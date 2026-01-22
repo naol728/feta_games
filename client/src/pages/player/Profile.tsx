@@ -40,7 +40,7 @@ interface Transaction {
 interface WithdrawRequest {
     id: number;
     amount: number;
-    status: 'pending' | 'approved' | 'rejected';
+    status: 'pending' | 'approved';
     requestedAt: string;
     processedAt?: string;
     method: string;
@@ -50,7 +50,7 @@ export default function Profile() {
     const [user, setUser] = useState<TelegramUser | null>(null);
     const [balance, setBalance] = useState<number>(0);
     const [transactions, setTransactions] = useState<Transaction[]>([
-        { id: 1, type: 'deposit', amount: 500, status: 'completed', date: '2024-03-15', description: 'Telebirr Deposit' },
+        { id: 1, type: 'deposit', amount: 500, status: 'completed', date: '2024-03-15', description: ' Deposit' },
         { id: 2, type: 'bet', amount: 100, status: 'completed', date: '2024-03-14', description: ' Bet' },
         { id: 3, type: 'win', amount: 250, status: 'completed', date: '2024-03-14', description: 'Bet Win' },
         { id: 4, type: 'withdrawal', amount: 200, status: 'pending', date: '2024-03-13', description: 'Bank Transfer' },
@@ -60,7 +60,6 @@ export default function Profile() {
     const [withdrawRequests, setWithdrawRequests] = useState<WithdrawRequest[]>([
         { id: 1, amount: 200, status: 'pending', requestedAt: '2024-03-13', method: 'Bank Transfer' },
         { id: 2, amount: 150, status: 'approved', requestedAt: '2024-03-10', processedAt: '2024-03-11', method: 'Telebirr' },
-        { id: 3, amount: 100, status: 'rejected', requestedAt: '2024-03-05', processedAt: '2024-03-06', method: 'Bank Transfer' },
     ]);
 
     const fetchBalance = async () => {
@@ -145,11 +144,11 @@ export default function Profile() {
     );
 
     return (
-        <div className="min-h-screen bg-background p-4 pb-20">
+        <div className="min-h-screen bg-background p-4 pb-16">
             <div className="max-w-2xl mx-auto space-y-6">
                 {/* Profile Header */}
                 <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold text-foreground">My Profile</h1>
+                    <h1 className="text-lg font-bold text-foreground">My Profile</h1>
                     <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
                         Active
                     </Badge>
@@ -157,15 +156,15 @@ export default function Profile() {
 
                 {/* Profile Card - Mobile First Design */}
                 <Card className="border">
-                    <CardContent className="p-6">
+                    <CardContent className="p-4">
                         <div className="flex flex-col items-center text-center space-y-4 mb-6">
                             <Avatar className="h-20 w-20 border-4 border-background shadow-lg">
-                                <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                                <AvatarFallback className="bg-primary text-primary-foreground text-lg">
                                     {user.first_name.charAt(0)}{user.last_name?.charAt(0) || ''}
                                 </AvatarFallback>
                             </Avatar>
                             <div>
-                                <h2 className="text-xl font-semibold text-foreground">
+                                <h2 className="text-lg font-semibold text-foreground">
                                     {user.first_name} {user.last_name || ''}
                                 </h2>
                                 <p className="text-muted-foreground">@{user.username || 'no_username'}</p>
@@ -173,30 +172,30 @@ export default function Profile() {
                         </div>
 
                         {/* Quick Stats */}
-                        <div className=" w-full mb-6">
-                            <div className="bg-card border rounded-lg p-3">
+                        <div className=" w-full mb-2">
+                            <div className="bg-card border rounded-lg p-2">
                                 <div className="flex items-center gap-2 mb-1">
                                     <Wallet className="h-4 w-4 text-primary" />
                                     <span className="text-sm text-muted-foreground">Balance</span>
                                 </div>
-                                <p className="text-2xl font-bold text-foreground">{balance.toLocaleString()} ETB</p>
+                                <p className="text-lg font-bold text-foreground">{balance.toLocaleString()} ETB</p>
                             </div>
                         </div>
 
                         {/* Language Info */}
-                        <div className="bg-card border rounded-lg p-3 mb-6">
+                        <div className="bg-card border rounded-lg p-3 mb-4">
                             <div className="flex items-center gap-2 mb-1">
                                 <Globe className="h-4 w-4 text-primary" />
-                                <span className="text-sm text-muted-foreground">Language</span>
+                                <span className="text-xs text-muted-foreground">Language</span>
                             </div>
-                            <p className="text-lg font-medium text-foreground">{user.language_code?.toUpperCase() || "EN"}</p>
+                            <p className="text- font-medium text-foreground">{user.language_code?.toUpperCase() || "EN"}</p>
                         </div>
 
                         {/* Action Buttons */}
                         <div className="grid grid-cols-2 gap-3">
                             <Button
                                 onClick={handleDeposit}
-                                className="bg-primary hover:bg-primary/90 h-12"
+                                className="bg-primary hover:bg-primary/90 h-10"
                             >
                                 <ArrowDownCircle className="mr-2 h-4 w-4" />
                                 Deposit
@@ -204,7 +203,7 @@ export default function Profile() {
                             <Button
                                 onClick={handleWithdraw}
                                 variant="destructive"
-                                className="h-12"
+                                className="h-10"
                             >
                                 <ArrowUpCircle className="mr-2 h-4 w-4" />
                                 Withdraw
@@ -216,11 +215,11 @@ export default function Profile() {
                 {/* Tabs Section - Mobile Optimized */}
                 <Tabs defaultValue="transactions" className="w-full">
                     <TabsList className="grid w-full grid-cols-2 mb-4">
-                        <TabsTrigger value="transactions" className="text-sm">
+                        <TabsTrigger value="transactions" >
                             <History className="mr-2 h-4 w-4" />
                             Transactions
                         </TabsTrigger>
-                        <TabsTrigger value="withdrawals" className="text-sm">
+                        <TabsTrigger value="withdrawals" >
                             <CreditCard className="mr-2 h-4 w-4" />
                             Withdrawals
                         </TabsTrigger>
@@ -231,7 +230,7 @@ export default function Profile() {
                         <div className="space-y-3">
                             {transactions.map((transaction) => (
                                 <Card key={transaction.id} className="border">
-                                    <CardContent className="p-4">
+                                    <CardContent className="p-3">
                                         <div className="flex items-start justify-between">
                                             <div className="flex items-start gap-3">
                                                 <div className="mt-1 p-2 bg-muted rounded-lg">
@@ -269,12 +268,11 @@ export default function Profile() {
                         <div className="space-y-3">
                             {withdrawRequests.map((request) => (
                                 <Card key={request.id} className="border">
-                                    <CardContent className="p-4">
+                                    <CardContent className="p-2">
                                         <div className="flex items-start justify-between">
                                             <div className="flex items-start gap-3">
                                                 <div className={`mt-1 p-2 rounded-lg ${request.status === 'approved' ? 'bg-green-50 dark:bg-green-950' :
-                                                    request.status === 'rejected' ? 'bg-destructive/10' :
-                                                        'bg-amber-50 dark:bg-amber-950'
+                                                    'bg-amber-50 dark:bg-amber-950'
                                                     }`}>
                                                     {getStatusIcon(request.status)}
                                                 </div>
@@ -309,6 +307,6 @@ export default function Profile() {
                     </TabsContent>
                 </Tabs>
             </div>
-        </div>
+        </div >
     );
 }

@@ -4,6 +4,7 @@ import Game from './pages/player/Game'
 import Invite from './pages/player/Invite'
 import Mainlayout from './layout/Mainlayout'
 import Profile from './pages/player/Profile'
+import ConnectFour from './pages/game/ConnectFour'
 export default function App() {
   return (
     <BrowserRouter>
@@ -13,6 +14,7 @@ export default function App() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/invite" element={<Invite />} />
         </Route>
+        <Route path="/connectfour" element={<ConnectFour />} />
       </Routes>
 
     </BrowserRouter>

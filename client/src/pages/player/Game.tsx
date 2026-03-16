@@ -1,8 +1,9 @@
-import React from "react"
+import React, { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { socket } from "@/lib/socket"
 
 const games = [
   {
@@ -32,6 +33,7 @@ const games = [
 ]
 
 export default function Game() {
+ 
   return (
     <div className="min-h-screen bg-background text-foreground p-4">
 

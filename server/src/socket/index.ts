@@ -1,12 +1,12 @@
-import http from "http";
-import { Server } from "socket.io";
-import app from "./../app"
-import { env } from "../config/env";
-const server = http.createServer(app);
+import connectFourSocket from "./connectfour.socket"
 
-const io = new Server(server, {
-  cors: { origin: env.CLIENT_URL, methods: ["GET", "POST"], credentials: true },
-  transports: ["websocket", "polling"],
-});
 
-export default io 
+export default function initSocket(io){
+
+  io.on("connection",(socket)=>{
+
+    console.log("user connected",socket.id)
+    connectFourSocket(io,socket)
+  })
+
+}

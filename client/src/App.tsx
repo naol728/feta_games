@@ -5,7 +5,10 @@ import Invite from './pages/player/Invite'
 import Mainlayout from './layout/Mainlayout'
 import Profile from './pages/player/Profile'
 import ConnectFour from './pages/game/ConnectFour'
+import { socket } from './lib/socket'
+
 export default function App() {
+   
   return (
     <BrowserRouter>
       <Routes>

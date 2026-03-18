@@ -4,9 +4,9 @@ import Game from './pages/player/Game'
 import Invite from './pages/player/Invite'
 import Mainlayout from './layout/Mainlayout'
 import Profile from './pages/player/Profile'
-import ConnectFour from './pages/game/ConnectFour'
+import ConnectFour from './pages/game/connectfour/ConnectFour'
 import { socket } from './lib/socket'
-import MatchMaking from './pages/game/MatchMaking'
+import MatchMaking from './pages/game/connectfour/MatchMaking'
 
 export default function App() {
    

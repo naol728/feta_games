@@ -1,88 +1,95 @@
-import React, { useEffect, useState } from "react"
+import React from "react"
 import { Link } from "react-router-dom"
-
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { socket } from "@/lib/socket"
 
 const games = [
-  {
-    name: "Connect Four",
-    description: "Connect four pieces before your opponent.",
-    path: "/connectfour",
-    players: 124,
-    entry: "$1",
-    image: "/connectfour.jpeg"
-  },
-  {
-    name: "Dots and Boxes",
-    description: "Complete more boxes than your opponent.",
-    path: "/dots",
-    players: 56,
-    entry: "$0.5",
-    image: "/connectfour.jpeg"
-  },
-  {
-    name: "Territory Capture",
-    description: "Capture the largest territory.",
-    path: "/territory",
-    players: 32,
-    entry: "$2",
-    image: "/connectfour.jpeg"
-  }
+  { name: "Connect Four", path: "/connectfour", image: "/connectfour.jpeg" },
+  { name: "Dots and Boxes", path: "/dots", image: "/connectfour.jpeg" },
+  { name: "Territory Capture", path: "/territory", image: "/connectfour.jpeg" }
 ]
 
 export default function Game() {
- 
   return (
     <div className="min-h-screen bg-background text-foreground p-4">
 
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-xl font-bold">
-          🎮 Feta Games
-        </h1>
+      {/* Top Bar */}
+      <div className="flex items-center justify-between mb-4">
+        <button className="text-sm text-muted-foreground">← Back</button>
+        <div className="flex gap-2">
+          <span className="px-3 py-1 text-xs rounded-full bg-muted text-muted-foreground">
+            Practice Mode
+          </span>
+          <span className="px-3 py-1 text-xs rounded-full bg-primary text-primary-foreground font-semibold">
+            Notice
+          </span>
+        </div>
+      </div>
 
-        <p className="text-sm text-muted-foreground">
-          Play 1v1 games and win money from other players
-        </p>
+      {/* Banner */}
+      <div className="relative rounded-2xl overflow-hidden mb-6 bg-primary/90 p-10 shadow-lg">
+        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle,_#fff_1px,_transparent_1px)] bg-[size:20px_20px]" />
+
+        <div className="relative z-10 ">
+          <h2 className="text-lg font-bold text-primary-foreground mb-1">
+            Play & Win Rewards
+          </h2>
+          <p className="text-sm text-bold text-primary-foreground/80">
+            Join games and earn prizes
+          </p>
+        </div>
+
+        <img
+          src="/casino.png"
+          className="absolute right-0 bottom-0 w-full opacity-90"
+        />
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        {[
+          { label: "Rocket", icon: "🚀" },
+          { label: "Contest", icon: "🏆" },
+          { label: "Spin", icon: "🎡" },
+          { label: "Coupon", icon: "🎁" }
+        ].map((item, i) => (
+          <div
+            key={i}
+            className="bg-card text-card-foreground rounded-xl p-3 flex flex-col items-center gap-2 shadow"
+          >
+            <span className="text-xl">{item.icon}</span>
+            <span className="text-xs">{item.label}</span>
+          </div>
+        ))}
       </div>
 
       {/* Game List */}
-      <div className="space-y-4">
-
+      <div className="space-y-2">
         {games.map((game, i) => (
           <Card
             key={i}
-            className ="transition-all duration-300 hover:scale-[1.02] py-2 -px-3"
+            className="bg-card border border-border rounded-xl py-3"
           >
-            <CardContent className=" flex items-center justify-between">
+            <CardContent className="flex items-center justify-between px-2  ">
 
-              {/* Left */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
 
-                {/* Game Image */}
-                <div className="w-10 h-10 rounded-xl overflow-hidden bg-muted flex-shrink-0">
+                {/* GOLD GLOW IMAGE */}
+                <div className="relative w-10 h-10 rounded-xl overflow-hidden">
+                  <div className="absolute inset-0 rounded-xl blur-md bg-primary opacity-60 animate-pulse" />
+
                   <img
                     src={game.image}
                     alt={game.name}
-                    className="w-full h-full object-cover"
+                    className="relative w-full h-full object-cover rounded-xl border border-primary"
                   />
                 </div>
 
-                {/* Info */}
-                <div>
-                  <p className="font-semibold text-xs">
-                    {game.name}
-                  </p>
-              
-                </div>
-
+                <p className="text-xs font-semibold">{game.name}</p>
               </div>
 
-              {/* Button */}
               <Link to={game.path}>
-                <Button>
+                <Button size={"sm"}>
                   Play
                 </Button>
               </Link>
@@ -90,7 +97,6 @@ export default function Game() {
             </CardContent>
           </Card>
         ))}
-
       </div>
 
     </div>

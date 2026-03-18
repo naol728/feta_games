@@ -1,6 +1,6 @@
-import { Redis } from "@upstash/redis"
-import {env} from "./env" 
+import Redis from "ioredis"
+
 export const redis = new Redis({
-  url: env.UPSTASH_REDIS_URL,
-  token: env.UPSTASH_REDIS_TOKEN
+  host: "127.0.0.1",
+  port: 6379,
 })

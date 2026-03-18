@@ -6,6 +6,7 @@ import Mainlayout from './layout/Mainlayout'
 import Profile from './pages/player/Profile'
 import ConnectFour from './pages/game/ConnectFour'
 import { socket } from './lib/socket'
+import MatchMaking from './pages/game/MatchMaking'
 
 export default function App() {
    
@@ -17,7 +18,8 @@ export default function App() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/invite" element={<Invite />} />
         </Route>
-        <Route path="/connectfour" element={<ConnectFour />} />
+        <Route path="/connectfour" element={<MatchMaking />} />
+         <Route path="/connectfour/:roomId" element={<ConnectFour />} />
       </Routes>
 
     </BrowserRouter>

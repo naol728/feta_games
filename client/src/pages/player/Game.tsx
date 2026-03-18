@@ -2,14 +2,43 @@ import React from "react"
 import { Link } from "react-router-dom"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+// add this above component
+import { useEffect, useState } from "react"
 
+function useCountdown(targetDate: Date) {
+  const [timeLeft, setTimeLeft] = useState("")
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date().getTime()
+      const distance = targetDate.getTime() - now
+
+      if (distance <= 0) {
+        setTimeLeft("Ended")
+        clearInterval(interval)
+        return
+      }
+
+      const hours = Math.floor((distance / (1000 * 60 * 60)) % 24)
+      const minutes = Math.floor((distance / (1000 * 60)) % 60)
+
+      setTimeLeft(`${hours}h ${minutes}m`)
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [targetDate])
+
+  return timeLeft
+}
 const games = [
   { name: "Connect Four", path: "/connectfour", image: "/connectfour.jpeg" },
-  { name: "Dots and Boxes", path: "/dots", image: "/connectfour.jpeg" },
+  { name: "Black and Red", path: "/dots", image: "/spinng.jpg" },
   { name: "Territory Capture", path: "/territory", image: "/connectfour.jpeg" }
 ]
 
 export default function Game() {
+      const timeLeft = useCountdown(new Date(Date.now() + 1000 * 60 * 60 * 5)) 
+
   return (
     <div className="min-h-screen bg-background text-foreground p-4">
 
@@ -27,7 +56,7 @@ export default function Game() {
       </div>
 
       {/* Banner */}
-      <div className="relative rounded-2xl overflow-hidden mb-6 bg-primary/90 p-10 shadow-lg">
+      <div className="relative rounded-2xl overflow-hidden mb-4 bg-primary/90 p-10 shadow-lg">
         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle,_#fff_1px,_transparent_1px)] bg-[size:20px_20px]" />
 
         <div className="relative z-10 ">
@@ -63,6 +92,48 @@ export default function Game() {
         ))}
       </div>
 
+
+<Card className="bg-accent/20 backdrop-blur-xl border border-border shadow-md my-2">
+  <CardContent className="px-5  flex items-center justify-between">
+
+    {/* Time Left */}
+    <div className="flex flex-col">
+      <span className="text-xs text-muted-foreground">
+        Time Left
+      </span>
+      <span className="text-sm font-semibold">
+        {timeLeft}
+      </span>
+    </div>
+
+    {/* Divider */}
+    <div className="h-8 w-px bg-border" />
+
+    {/* Total Pool */}
+    <div className="flex flex-col">
+      <span className="text-sm text-muted-foreground">
+        Total Pool
+      </span>
+      <span className="text-sm font-semibold text-primary">
+        12,500 birr
+      </span>
+    </div>
+
+    {/* Divider */}
+    <div className="h-8 w-px bg-border" />
+
+    {/* Rewards */}
+    <div className="flex flex-col text-right">
+      <span className="text-xs text-muted-foreground">
+        Rewards
+      </span>
+      <span className="text-sm font-semibold">
+        Top 10
+      </span>
+    </div>
+
+  </CardContent>
+</Card>
       {/* Game List */}
       <div className="space-y-2">
         {games.map((game, i) => (

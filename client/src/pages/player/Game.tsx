@@ -1,9 +1,9 @@
-import React from "react"
 import { Link } from "react-router-dom"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-// add this above component
 import { useEffect, useState } from "react"
+import { Wallet } from "lucide-react"
+import TopBar from "@/layout/TopBar"
 
 function useCountdown(targetDate: Date) {
   const [timeLeft, setTimeLeft] = useState("")
@@ -43,17 +43,10 @@ export default function Game() {
     <div className="min-h-screen bg-background text-foreground p-4">
 
       {/* Top Bar */}
-      <div className="flex items-center justify-between mb-4">
-        <button className="text-sm text-muted-foreground">← Back</button>
-        <div className="flex gap-2">
-          <span className="px-3 py-1 text-xs rounded-full bg-muted text-muted-foreground">
-            Practice Mode
-          </span>
-          <span className="px-3 py-1 text-xs rounded-full bg-primary text-primary-foreground font-semibold">
-            Notice
-          </span>
-        </div>
-      </div>
+      <TopBar
+  balance={100}
+  onDeposit={() => console.log("deposit")}
+/>
 
       {/* Banner */}
       <div className="relative rounded-2xl overflow-hidden mb-4 bg-primary/90 p-10 shadow-lg">

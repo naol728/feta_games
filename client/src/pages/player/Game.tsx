@@ -31,11 +31,12 @@ function useCountdown(targetDate: Date) {
   return timeLeft
 }
 const games = [
+  { name: "JetX Pick", path: "/jetxpick", image: "/jetx.jpeg" },
+  { name: "Memory Flip", path: "/memoryflip", image: "/memoryflip.jpeg" },
   { name: "Connect Four", path: "/connectfour", image: "/connectfour.jpeg" },
-  { name: "Black and Red", path: "/dots", image: "/spinng.jpg" },
-  { name: "Territory Capture", path: "/territory", image: "/connectfour.jpeg" }
+  { name: "Card Draw", path: "/carddraw", image: "/carddrawduel.jpg" },
+  { name: "Mines Duel", path: "/minesduel", image: "/mineduel.jpeg"}
 ]
-
 export default function Game() {
       const timeLeft = useCountdown(new Date(Date.now() + 1000 * 60 * 60 * 5)) 
 

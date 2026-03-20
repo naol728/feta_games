@@ -7,12 +7,12 @@ import { Server } from "socket.io";
 import initSocket from "./socket";
 
 const app = express();
-app.use(cors({origin:"https://feta-games.vercel.app/"}));
+app.use(cors({origin:"*"}));
 
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: { origin: "https://feta-games.vercel.app/", methods: ["GET", "POST","PUT","DELETE"], credentials: true },
+  cors: { origin: "*", methods: ["GET", "POST","PUT","DELETE"], credentials: true },
   transports: ["websocket", "polling"],
 });
 

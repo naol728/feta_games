@@ -7,6 +7,10 @@ import Profile from './pages/player/Profile'
 import ConnectFour from './pages/game/connectfour/ConnectFour'
 import { socket } from './lib/socket'
 import MatchMaking from './pages/game/connectfour/MatchMaking'
+import Jetx from './pages/game/Jetx/Jetx'
+import MemoryFlip from './pages/game/memoryflip/MemoryFlip'
+import MinesDuel from './pages/game/minesduel/MinesDuel'
+import CardDraw from './pages/game/carddraw/CardDraw'
 
 export default function App() {
    
@@ -20,6 +24,10 @@ export default function App() {
         </Route>
         <Route path="/connectfour" element={<MatchMaking />} />
          <Route path="/connectfour/:roomId" element={<ConnectFour />} />
+         <Route path='/jetxpick' element={<Jetx />} />
+         <Route path="/memoryflip" element={<MemoryFlip />} />
+         <Route path="/minesduel" element={<MinesDuel />} />
+         <Route path="/carddraw" element={<CardDraw /> } />
       </Routes>
 
     </BrowserRouter>

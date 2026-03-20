@@ -15,7 +15,7 @@ export default function TopBar({
 }: TopBarProps) {
   return (
     <div className="mb-2 z-50 backdrop-blur-xl bg-background/80">
-      <div className="flex items-center justify-between px-3 py-2">
+      <div className="flex items-center justify-between px-1 py-2">
 
         {/* App Name */}
         <h1 className="text-sm font-semibold text-primary truncate">
@@ -36,7 +36,7 @@ export default function TopBar({
           {/* Deposit */}
           <Button
             size="sm"
-            className="h-8 px-3 flex items-center gap-1"
+            className="h-7 px-3 flex items-center gap-1"
             onClick={onDeposit}
           >
             <Wallet className="w-4 h-4" />

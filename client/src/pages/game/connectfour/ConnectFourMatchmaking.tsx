@@ -26,21 +26,21 @@ export default function ConnectFourMatchmaking() {
 
   const [rooms, setRooms] = useState<any[]>([])
 
-useEffect(() => {
-  socket.emit("connectfour:queue:list")
+  useEffect(() => {
+    socket.emit("connectfour:queue:list")
 
-  socket.on("connectfour:queue:list", (data) => {
-    setRooms(data)
-  })
-  socket.on("connectfour:queue:update", () => {
-  socket.emit("connectfour:queue:list")
-})
+    socket.on("connectfour:queue:list", (data) => {
+      setRooms(data)
+    })
+    socket.on("connectfour:queue:update", () => {
+      socket.emit("connectfour:queue:list")
+    })
 
-  return () => {
-    socket.off("connectfour:queue:list")
-     socket.off("connectfour:queue:update")
-  }
-}, [])
+    return () => {
+      socket.off("connectfour:queue:list")
+      socket.off("connectfour:queue:update")
+    }
+  }, [])
 
   useEffect(() => {
     socket.emit("player:register", { playerId })
@@ -49,15 +49,15 @@ useEffect(() => {
       navigate(`/connectfour/${roomId}`)
     })
     socket.on("error", (msg) => {
-  console.error(msg)
-  setSearching(false)
-})  
+      console.error(msg)
+      setSearching(false)
+    })
     socket.on("connectfour:cancelled", () => {
       setSearching(false)
-  socket.emit("connectfour:queue:list")
-     console.log("Matchmaking cancelled")
+      socket.emit("connectfour:queue:list")
+      console.log("Matchmaking cancelled")
     })
-    
+
 
     return () => {
       socket.off("connectfour:matched")
@@ -65,7 +65,7 @@ useEffect(() => {
   }, [playerId, navigate])
 
   const startMatchmaking = () => {
-   if (!betAmount || searching) return 
+    if (!betAmount || searching) return
     setSearching(true)
 
     socket.emit("connectfour:queue", {
@@ -80,21 +80,21 @@ useEffect(() => {
   }
 
   useEffect(() => {
-  const interval = setInterval(() => {
-    socket.emit("connectfour:queue:list")
-  }, 5000)
+    const interval = setInterval(() => {
+      socket.emit("connectfour:queue:list")
+    }, 5000)
 
-  return () => clearInterval(interval)
-}, [])
+    return () => clearInterval(interval)
+  }, [])
 
- const joinRoom = (targetPlayerId: string, bet: number) => {
-  if(targetPlayerId === playerId) return
-  socket.emit("connectfour:queue:join_player", {
-    playerId,
-    targetPlayerId,
-    bet
-  })
-}
+  const joinRoom = (targetPlayerId: string, bet: number) => {
+    if (targetPlayerId === playerId) return
+    socket.emit("connectfour:queue:join_player", {
+      playerId,
+      targetPlayerId,
+      bet
+    })
+  }
 
   return (
     <div className="relative flex flex-col min-h-screen overflow-hidden">
@@ -107,10 +107,10 @@ useEffect(() => {
           variant="ghost"
           size="icon"
           onClick={() => navigate(-1)}
-          className="rounded-full"  
+          className="rounded-full"
         >
           <ArrowLeft className="h-3 w-3" /> <span className="text-xs">Back</span>
-        </Button> 
+        </Button>
         <h1 className="text-lg font-semibold mx-auto pr-8">
           Matchmaking
         </h1>
@@ -190,31 +190,31 @@ useEffect(() => {
                 Available Rooms
               </h2>
 
-             {rooms.map((group) => (
-  <div key={group.bet}>
-    
-    <p className="text-sm font-medium mb-2">{group.bet} birr</p>
+              {rooms.map((group) => (
+                <div key={group.bet}>
 
-    {group.players.length === 0 ? (
-  <p className="text-xs text-muted-foreground">No players</p>
-) : group.players.filter((p: any) => p.playerId !== playerId).map((p: any) => (
-      <div
-        key={p.playerId}
-        className="flex justify-between p-2 border rounded"
-      >
-        <span className="text-xs">{p.playerId}</span>
+                  <p className="text-sm font-medium mb-2">{group.bet} birr</p>
 
-        <Button
-          size="sm"
-          disabled={searching} // ✅ prevent conflict
-          onClick={() => joinRoom(p.playerId, group.bet)}
-        >
-          Join
-        </Button>
-      </div>
-    ))}
-  </div>
-))}
+                  {group.players.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No players</p>
+                  ) : group.players.filter((p: any) => p.playerId !== playerId).map((p: any) => (
+                    <div
+                      key={p.playerId}
+                      className="flex justify-between p-2 border rounded"
+                    >
+                      <span className="text-xs">{p.playerId}</span>
+
+                      <Button
+                        size="sm"
+                        disabled={searching} // ✅ prevent conflict
+                        onClick={() => joinRoom(p.playerId, group.bet)}
+                      >
+                        Join
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}

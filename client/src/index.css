@@ -3,22 +3,22 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1.0000 0 0);
+  --background: oklch(1 0 0);
   --foreground: oklch(0.1448 0 0);
   --card: oklch(0.9702 0 0);
   --card-foreground: oklch(0.1448 0 0);
-  --popover: oklch(1.0000 0 0);
+  --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.1448 0 0);
   --primary: oklch(0.7605 0.1371 89.1695);
-  --primary-foreground: oklch(1.0000 0 0);
+  --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.2178 0 0);
   --secondary-foreground: oklch(0.7605 0.1371 89.1695);
   --muted: oklch(0.9551 0 0);
   --muted-foreground: oklch(0.5103 0 0);
-  --accent: oklch(0.9174 0.0750 95.1119);
+  --accent: oklch(0.9174 0.075 95.1119);
   --accent-foreground: oklch(0.2178 0 0);
-  --destructive: oklch(0.4000 0.1639 28.8068);
-  --destructive-foreground: oklch(1.0000 0 0);
+  --destructive: oklch(0.4 0.1639 28.8068);
+  --destructive-foreground: oklch(1 0 0);
   --border: oklch(0.8945 0 0);
   --input: oklch(0.9551 0 0);
   --ring: oklch(0.7605 0.1371 89.1695);
@@ -31,7 +31,7 @@
   --sidebar-foreground: oklch(0.7605 0.1371 89.1695);
   --sidebar-primary: oklch(0.7605 0.1371 89.1695);
   --sidebar-primary-foreground: oklch(0 0 0);
-  --sidebar-accent: oklch(0.2520 0 0);
+  --sidebar-accent: oklch(0.252 0 0);
   --sidebar-accent-foreground: oklch(0.7605 0.1371 89.1695);
   --sidebar-border: oklch(0.3211 0 0);
   --sidebar-ring: oklch(0.7605 0.1371 89.1695);
@@ -47,11 +47,21 @@
   --shadow-color: #000000;
   --shadow-2xs: -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.06);
   --shadow-xs: -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.06);
-  --shadow-sm: -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.11), -6px 1px 2px -10.5px hsl(0 0% 0% / 0.11);
-  --shadow: -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.11), -6px 1px 2px -10.5px hsl(0 0% 0% / 0.11);
-  --shadow-md: -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.11), -6px 2px 4px -10.5px hsl(0 0% 0% / 0.11);
-  --shadow-lg: -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.11), -6px 4px 6px -10.5px hsl(0 0% 0% / 0.11);
-  --shadow-xl: -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.11), -6px 8px 10px -10.5px hsl(0 0% 0% / 0.11);
+  --shadow-sm:
+    -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.11),
+    -6px 1px 2px -10.5px hsl(0 0% 0% / 0.11);
+  --shadow:
+    -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.11),
+    -6px 1px 2px -10.5px hsl(0 0% 0% / 0.11);
+  --shadow-md:
+    -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.11),
+    -6px 2px 4px -10.5px hsl(0 0% 0% / 0.11);
+  --shadow-lg:
+    -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.11),
+    -6px 4px 6px -10.5px hsl(0 0% 0% / 0.11);
+  --shadow-xl:
+    -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.11),
+    -6px 8px 10px -10.5px hsl(0 0% 0% / 0.11);
   --shadow-2xl: -6px -5.5px 15.5px -9.5px hsl(0 0% 0% / 0.28);
   --tracking-normal: 0.02em;
   --spacing: 0.25rem;
@@ -59,22 +69,22 @@
 
 .dark {
   --background: oklch(0 0 0);
-  --foreground: oklch(1.0000 0 0);
+  --foreground: oklch(1 0 0);
   --card: oklch(0.1448 0 0);
   --card-foreground: oklch(0.7605 0.1371 89.1695);
   --popover: oklch(0.1448 0 0);
-  --popover-foreground: oklch(1.0000 0 0);
+  --popover-foreground: oklch(1 0 0);
   --primary: oklch(0.7605 0.1371 89.1695);
   --primary-foreground: oklch(0 0 0);
   --secondary: oklch(0.2178 0 0);
-  --secondary-foreground: oklch(1.0000 0 0);
+  --secondary-foreground: oklch(1 0 0);
   --muted: oklch(0.2178 0 0);
   --muted-foreground: oklch(0.7058 0 0);
   --accent: oklch(0.7605 0.1371 89.1695);
   --accent-foreground: oklch(0.7605 0.1371 89.1695);
   --destructive: oklch(0.6734 0.2142 24.1741);
-  --destructive-foreground: oklch(1.0000 0 0);
-  --border: oklch(0.2850 0 0);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.285 0 0);
   --input: oklch(0.2178 0 0);
   --ring: oklch(0.7605 0.1371 89.1695);
   --chart-1: oklch(0.8789 0.1801 93.5768);
@@ -83,7 +93,7 @@
   --chart-4: oklch(0.7457 0.1461 82.1418);
   --chart-5: oklch(0.7137 0.1342 88.4256);
   --sidebar: oklch(0.1149 0 0);
-  --sidebar-foreground: oklch(1.0000 0 0);
+  --sidebar-foreground: oklch(1 0 0);
   --sidebar-primary: oklch(0.7605 0.1371 89.1695);
   --sidebar-primary-foreground: oklch(0 0 0);
   --sidebar-accent: oklch(0.1957 0 0);
@@ -102,11 +112,21 @@
   --shadow-color: #d4ac37;
   --shadow-2xs: -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.06);
   --shadow-xs: -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.06);
-  --shadow-sm: -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.11), -6px 1px 2px -10.5px hsl(44.7134 64.6091% 52.3529% / 0.11);
-  --shadow: -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.11), -6px 1px 2px -10.5px hsl(44.7134 64.6091% 52.3529% / 0.11);
-  --shadow-md: -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.11), -6px 2px 4px -10.5px hsl(44.7134 64.6091% 52.3529% / 0.11);
-  --shadow-lg: -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.11), -6px 4px 6px -10.5px hsl(44.7134 64.6091% 52.3529% / 0.11);
-  --shadow-xl: -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.11), -6px 8px 10px -10.5px hsl(44.7134 64.6091% 52.3529% / 0.11);
+  --shadow-sm:
+    -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.11),
+    -6px 1px 2px -10.5px hsl(44.7134 64.6091% 52.3529% / 0.11);
+  --shadow:
+    -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.11),
+    -6px 1px 2px -10.5px hsl(44.7134 64.6091% 52.3529% / 0.11);
+  --shadow-md:
+    -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.11),
+    -6px 2px 4px -10.5px hsl(44.7134 64.6091% 52.3529% / 0.11);
+  --shadow-lg:
+    -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.11),
+    -6px 4px 6px -10.5px hsl(44.7134 64.6091% 52.3529% / 0.11);
+  --shadow-xl:
+    -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.11),
+    -6px 8px 10px -10.5px hsl(44.7134 64.6091% 52.3529% / 0.11);
   --shadow-2xl: -6px -5.5px 15.5px -9.5px hsl(44.7134 64.6091% 52.3529% / 0.28);
 }
 
@@ -178,4 +198,54 @@
     @apply bg-background text-foreground;
     letter-spacing: var(--tracking-normal);
   }
+}
+
+.perspective {
+  perspective: 1000px;
+}
+
+.transform-style-preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+@keyframes bloom {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-bloom {
+  animation: bloom 0.6s ease-out;
+}
+@keyframes bloom {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-bloom {
+  animation: bloom 0.6s ease-out;
 }

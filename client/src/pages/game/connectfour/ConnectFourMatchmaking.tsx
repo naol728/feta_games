@@ -1,21 +1,15 @@
 import { useEffect, useState } from "react"
 import { socket } from "@/lib/socket"
 import { useNavigate } from "react-router-dom"
-
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft } from "lucide-react"
-import TopBar from "@/layout/TopBar"
 
-type Room = {
-  id: string
-  bet: number
-  players: number
-}
 
-export default function MatchMaking() {
+
+export default function ConnectFourMatchmaking() {
   const navigate = useNavigate()
 
   const [playerId] = useState(() => {

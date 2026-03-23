@@ -1,8 +1,10 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import React, { useState } from 'react'
+import type { Player } from './CardDraw';
 
-export default function Players({ player }) {
+
+export default function Players({ player }: { player: Player }) {
 
     const [playerId] = useState(() => {
         let id = localStorage.getItem("playerId");
@@ -15,9 +17,9 @@ export default function Players({ player }) {
 
     return (
         <div className="flex justify-between gap-2.5 px-2 py-1.5">
-            
+
             <div className="flex flex-col justify-between">
-                
+
                 <div className='flex flex-col gap-1'>
                     <Avatar className="h-9 w-9">
                         <AvatarFallback className="bg-primary/15 text-primary text-[11px] font-semibold">
@@ -26,9 +28,8 @@ export default function Players({ player }) {
                     </Avatar>
 
                     <div>
-                        <p className={`font-medium text-[11px] leading-tight ${
-                            player.id === playerId ? "text-primary" : "text-foreground/80"
-                        }`}>
+                        <p className={`font-medium text-[11px] leading-tight ${player.id === playerId ? "text-primary" : "text-foreground/80"
+                            }`}>
                             {player.id}
                         </p>
                     </div>
@@ -52,13 +53,13 @@ export default function Players({ player }) {
                     </p>
 
                     <div className="flex flex-col gap-1">
-                        {player.picks.map((pick: any, i: number) => (
+                        {player.picks.map((pick, i: number) => (
                             <Badge
                                 key={i}
                                 variant="secondary"
                                 className="text-[10px] font-mono px-2 py-[2px]"
                             >
-                                {pick?.value || '?'}
+                                {pick?.value ?? '?'}
                             </Badge>
                         ))}
                     </div>

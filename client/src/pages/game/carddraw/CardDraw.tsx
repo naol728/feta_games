@@ -1,113 +1,32 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { socket } from "@/lib/socket";
-import { Card as ShadcnCard, CardContent } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
 import { Trophy, Coins, User, Clock } from "lucide-react";
 import Players from "./Players";
+import CardContainer from "./CardContainer";
 
-function getPickedMap(match: any) {
-  const map: Record<number, string> = {};
 
-  match.players.forEach((p: any) => {
-    p.picks?.forEach((card: any) => {
-      const index = match.deck.findIndex(
-        (d: any) => d === card // same reference (works if server sends same object)
-      );
-      if (index !== -1) map[index] = p.id;
-    });
-  });
-
-  return map;
+type Pick = {
+  value: number
 }
-
-/* --- card images mapping --- */
-const cardMap: Record<string, string> = {
-  "1": "/cards/AS.png",
-  "2": "/cards/2S.png",
-  "3": "/cards/3S.png",
-  "4": "/cards/4S.png",
-  "5": "/cards/5S.png",
-  "6": "/cards/6S.png",
-  "7": "/cards/7S.png",
-  "8": "/cards/8S.png",
-  "9": "/cards/9S.png",
-  "10": "/cards/10S.png",
-  J: "/cards/JS.png",
-  Q: "/cards/QS.png",
-  K: "/cards/KS.png",
+export type Player = {
+  id: string,
+  total: number,
+  picks: Pick[]
+}
+export type Match = {
+  matchId: string,
+  players: Player[],
+  betAmount: number,
+  status: string,
+  winner: string | null,
+  deck: [],
+  turn: string,
+  round: number,
 };
-function Card({ card, index, roomId, playerId, disabled, pickedBy }: any) {
-  function handlepick() {
-    if (disabled) return;
 
-    socket.emit("carddraw:card-pick", {
-      roomId,
-      cardindex: index,
-      playerId,
-    });
-  }
-
-  const isMine = pickedBy === playerId;
-  const isOpponent = pickedBy && pickedBy !== playerId;
-
-  return (
-    <div
-      className={`relative w-[60px] h-[80px] perspective mx-auto ${disabled ? "opacity-50" : "cursor-pointer hover:scale-[1.03]"
-        } transition`}
-      onClick={handlepick}
-    >
-      <div
-        className={`relative w-full h-full transition-transform duration-500 transform-style-preserve-3d ${card.revealed ? "rotate-y-180" : ""
-          }`}
-      >
-        <img
-          src="/cards/back2.png"
-          className="absolute w-full h-full bg-white backface-hidden border  shadow-sm"
-        />
-
-        <img
-          src={cardMap[card.value]}
-          className="absolute w-full h-full bg-white rotate-y-180 backface-hidden border  shadow-sm"
-        />
-      </div>
-
-      {pickedBy && (
-        <div
-          className={`absolute inset-0 rounded-sm border-[2px] ${isMine ? "border-green-500" : "border-red-500"
-            }`}
-        />
-      )}
-    </div>
-  );
-}
-
-/* --- grid --- */
-function CardHand({ deck, roomId, playerId, match }: any) {
-  const isMyTurn = match.turn === playerId;
-  const pickedMap = getPickedMap(match);
-
-  return (
-    <div className="grid grid-cols-4 sm:grid-cols-5 gap-2.5 bg-muted/20 mt-5 mx-auto p-2 rounded-xl">
-      {deck.map((card: any, i: number) => (
-        <Card
-          key={i}
-          card={card}
-          index={i}
-          roomId={roomId}
-          playerId={playerId}
-          pickedBy={pickedMap[i]}
-          disabled={
-            !isMyTurn || card.revealed || match.status === "finished"
-          }
-        />
-      ))}
-    </div>
-  );
-}
-
-/* --- main --- */
 export default function CardDraw() {
   const { roomId } = useParams();
 
@@ -120,7 +39,7 @@ export default function CardDraw() {
     return id;
   });
 
-  const [match, setMatch] = useState<any>(null);
+  const [match, setMatch] = useState<Match | null>(null);
 
   useEffect(() => {
     if (!roomId) return;
@@ -133,7 +52,7 @@ export default function CardDraw() {
     });
 
     socket.on("carddraw:update", ({ match }) => {
-      setMatch(match); // 🔥 re-render UI
+      setMatch(match);
     });
 
     socket.on("carddraw:result", (finalMatch) => {
@@ -211,7 +130,7 @@ export default function CardDraw() {
 
         {/* players */}
         <div className="flex gap-3 justify-center mt-4">
-          {match.players.map((player: any, idx: number) => (
+          {match.players.map((player: Player, idx: number) => (
             <div key={idx}>
               <Players player={player} />
             </div>
@@ -236,7 +155,7 @@ export default function CardDraw() {
           </div>
 
           <div className="mx-auto px-2">
-            <CardHand
+            <CardContainer
               deck={match.deck}
               roomId={roomId}
               playerId={playerId}

@@ -111,9 +111,9 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
         deck: shuffleDeck(),
         pickedIndices: [],
 
-        turn: playerId, // whose turn
+        turn: playerId, 
         round: 1,
-        maxRounds: 3, // configurable
+        maxRounds: 3, 
       };
       await redis.set(`room:carddraw:${roomId}`, JSON.stringify(match));
       io.to(opponentData.socketId).emit("carddraw:matched", { roomId });

@@ -5,7 +5,6 @@ import type { Player } from './CardDraw';
 
 
 export default function Players({ player }: { player: Player }) {
-
     const [playerId] = useState(() => {
         let id = localStorage.getItem("playerId");
         if (!id) {
@@ -14,7 +13,6 @@ export default function Players({ player }: { player: Player }) {
         }
         return id;
     });
-
     return (
         <div className="flex justify-between gap-2.5 px-2 py-1.5">
 

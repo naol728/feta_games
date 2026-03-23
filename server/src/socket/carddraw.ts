@@ -38,89 +38,116 @@ interface CustomSocket extends Socket {
   roomId?: string;
 }
 export default function CardDrawSocket(io: Server, socket: CustomSocket) {
-  socket.on(
-    "carddraw:queue",
-    async (data: { playerId: string; bet: number }) => {
-      const { playerId, bet } = data;
-      const allowedBets = [10, 50, 100];
+  socket.on("carddraw:queue", async ({ playerId, bet }) => {
+    console.log(playerId)
+    const allowedBets = [10, 50, 100];
+    if (!allowedBets.includes(bet)) {
+      socket.emit("error", "Invalid bet amount");
+      return;
+    }
 
-      if (!allowedBets.includes(bet)) {
-        socket.emit("error", "Invalid bet amount");
-        return;
+    const queueKey = QUEUE_KEY(bet);
+
+    // remove old queue entry
+    if (socket.queueKey && socket.queueEntry) {
+      await redis.lrem(socket.queueKey, 1, socket.queueEntry);
+    }
+
+    const entry: QueueEntry = {
+      playerId,
+      socketId: socket.id,
+    };
+
+    socket.queueKey = queueKey;
+    socket.queueEntry = JSON.stringify(entry);
+    await redis.lpush(queueKey, JSON.stringify(entry));
+
+    io.emit("carddraw:queue:update"); // 🔥 broadcast
+    // 🔥 try get opponent
+    let opponent: QueueEntry | null = null;
+
+    const raw = await redis.rpop(queueKey);
+
+    if (raw) {
+      const parsed: QueueEntry = JSON.parse(raw);
+      const isAlive = io.sockets.sockets.get(parsed.socketId);
+
+      if (isAlive && parsed.playerId !== playerId) {
+        opponent = parsed;
       }
+    }
 
-      const queueKey = QUEUE_KEY(bet);
+    // ❌ no opponent → queue
+    if (!opponent) {
+      await redis.lpush(queueKey, JSON.stringify(entry));
+      socket.emit("carddraw:waiting", { bet });
+      return;
+    }
 
-      // remove old entry
-      if (socket.queueKey && socket.queueEntry) {
-        await redis.lrem(socket.queueKey, 1, socket.queueEntry);
-      }
+    // ✅ MATCH FOUND
+    socket.queueKey = null;
+    socket.queueEntry = null;
 
-      const entry: string = JSON.stringify({
-        playerId,
-        socketId: socket.id,
-      });
+    const roomId = `cd_${Date.now()}`;
 
-      socket.queueKey = queueKey;
-      socket.queueEntry = entry;
-      // safe matchmaking
-      let opponentData: QueueEntry | null = null;
+    const match = {
+      matchId: roomId,
+      players: [
+        {
+          id: opponent.playerId,
+          socketId: opponent.socketId,
+          picks: [],
+          total: 0,
+        },
+        {
+          id: playerId,
+          socketId: socket.id,
+          picks: [],
+          total: 0,
+        },
+      ],
+      betAmount: bet,
+      status: "playing",
+      winner: null,
+      deck: shuffleDeck(),
+      pickedIndices: [],
+      turn: playerId,
+      round: 1,
+      maxRounds: 3,
+    };
 
-      while (true) {
-        const opponent = await redis.rpop(queueKey);
-        if (!opponent) break;
+    await redis.set(`room:carddraw:${roomId}`, JSON.stringify(match));
 
-        const parsed: QueueEntry = JSON.parse(opponent);
-        const isAlive = io.sockets.sockets.get(parsed.socketId);
+    // 🔥 JOIN ROOM (IMPORTANT FIX)
+    socket.join(roomId);
+    io.sockets.sockets.get(opponent.socketId)?.join(roomId);
 
-        if (isAlive) {
-          opponentData = parsed;
-          break;
-        }
-      }
-      if (!opponentData) {
-        await redis.lpush(queueKey, entry);
-        socket.emit("carddraw:waiting");
-        return;
-      }
+    // notify both
+    io.to(opponent.socketId).emit("carddraw:matched", { roomId });
+    socket.emit("carddraw:matched", { roomId });
+    io.emit("carddraw:queue:update");
+  });
+
+  socket.on("carddraw:cancel", async () => {
+    if (socket.queueKey && socket.queueEntry) {
+      await redis.lrem(socket.queueKey, 1, socket.queueEntry);
+
       socket.queueKey = null;
       socket.queueEntry = null;
 
-      const roomId = `cd_${Date.now()}`;
-      const match = {
-        matchId: roomId,
-        players: [
-          {
-            id: opponentData.playerId,
-            socketId: opponentData.socketId,
-            picks: [], // cards picked across rounds
-            total: 0, // accumulated score
-          },
-          {
-            id: playerId,
-            socketId: socket.id,
-            picks: [],
-            total: 0,
-          },
-        ],
+      socket.emit("carddraw:cancelled");
 
-        betAmount: bet,
-        status: "playing",
-        winner: null,
+      io.emit("carddraw:queue:update");
+    }
+  });
 
-        deck: shuffleDeck(),
-        pickedIndices: [],
+  socket.on("disconnect", async () => {
+    if (socket.queueKey && socket.queueEntry) {
+      await redis.lrem(socket.queueKey, 1, socket.queueEntry);
 
-        turn: playerId, 
-        round: 1,
-        maxRounds: 3, 
-      };
-      await redis.set(`room:carddraw:${roomId}`, JSON.stringify(match));
-      io.to(opponentData.socketId).emit("carddraw:matched", { roomId });
-      io.to(socket.id).emit("carddraw:matched", { roomId });
-    },
-  );
-
+      io.emit("carddraw:queue:update"); // 🔥 cleanup update
+    }
+  });
   socket.on("carddraw:join", async ({ roomId }: { roomId: string }) => {
     const roomRaw = await redis.get(`room:carddraw:${roomId}`);
     if (!roomRaw) {
@@ -217,5 +244,34 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
     if (match.status === "finished") {
       io.to(roomId).emit("carddraw:result", match);
     }
+  });
+  const ALLOWED_BETS = [10, 50, 100];
+
+  socket.on("carddraw:queue:list", async () => {
+    const result = [];
+
+    for (const bet of ALLOWED_BETS) {
+      const queueKey = `queue:carddraw:${bet}`;
+
+      const rawList = await redis.lrange(queueKey, 0, -1);
+
+      const players = rawList
+        .map((item) => {
+          try {
+            return JSON.parse(item);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      result.push({
+        bet,
+        players, // [{ playerId, socketId }]
+        count: players.length,
+      });
+    }
+
+    socket.emit("carddraw:queue:list", result);
   });
 }

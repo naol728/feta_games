@@ -1,107 +1,122 @@
-import { useEffect, useState } from "react"
-import { socket } from "@/lib/socket"
-import { useNavigate } from "react-router-dom"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
-import { ArrowLeft } from "lucide-react"
+import { useEffect, useState } from "react";
+import { socket } from "@/lib/socket";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft } from "lucide-react";
 
-
-
-export default function ConnectFourMatchmaking() {
-  const navigate = useNavigate()
+export default function CardDrawMatchmaking() {
+  const navigate = useNavigate();
 
   const [playerId] = useState(() => {
-    let id = localStorage.getItem("playerId")
+    let id = localStorage.getItem("playerId");
     if (!id) {
-      id = "player_" + Math.floor(Math.random() * 100000)
-      localStorage.setItem("playerId", id)
+      id = "player_" + Math.floor(Math.random() * 100000);
+      localStorage.setItem("playerId", id);
     }
-    return id
-  })
+    return id;
+  });
 
-  const [betAmount, setBetAmount] = useState<number | null>(null)
-  const [searching, setSearching] = useState(false)
+  const [betAmount, setBetAmount] = useState<number | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [rooms, setRooms] = useState<any[]>([]);
 
-  const [rooms, setRooms] = useState<any[]>([])
-
+  /* ---------------- QUEUE LIST ---------------- */
   useEffect(() => {
-    socket.emit("connectfour:queue:list")
+    socket.emit("carddraw:queue:list");
 
-    socket.on("connectfour:queue:list", (data) => {
-      setRooms(data)
-    })
-    socket.on("connectfour:queue:update", () => {
-      socket.emit("connectfour:queue:list")
-    })
+    socket.on("carddraw:queue:list", (data) => {
+      setRooms(data);
+    });
+
+    socket.on("carddraw:queue:update", () => {
+      socket.emit("carddraw:queue:list");
+    });
 
     return () => {
-      socket.off("connectfour:queue:list")
-      socket.off("connectfour:queue:update")
-    }
-  }, [])
+      socket.off("carddraw:queue:list");
+      socket.off("carddraw:queue:update");
+    };
+  }, []);
 
+  /* ---------------- PLAYER + MATCH ---------------- */
   useEffect(() => {
-    socket.emit("player:register", { playerId })
+    socket.emit("player:register", { playerId });
 
-    socket.on("connectfour:matched", ({ roomId }: { roomId: string }) => {
-      navigate(`/connectfour/${roomId}`)
-    })
+    socket.on("carddraw:matched", ({ roomId }) => {
+      setSearching(false);
+      navigate(`/carddraw/${roomId}`);
+    });
+
+    socket.on("carddraw:waiting", () => {
+      setSearching(true);
+    });
+
+    socket.on("carddraw:cancelled", () => {
+      setSearching(false);
+      socket.emit("carddraw:queue:list");
+    });
+
     socket.on("error", (msg) => {
-      console.error(msg)
-      setSearching(false)
-    })
-    socket.on("connectfour:cancelled", () => {
-      setSearching(false)
-      socket.emit("connectfour:queue:list")
-      console.log("Matchmaking cancelled")
-    })
-
+      console.error(msg);
+      setSearching(false);
+    });
 
     return () => {
-      socket.off("connectfour:matched")
-    }
-  }, [playerId, navigate])
+      socket.off("carddraw:matched");
+      socket.off("carddraw:waiting");
+      socket.off("carddraw:cancelled");
 
+      // 🔥 auto cancel on leave
+      socket.emit("carddraw:cancel");
+    };
+  }, [playerId, navigate]);
+
+  /* ---------------- ACTIONS ---------------- */
   const startMatchmaking = () => {
-    if (!betAmount || searching) return
-    setSearching(true)
+    if (!betAmount || searching) return;
 
-    socket.emit("connectfour:queue", {
+    setSearching(true);
+
+    socket.emit("carddraw:queue", {
       playerId,
       bet: Number(betAmount),
-    })
-  }
+    });
+  };
 
   const cancelMatchmaking = () => {
-    setSearching(false)
-    socket.emit("connectfour:cancel", { playerId })
-  }
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      socket.emit("connectfour:queue:list")
-    }, 5000)
-
-    return () => clearInterval(interval)
-  }, [])
+    setSearching(false);
+    socket.emit("carddraw:cancel");
+  };
 
   const joinRoom = (targetPlayerId: string, bet: number) => {
-    if (targetPlayerId === playerId) return
-    socket.emit("connectfour:queue:join_player", {
+    if (targetPlayerId === playerId) return;
+
+    socket.emit("carddraw:queue:join_player", {
       playerId,
       targetPlayerId,
-      bet
-    })
-  }
+      bet,
+    });
+  };
+
+  /* ---------------- POLLING FALLBACK ---------------- */
+  useEffect(() => {
+    const interval = setInterval(() => {
+      socket.emit("carddraw:queue:list");
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="relative flex flex-col min-h-screen overflow-hidden">
 
-      {/* Animated Background */}
+      {/* Background */}
       <div className="absolute inset-0 -z-10 animate-gradient bg-[linear-gradient(270deg,hsl(var(--primary)),hsl(var(--secondary)),hsl(var(--accent)),hsl(var(--primary)))] bg-[length:600%_600%]" />
-      {/* Top Bar */}
+
+      {/* Top */}
       <div className="flex items-center px-3 pt-3">
         <Button
           variant="ghost"
@@ -109,17 +124,19 @@ export default function ConnectFourMatchmaking() {
           onClick={() => navigate(-1)}
           className="rounded-full"
         >
-          <ArrowLeft className="h-3 w-3" /> <span className="text-xs">Back</span>
+          <ArrowLeft className="h-3 w-3" />
+          <span className="text-xs">Back</span>
         </Button>
+
         <h1 className="text-lg font-semibold mx-auto pr-8">
-          Matchmaking
+          Card Draw
         </h1>
       </div>
 
       {/* Content */}
       <div className="flex-1 p-3 space-y-4">
 
-        {/* Matchmaking Card */}
+        {/* Matchmaking */}
         <Card className="bg-card/80 backdrop-blur-xl">
           <CardContent className="p-4 space-y-4">
             {!searching ? (
@@ -136,16 +153,17 @@ export default function ConnectFourMatchmaking() {
                   {[10, 50, 100].map((amount) => (
                     <Label
                       key={amount}
-                      htmlFor={`bet-${amount}`}
                       className={`
                         flex flex-col items-center justify-center
                         w-full py-3 rounded-xl border cursor-pointer
-                        ${betAmount === amount ? "border-primary bg-primary/10" : "border-border"}
+                        ${betAmount === amount
+                          ? "border-primary bg-primary/10"
+                          : "border-border"
+                        }
                       `}
                     >
                       <RadioGroupItem
                         value={amount.toString()}
-                        id={`bet-${amount}`}
                         className="hidden"
                       />
                       <span className="text-sm font-medium">
@@ -166,6 +184,7 @@ export default function ConnectFourMatchmaking() {
             ) : (
               <div className="flex flex-col items-center gap-4 py-4">
                 <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+
                 <p className="text-sm text-center">
                   Finding opponent ({betAmount} birr)
                 </p>
@@ -182,37 +201,51 @@ export default function ConnectFourMatchmaking() {
           </CardContent>
         </Card>
 
-        {/* Rooms List */}
+        {/* Queue List */}
         {!searching && (
           <Card className="bg-card/80 backdrop-blur-xl">
             <CardContent className="p-4 space-y-3">
               <h2 className="text-sm font-medium">
-                Available Rooms
+                Available Players
               </h2>
 
               {rooms.map((group) => (
                 <div key={group.bet}>
-
-                  <p className="text-sm font-medium mb-2">{group.bet} birr</p>
+                  <p className="text-sm font-medium mb-2 flex justify-between">
+                    <span>{group.bet} birr</span>
+                    <span className="text-xs text-muted-foreground">
+                      {group.count} players
+                    </span>
+                  </p>
 
                   {group.players.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No players</p>
-                  ) : group.players.filter((p: any) => p.playerId !== playerId).map((p: any) => (
-                    <div
-                      key={p.playerId}
-                      className="flex justify-between p-2 border rounded"
-                    >
-                      <span className="text-xs">{p.playerId}</span>
+                    <p className="text-xs text-muted-foreground">
+                      No players
+                    </p>
+                  ) : (
+                    group.players
+                      .filter((p: any) => p.playerId !== playerId)
+                      .map((p: any) => (
+                        <div
+                          key={p.playerId}
+                          className="flex justify-between items-center p-2 border rounded"
+                        >
+                          <span className="text-xs">
+                            {p.playerId}
+                          </span>
 
-                      <Button
-                        size="sm"
-                        disabled={searching} // ✅ prevent conflict
-                        onClick={() => joinRoom(p.playerId, group.bet)}
-                      >
-                        Join
-                      </Button>
-                    </div>
-                  ))}
+                          <Button
+                            size="sm"
+                            disabled={searching}
+                            onClick={() =>
+                              joinRoom(p.playerId, group.bet)
+                            }
+                          >
+                            Join
+                          </Button>
+                        </div>
+                      ))
+                  )}
                 </div>
               ))}
             </CardContent>
@@ -220,7 +253,7 @@ export default function ConnectFourMatchmaking() {
         )}
       </div>
 
-      {/* Gradient Animation */}
+      {/* Animation */}
       <style>
         {`
           @keyframes gradientMove {
@@ -234,5 +267,5 @@ export default function ConnectFourMatchmaking() {
         `}
       </style>
     </div>
-  )
+  );
 }

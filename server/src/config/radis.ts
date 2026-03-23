@@ -1,6 +1,12 @@
-import Redis from "ioredis"
-
+import { Redis } from "@upstash/redis";
+import { env } from "./env";
 export const redis = new Redis({
-  host: "127.0.0.1",
-  port: 6379,
-})
+  url: env.UPSTASH_REDIS_URL,
+  token: env.UPSTASH_REDIS_TOKEN,
+});
+
+
+
+
+
+

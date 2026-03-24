@@ -7,25 +7,19 @@ import { Server } from "socket.io";
 import initSocket from "./socket";
 
 const app = express();
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      callback(null, true);
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["*"],
-  }),
-);
-app.options("*", cors());
+const corsConfig = {
+  origin: (origin: any, cb: any) => cb(null, true),
+  credentials: true,
+};
 
+app.use(cors(corsConfig));
+app.options("*", cors(corsConfig));
+app.set("trust proxy", 1);
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: (origin, callback) => callback(null, true),
-    credentials: true,
-  },
+  path: "/socket.io",
+  cors: corsConfig,
   transports: ["websocket", "polling"],
 });
 

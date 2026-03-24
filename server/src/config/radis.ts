@@ -1,12 +1,4 @@
-import { Redis } from "@upstash/redis";
-import { env } from "./env";
-export const redis = new Redis({
-  url: env.UPSTASH_REDIS_URL,
-  token: env.UPSTASH_REDIS_TOKEN,
-});
-
-
-
-
-
-
+import Redis from "ioredis";
+export const redis = new Redis(
+  "rediss://default:gQAAAAAAARuPAAIncDI1ODUyMDI1ZDIyNTM0ZmZkYjQ2NDA1Y2IxM2E4YzM1M3AyNzI1OTE@ample-kingfish-72591.upstash.io:6379",
+);

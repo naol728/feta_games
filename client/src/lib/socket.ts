@@ -1,10 +1,7 @@
 import { io } from "socket.io-client";
 
-export const socket = io(import.meta.env.VITE_BACKEND_URL!, {
+export const socket = io("https://feta-games.onrender.com", {
   transports: ["websocket", "polling"],
   withCredentials: true,
-  autoConnect: true,
   reconnection: true,
-  reconnectionAttempts: Infinity,
-  reconnectionDelay: 1000,
 });

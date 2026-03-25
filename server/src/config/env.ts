@@ -9,7 +9,7 @@ export const env = {
   APP_NAME: process.env.APP_NAME as string,
   APP_URL: process.env.APP_URL as string,
   UPSTASH_REDIS_URL: process.env.UPSTASH_REDIS_URL,
-  UPSTASH_REDIS_TOKEN: process.env.UPSTASH_REDIS_TOKEN,
+  LOCAL_REDIS: process.env.LOCAL_REDIS,
 };
 
 if (!env.BOT_TOKEN || !env.ADMIN_CHAT_ID) {

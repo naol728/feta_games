@@ -22,7 +22,24 @@ export default function CardDrawMatchmaking() {
   const [betAmount, setBetAmount] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
   const [status, setStatus] = useState("");
+  const [queues, setQueues] = useState<[]>([]);
 
+  useEffect(() => {
+    socket.emit("carddraw:queue:list");
+
+    socket.on("carddraw:queue:list", (data) => {
+      setQueues(data);
+    });
+
+    socket.on("carddraw:queue:update", () => {
+      socket.emit("carddraw:queue:list"); // refresh
+    });
+
+    return () => {
+      socket.off("carddraw:queue:list");
+      socket.off("carddraw:queue:update");
+    };
+  }, []);
   useEffect(() => {
     socket.emit("player:register", { playerId });
 
@@ -95,7 +112,7 @@ export default function CardDrawMatchmaking() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 p-3 space-y-4">
+      <div className="flex-1 p-3 ">
 
         <Card className="bg-card/80 backdrop-blur-xl">
           <CardContent className="p-4 space-y-4">
@@ -170,20 +187,40 @@ export default function CardDrawMatchmaking() {
         </Card>
 
       </div>
+      <div className="space-y-3">
+        {queues.map((q: { bet: number, count: number, players: [] }) => (
+          <div key={q.bet} className="border p-3 rounded-lg">
+            <div className="flex justify-between mb-2">
+              <span>{q.bet} ETB</span>
+              <span>{q.count} players</span>
+            </div>
 
-      {/* Gradient Animation */}
-      <style>
-        {`
-          @keyframes gradientMove {
-            0% { background-position: 0% 50% }
-            50% { background-position: 100% 50% }
-            100% { background-position: 0% 50% }
-          }
-          .animate-gradient {
-            animation: gradientMove 8s ease infinite;
-          }
-        `}
-      </style>
+            <div className="space-y-2">
+              {q.players.map((p: { queueId: number, playerId: number }) => (
+                <div
+                  key={p.queueId}
+                  className="flex justify-between items-center border p-2 rounded"
+                >
+                  <span>{p.playerId}</span>
+
+                  <button
+                    onClick={() =>
+                      socket.emit("carddraw:queue:join", {
+                        queueId: p.queueId,
+                        bet: q.bet,
+                        playerId,
+                      })
+                    }
+                    className="bg-primary px-3 py-1 rounded text-xs"
+                  >
+                    Join
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

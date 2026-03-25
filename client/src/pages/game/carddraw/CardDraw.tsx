@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom"; // ✅ add
 import { socket } from "@/lib/socket";
 import { CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,28 +7,31 @@ import { Trophy, Coins, User, Clock } from "lucide-react";
 import Players from "./Players";
 import CardContainer from "./CardContainer";
 
-
 type Pick = {
-  value: number
-}
+  value: number;
+};
+
 export type Player = {
-  id: string,
-  total: number,
-  picks: Pick[]
-}
+  id: string;
+  total: number;
+  picks: Pick[];
+};
+
 export type Match = {
-  matchId: string,
-  players: Player[],
-  betAmount: number,
-  status: string,
-  winner: string | null,
-  deck: [],
-  turn: string,
-  round: number,
+  matchId: string;
+  players: Player[];
+  betAmount: number;
+  status: string;
+  winner: string | null;
+  deck: [];
+  turn: string;
+  round: number;
+  reason?: string; 
 };
 
 export default function CardDraw() {
   const { roomId } = useParams();
+  const navigate = useNavigate(); // ✅
 
   const [playerId] = useState(() => {
     let id = localStorage.getItem("playerId");
@@ -59,12 +62,32 @@ export default function CardDraw() {
       setMatch(finalMatch);
     });
 
+    // ✅ NEW: opponent left handler
+    socket.on("carddraw:opponent-left", () => {
+      setMatch((prev) =>
+        prev
+          ? {
+            ...prev,
+            status: "finished",
+            winner: null,
+            reason: "opponent_left",
+          }
+          : prev
+      );
+
+      // small delay for UX
+      setTimeout(() => {
+        navigate("/carddraw"); // or "/" or matchmaking page
+      }, 2000);
+    });
+
     return () => {
       socket.off("carddraw:start");
       socket.off("carddraw:update");
       socket.off("carddraw:result");
+      socket.off("carddraw:opponent-left"); // ✅ cleanup
     };
-  }, [roomId, playerId]);
+  }, [roomId, playerId, navigate]);
 
   if (!match) {
     return (
@@ -168,12 +191,18 @@ export default function CardDraw() {
           <div className="text-center mt-6">
             <div
               className={`inline-block px-6 py-2.5 rounded-xl text-base font-semibold shadow-md
-            ${match.winner === playerId
-                  ? "bg-green-500 text-white"
-                  : "bg-red-500 text-white"
+              ${match.reason === "opponent_left"
+                  ? "bg-yellow-500 text-white" // ✅ special case
+                  : match.winner === playerId
+                    ? "bg-green-500 text-white"
+                    : "bg-red-500 text-white"
                 }`}
             >
-              {match.winner === playerId ? "🎉 You Win" : "💀 You Lose"}
+              {match.reason === "opponent_left"
+                ? "⚠️ Opponent Left"
+                : match.winner === playerId
+                  ? "🎉 You Win"
+                  : "💀 You Lose"}
             </div>
           </div>
         )}

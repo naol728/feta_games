@@ -2,7 +2,6 @@ import { Link } from "react-router-dom"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useEffect, useState } from "react"
-import { Wallet } from "lucide-react"
 import TopBar from "@/layout/TopBar"
 
 function useCountdown(targetDate: Date) {
@@ -31,23 +30,23 @@ function useCountdown(targetDate: Date) {
   return timeLeft
 }
 const games = [
+  { name: "Card Draw", path: "/carddraw", image: "/carddrawduel.jpg" },
   { name: "JetX Pick", path: "/jetxpick", image: "/jetx.jpeg" },
   { name: "Memory Flip", path: "/memoryflip", image: "/memoryflip.jpeg" },
   { name: "Connect Four", path: "/connectfour", image: "/connectfour.jpeg" },
-  { name: "Card Draw", path: "/carddraw", image: "/carddrawduel.jpg" },
-  { name: "Mines Duel", path: "/minesduel", image: "/mineduel.jpeg"}
+  { name: "Mines Duel", path: "/minesduel", image: "/mineduel.jpeg" }
 ]
 export default function Game() {
-      const timeLeft = useCountdown(new Date(Date.now() + 1000 * 60 * 60 * 5)) 
+  const timeLeft = useCountdown(new Date(Date.now() + 1000 * 60 * 60 * 5))
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4">
 
       {/* Top Bar */}
       <TopBar
-  balance={100}
-  onDeposit={() => console.log("deposit")}
-/>
+        balance={100}
+        onDeposit={() => console.log("deposit")}
+      />
 
       {/* Banner */}
       <div className="relative rounded-2xl overflow-hidden mb-4 bg-primary/90 p-10 shadow-lg">
@@ -87,47 +86,47 @@ export default function Game() {
       </div>
 
 
-<Card className="bg-accent/20 backdrop-blur-xl border border-border shadow-md my-2">
-  <CardContent className="px-5  flex items-center justify-between">
+      <Card className="bg-accent/20 backdrop-blur-xl border border-border shadow-md my-2">
+        <CardContent className="px-5  flex items-center justify-between">
 
-    {/* Time Left */}
-    <div className="flex flex-col">
-      <span className="text-xs text-muted-foreground">
-        Time Left
-      </span>
-      <span className="text-sm font-semibold">
-        {timeLeft}
-      </span>
-    </div>
+          {/* Time Left */}
+          <div className="flex flex-col">
+            <span className="text-xs text-muted-foreground">
+              Time Left
+            </span>
+            <span className="text-sm font-semibold">
+              {timeLeft}
+            </span>
+          </div>
 
-    {/* Divider */}
-    <div className="h-8 w-px bg-border" />
+          {/* Divider */}
+          <div className="h-8 w-px bg-border" />
 
-    {/* Total Pool */}
-    <div className="flex flex-col">
-      <span className="text-sm text-muted-foreground">
-        Total Pool
-      </span>
-      <span className="text-sm font-semibold text-primary">
-        12,500 birr
-      </span>
-    </div>
+          {/* Total Pool */}
+          <div className="flex flex-col">
+            <span className="text-sm text-muted-foreground">
+              Total Pool
+            </span>
+            <span className="text-sm font-semibold text-primary">
+              12,500 birr
+            </span>
+          </div>
 
-    {/* Divider */}
-    <div className="h-8 w-px bg-border" />
+          {/* Divider */}
+          <div className="h-8 w-px bg-border" />
 
-    {/* Rewards */}
-    <div className="flex flex-col text-right">
-      <span className="text-xs text-muted-foreground">
-        Rewards
-      </span>
-      <span className="text-sm font-semibold">
-        Top 10
-      </span>
-    </div>
+          {/* Rewards */}
+          <div className="flex flex-col text-right">
+            <span className="text-xs text-muted-foreground">
+              Rewards
+            </span>
+            <span className="text-sm font-semibold">
+              Top 10
+            </span>
+          </div>
 
-  </CardContent>
-</Card>
+        </CardContent>
+      </Card>
       {/* Game List */}
       <div className="space-y-2">
         {games.map((game, i) => (

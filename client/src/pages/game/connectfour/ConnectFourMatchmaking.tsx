@@ -129,7 +129,7 @@ export default function CardDrawMatchmaking() {
         </Button>
 
         <h1 className="text-lg font-semibold mx-auto pr-8">
-          Card Draw
+          Conect Four
         </h1>
       </div>
 

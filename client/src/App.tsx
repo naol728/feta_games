@@ -11,7 +11,7 @@ import MemoryFlip from "./pages/game/memoryflip/MemoryFlip";
 import MinesDuel from "./pages/game/minesduel/MinesDuel";
 import CardDraw from "./pages/game/carddraw/CardDraw";
 import CardDrawMatchmaking from "./pages/game/carddraw/CardDrawMatchmaking";
-
+import { ToastContainer } from "react-toastify"
 export default function App() {
   return (
     <BrowserRouter>
@@ -29,6 +29,18 @@ export default function App() {
         <Route path="/carddraw" element={<CardDrawMatchmaking />} />
         <Route path="/carddraw/:roomId" element={<CardDraw />} />
       </Routes>
+      <ToastContainer
+        position="top-center"
+        autoClose={false}
+        hideProgressBar={true}
+        newestOnTop={false}
+        closeOnClick={false}
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+      />
     </BrowserRouter>
   );
 }

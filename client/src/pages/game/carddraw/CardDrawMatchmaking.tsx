@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { socket } from "@/lib/socket";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft } from "lucide-react";
+import { toast } from "react-toastify";
+import { Badge } from "@/components/ui/badge";
 
 export default function CardDrawMatchmaking() {
   const navigate = useNavigate();
@@ -21,18 +23,14 @@ export default function CardDrawMatchmaking() {
 
   const [betAmount, setBetAmount] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
-  const [status, setStatus] = useState("");
   const [queues, setQueues] = useState<[]>([]);
 
   useEffect(() => {
     socket.emit("carddraw:queue:list");
 
-    socket.on("carddraw:queue:list", (data) => {
-      setQueues(data);
-    });
-
+    socket.on("carddraw:queue:list", (data) => setQueues(data));
     socket.on("carddraw:queue:update", () => {
-      socket.emit("carddraw:queue:list"); // refresh
+      socket.emit("carddraw:queue:list");
     });
 
     return () => {
@@ -40,12 +38,13 @@ export default function CardDrawMatchmaking() {
       socket.off("carddraw:queue:update");
     };
   }, []);
+
   useEffect(() => {
     socket.emit("player:register", { playerId });
 
     socket.on("carddraw:waiting", () => {
       setSearching(true);
-      setStatus("Finding opponent...");
+      toast.info("Finding Match...");
     });
 
     socket.on("carddraw:matched", ({ roomId }) => {
@@ -53,22 +52,14 @@ export default function CardDrawMatchmaking() {
       navigate(`/carddraw/${roomId}`);
     });
 
-    socket.on("carddraw:cancelled", () => {
-      setSearching(false);
-      setStatus("Matchmaking cancelled");
-    });
+    socket.on("carddraw:cancelled", () => setSearching(false));
 
-    socket.on("error", (msg) => {
-      console.error(msg);
-      setSearching(false);
-    });
+    socket.on("error", () => setSearching(false));
 
     return () => {
       socket.off("carddraw:waiting");
       socket.off("carddraw:matched");
       socket.off("carddraw:cancelled");
-
-      // auto cancel on leave
       socket.emit("carddraw:cancel");
     };
   }, [playerId, navigate]);
@@ -85,142 +76,160 @@ export default function CardDrawMatchmaking() {
 
   const cancelMatchmaking = () => {
     setSearching(false);
+    toast.info("Finding Canceled...");
     socket.emit("carddraw:cancel");
   };
 
   return (
-    <div className="relative flex flex-col min-h-screen overflow-hidden">
+    <div className="min-h-screen bg-background text-foreground px-3 py-2 space-y-3">
 
-      {/* Animated Background */}
-      <div className="absolute inset-0 -z-10 animate-gradient bg-[linear-gradient(270deg,hsl(var(--primary)),hsl(var(--secondary)),hsl(var(--accent)),hsl(var(--primary)))] bg-[length:600%_600%]" />
-
-      {/* Top Bar */}
-      <div className="flex items-center px-3 pt-3">
+      {/* Header */}
+      <div className="flex items-center gap-2">
         <Button
           variant="ghost"
           size="icon"
           onClick={() => navigate(-1)}
-          className="rounded-full"
+          className="rounded-full h-8 w-8"
         >
-          <ArrowLeft className="h-3 w-3" />
-          <span className="text-xs">Back</span>
+          <ArrowLeft className="h-4 w-4" />
         </Button>
 
-        <h1 className="text-lg font-semibold mx-auto pr-8">
-          Card Draw
+        <h1 className="text-sm font-semibold tracking-wide">
+          CARD DRAW
         </h1>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 p-3 ">
+      {/* Betting Card */}
+      <Card className="bg-card border border-border shadow-md">
+        <CardContent className="p-3 space-y-3">
 
-        <Card className="bg-card/80 backdrop-blur-xl">
-          <CardContent className="p-4 space-y-4">
-
-            {!searching ? (
-              <>
-                <h2 className="text-base font-medium text-center">
-                  Select Bet
-                </h2>
-
-                <RadioGroup
-                  value={betAmount?.toString() || ""}
-                  onValueChange={(v) => setBetAmount(Number(v))}
-                  className="flex justify-between"
-                >
-                  {[10, 50, 100].map((amount) => (
-                    <Label
-                      key={amount}
-                      className={`
-                        flex flex-col items-center justify-center
-                        w-full py-3 rounded-xl border cursor-pointer
-                        ${betAmount === amount
-                          ? "border-primary bg-primary/10"
-                          : "border-border"
-                        }
-                      `}
-                    >
-                      <RadioGroupItem
-                        value={amount.toString()}
-                        className="hidden"
-                      />
-                      <span className="text-sm font-medium">
-                        {amount} birr
-                      </span>
-                    </Label>
-                  ))}
-                </RadioGroup>
-
-                <Button
-                  onClick={startMatchmaking}
-                  disabled={!betAmount}
-                  className="w-full h-11 text-base"
-                >
-                  Start Match
-                </Button>
-              </>
-            ) : (
-              <div className="flex flex-col items-center gap-4 py-4">
-                <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-
-                <p className="text-sm text-center">
-                  Finding opponent ({betAmount} birr)
-                </p>
-
-                <Button
-                  variant="destructive"
-                  onClick={cancelMatchmaking}
-                  className="w-full"
-                >
-                  Cancel
-                </Button>
+          {!searching ? (
+            <>
+              <div className="text-xs text-muted-foreground text-center">
+                Select Bet Amount
               </div>
-            )}
 
-            {status && (
-              <p className="text-xs text-center text-muted-foreground">
-                {status}
-              </p>
-            )}
-
-          </CardContent>
-        </Card>
-
-      </div>
-      <div className="space-y-3">
-        {queues.map((q: { bet: number, count: number, players: [] }) => (
-          <div key={q.bet} className="border p-3 rounded-lg">
-            <div className="flex justify-between mb-2">
-              <span>{q.bet} ETB</span>
-              <span>{q.count} players</span>
-            </div>
-
-            <div className="space-y-2">
-              {q.players.map((p: { queueId: number, playerId: number }) => (
-                <div
-                  key={p.queueId}
-                  className="flex justify-between items-center border p-2 rounded"
-                >
-                  <span>{p.playerId}</span>
-
-                  <button
-                    onClick={() =>
-                      socket.emit("carddraw:queue:join", {
-                        queueId: p.queueId,
-                        bet: q.bet,
-                        playerId,
-                      })
-                    }
-                    className="bg-primary px-3 py-1 rounded text-xs"
+              <RadioGroup
+                value={betAmount?.toString() || ""}
+                onValueChange={(v) => setBetAmount(Number(v))}
+                className="grid grid-cols-3 gap-2"
+              >
+                {[10, 50, 100].map((amount) => (
+                  <Label
+                    key={amount}
+                    className={`
+                      flex items-center justify-center
+                      py-2 rounded-md text-sm font-semibold cursor-pointer
+                      border transition-all
+                      ${betAmount === amount
+                        ? "border-primary bg-primary/20 shadow-sm"
+                        : "border-border hover:border-primary/40"
+                      }
+                    `}
                   >
-                    Join
-                  </button>
-                </div>
-              ))}
+                    <RadioGroupItem
+                      value={amount.toString()}
+                      className="hidden"
+                    />
+                    {amount} ETB
+                  </Label>
+                ))}
+              </RadioGroup>
+
+              <Button
+                onClick={startMatchmaking}
+                disabled={!betAmount}
+                className="w-full h-9 text-sm font-semibold"
+              >
+                Find Match
+              </Button>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-3 py-3">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+
+              <p className="text-xs text-muted-foreground">
+                Matching ({betAmount} ETB)
+              </p>
+
+              <Button
+                variant="destructive"
+                onClick={cancelMatchmaking}
+                className="w-full h-8 text-xs"
+              >
+                Cancel
+              </Button>
             </div>
-          </div>
-        ))}
-      </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Queue Lobby */}
+      {!searching && (
+        <div className="space-y-2">
+          {queues.map((q: { bet: number; count: number; players: [] }) => (
+            <Card
+              key={q.bet}
+              className="bg-card border border-border/80 shadow-sm"
+            >
+              <CardHeader className="flex flex-row items-center justify-between px-3 py-2">
+                <span className="text-xs font-semibold">
+                  {q.bet} ETB
+                </span>
+
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] px-2 py-0.5"
+                >
+                  {q.count}
+                </Badge>
+              </CardHeader>
+
+              <CardContent className="px-2 pb-2 space-y-1">
+                {q.players.length === 0 && (
+                  <div className="text-[10px] text-muted-foreground px-1">
+                    Empty queue
+                  </div>
+                )}
+
+                {q.players.map(
+                  (p: { queueId: number; playerId: number }) => (
+                    <div
+                      key={p.queueId}
+                      className="
+                        flex items-center justify-between
+                        px-2 py-1.5 rounded-md
+                        border border-border/60
+                        bg-muted/20
+                        hover:bg-muted/40
+                        transition
+                      "
+                    >
+                      <span className="text-[11px] font-mono opacity-80">
+                        {p.playerId}
+                      </span>
+
+                      <Button
+                        size="sm"
+                        className="h-6 px-2 text-[10px]"
+                        onClick={() =>
+                          socket.emit("carddraw:queue:join", {
+                            queueId: p.queueId,
+                            bet: q.bet,
+                            playerId,
+                          })
+                        }
+                      >
+                        Join
+                      </Button>
+                    </div>
+                  )
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

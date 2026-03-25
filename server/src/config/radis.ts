@@ -1,4 +1,3 @@
 import Redis from "ioredis";
-export const redis = new Redis(
-  "rediss://default:gQAAAAAAARuPAAIncDI1ODUyMDI1ZDIyNTM0ZmZkYjQ2NDA1Y2IxM2E4YzM1M3AyNzI1OTE@ample-kingfish-72591.upstash.io:6379",
-);
+import { env } from "./env";
+export const redis = new Redis(env.LOCAL_REDIS!);

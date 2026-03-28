@@ -4,7 +4,21 @@ import { redis } from "../config/radis";
 const QUEUE_KEY = (bet: number) => `queue:carddraw:${bet}`;
 
 function shuffleDeck() {
-  const values: (number | string)[] = [1,2,3,4,5,6,7,8,9,10,"J","Q","K"];
+  const values: (number | string)[] = [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    "J",
+    "Q",
+    "K",
+  ];
   const deck = values.map((v) => ({ value: v, revealed: false }));
 
   for (let i = deck.length - 1; i > 0; i--) {
@@ -30,7 +44,6 @@ interface CustomSocket extends Socket {
 const ALLOWED_BETS = [10, 50, 100];
 
 export default function CardDrawSocket(io: Server, socket: CustomSocket) {
-
   // =========================
   // QUEUE MATCHMAKING
   // =========================
@@ -186,7 +199,8 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
       match.status !== "playing" ||
       match.turn !== playerId ||
       match.pickedIndices.includes(cardindex)
-    ) return;
+    )
+      return;
 
     const player = match.players.find((p) => p.id === playerId);
     const opponent = match.players.find((p) => p.id !== playerId);
@@ -284,9 +298,7 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
         const match = JSON.parse(raw);
         if (match.status !== "playing") return;
 
-        const opponent = match.players.find(
-          (p) => p.socketId !== socket.id
-        );
+        const opponent = match.players.find((p) => p.socketId !== socket.id);
 
         if (!opponent) return;
 
@@ -315,7 +327,7 @@ function createMatch(
   socket: CustomSocket,
   opponent: QueueEntry,
   playerId: string,
-  bet: number
+  bet: number,
 ) {
   const roomId = `cd_${Date.now()}`;
 

@@ -9,6 +9,7 @@ interface CustomSocket extends Socket {
   queueEntry?: string | null;
   roomId?: string;
 }
+
 export default function initSocket(io: any) {
   io.on("connection", (socket: CustomSocket) => {
     socket.on("player:register", async ({ playerId }) => {

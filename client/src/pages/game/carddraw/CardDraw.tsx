@@ -1,11 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom"; // ✅ add
+import { useParams, useNavigate } from "react-router-dom";
 import { socket } from "@/lib/socket";
 import { CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Trophy, Coins, User, Clock } from "lucide-react";
 import Players from "./Players";
 import CardContainer from "./CardContainer";
+import { toast } from "react-toastify";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import confetti from "canvas-confetti";
 
 type Pick = {
   value: number;
@@ -26,12 +36,12 @@ export type Match = {
   deck: [];
   turn: string;
   round: number;
-  reason?: string; 
+  reason?: string;
 };
 
 export default function CardDraw() {
   const { roomId } = useParams();
-  const navigate = useNavigate(); // ✅
+  const navigate = useNavigate();
 
   const [playerId] = useState(() => {
     let id = localStorage.getItem("playerId");
@@ -43,6 +53,28 @@ export default function CardDraw() {
   });
 
   const [match, setMatch] = useState<Match | null>(null);
+  const [showResult, setShowResult] = useState(false);
+  const isWin = match?.winner === playerId;
+  const isLose =
+    match?.winner !== playerId && match?.reason !== "opponent_left";
+  const isLeft = match?.reason === "opponent_left";
+
+  useEffect(() => {
+    if (!showResult) return;
+
+    if (isWin) {
+      confetti({
+        particleCount: 120,
+        spread: 70,
+        origin: { y: 0.6 },
+      });
+    }
+  }, [showResult]);
+  useEffect(() => {
+    if (match?.status === "finished") {
+      setShowResult(true);
+    }
+  }, [match?.status]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -51,6 +83,7 @@ export default function CardDraw() {
     socket.emit("carddraw:join", { roomId });
 
     socket.on("carddraw:start", (data) => {
+      toast.success("Game Started")
       setMatch(data);
     });
 
@@ -62,8 +95,8 @@ export default function CardDraw() {
       setMatch(finalMatch);
     });
 
-    // ✅ NEW: opponent left handler
     socket.on("carddraw:opponent-left", () => {
+      toast.error("Opponet Left")
       setMatch((prev) =>
         prev
           ? {
@@ -85,7 +118,7 @@ export default function CardDraw() {
       socket.off("carddraw:start");
       socket.off("carddraw:update");
       socket.off("carddraw:result");
-      socket.off("carddraw:opponent-left"); // ✅ cleanup
+      socket.off("carddraw:opponent-left");
     };
   }, [roomId, playerId, navigate]);
 
@@ -110,53 +143,48 @@ export default function CardDraw() {
       <div className="mx-auto space-y-5 px-3">
 
         {/* top info */}
-        <div className="border border-border/40 mt-4 p-3 rounded-xl bg-muted/20">
-          <div className="flex justify-between items-center flex-wrap gap-3">
+        <div className="mt-3 px-2 py-2 rounded-md bg-muted/30 border border-border/30">
+          <div className="flex items-center justify-between gap-2">
 
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="gap-1 text-[11px] px-2 py-[2px]">
+            {/* LEFT: round + bet */}
+            <div className="flex items-center gap-2 text-[11px] min-w-0">
+              <span className="flex items-center gap-1 font-medium">
                 <Trophy className="w-3 h-3" />
-                Round {match.round}
-              </Badge>
+                R{match.round}
+              </span>
 
-              <Badge variant="outline" className="gap-1 text-[11px] px-2 py-[2px]">
+              <span className="flex items-center gap-1 text-muted-foreground">
                 <Coins className="w-3 h-3" />
-                {match.betAmount} ETB
-              </Badge>
+                {match.betAmount}
+              </span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-muted-foreground" />
+            {/* RIGHT: status */}
+            <div className="flex items-center gap-1 text-[11px] whitespace-nowrap">
+              <Clock className="w-3.5 h-3.5 text-muted-foreground" />
 
               {match.status === "finished" ? (
-                <Badge variant="destructive" className="text-[11px] px-2 py-[2px]">
-                  Game Ended
-                </Badge>
+                <span className="text-red-500 font-medium">
+                  Ended
+                </span>
+              ) : match.turn === playerId ? (
+                <span className="text-primary font-semibold flex items-center gap-1">
+                  <User className="w-3 h-3" />
+                  Your Turn
+                </span>
               ) : (
-                <Badge
-                  variant={match.turn === playerId ? "default" : "secondary"}
-                  className="gap-1 text-[11px] px-2 py-[2px]"
-                >
-                  {match.turn === playerId ? (
-                    <>
-                      <User className="w-3 h-3" />
-                      Your Turn
-                    </>
-                  ) : (
-                    "Opponent's Turn"
-                  )}
-                </Badge>
+                <span className="text-muted-foreground">
+                  Opponent
+                </span>
               )}
             </div>
+
           </div>
         </div>
 
-        {/* players */}
-        <div className="flex gap-3 justify-center mt-4">
+        <div className="flex flex-col gap-2 mt-3 px-2">
           {match.players.map((player: Player, idx: number) => (
-            <div key={idx}>
-              <Players player={player} />
-            </div>
+            <Players key={idx} player={player} />
           ))}
         </div>
 
@@ -187,25 +215,65 @@ export default function CardDraw() {
           </div>
         </div>
 
-        {match.status === "finished" && (
-          <div className="text-center mt-6">
-            <div
-              className={`inline-block px-6 py-2.5 rounded-xl text-base font-semibold shadow-md
-              ${match.reason === "opponent_left"
-                  ? "bg-yellow-500 text-white" // ✅ special case
-                  : match.winner === playerId
-                    ? "bg-green-500 text-white"
-                    : "bg-red-500 text-white"
-                }`}
-            >
-              {match.reason === "opponent_left"
-                ? "⚠️ Opponent Left"
-                : match.winner === playerId
-                  ? "🎉 You Win"
-                  : "💀 You Lose"}
+        <Dialog open={showResult}>
+          <DialogContent
+            className={`
+      w-[300px] text-center p-6 border border-white/10
+      bg-[#0f172a] text-white backdrop-blur-xl
+
+      ${isWin && "shadow-[0_0_40px_rgba(16,185,129,0.35)]"}
+      ${isLose && "shadow-[0_0_40px_rgba(239,68,68,0.35)]"}
+      ${isLeft && "shadow-[0_0_40px_rgba(245,158,11,0.35)]"}
+
+      ${isWin && "animate-[winPop_0.4s_ease]"}
+      ${isLose && "animate-[loseShake_0.4s_ease]"}
+    `}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold tracking-wide">
+                {isLeft
+                  ? "Opponent Left"
+                  : isWin
+                    ? "Victory"
+                    : "Defeat"}
+              </DialogTitle>
+
+              <DialogDescription className="text-xs text-white/70 mt-1">
+                {isLeft
+                  ? "Win by default"
+                  : isWin
+                    ? "Well played"
+                    : "Try again"}
+              </DialogDescription>
+            </DialogHeader>
+
+            {/* RESULT AMOUNT */}
+            <div className="mt-5">
+              <div className="text-[11px] text-white/50">Result</div>
+
+              <div
+                className={`
+          text-3xl font-bold mt-1 tracking-wide
+          ${isWin && "text-emerald-400"}
+          ${isLose && "text-red-400"}
+          ${isLeft && "text-amber-400"}
+        `}
+              >
+                {isWin || isLeft ? "+" : "-"}
+                {match?.betAmount}
+                <span className="text-xs ml-1 text-white/60">ETB</span>
+              </div>
             </div>
-          </div>
-        )}
+
+            {/* ACTION */}
+            <Button
+              className="mt-6 w-full text-sm bg-white/10 hover:bg-white/20 text-white border border-white/10"
+              onClick={() => navigate("/carddraw")}
+            >
+              Play Again
+            </Button>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

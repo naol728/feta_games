@@ -2,16 +2,18 @@ import { useEffect, useState } from "react";
 import { socket } from "@/lib/socket";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "react-toastify";
-import { Badge } from "@/components/ui/badge";
-
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 export default function CardDrawMatchmaking() {
   const navigate = useNavigate();
-
+  const [showRules, setShowRules] = useState(false);
   const [playerId] = useState(() => {
     let id = localStorage.getItem("playerId");
     if (!id) {
@@ -20,7 +22,23 @@ export default function CardDrawMatchmaking() {
     }
     return id;
   });
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setShowRules(true);
+    }, 300);
 
+    return () => clearTimeout(t);
+  }, []);
+  const [dontShow, setDontShow] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem("hide_rules")) {
+      setShowRules(true);
+    }
+  }, []);
+
+
+  const [loadingQueues, setLoadingQueues] = useState(true);
   const [betAmount, setBetAmount] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
   const [queues, setQueues] = useState<[]>([]);
@@ -28,7 +46,11 @@ export default function CardDrawMatchmaking() {
   useEffect(() => {
     socket.emit("carddraw:queue:list");
 
-    socket.on("carddraw:queue:list", (data) => setQueues(data));
+    socket.on("carddraw:queue:list", (data) => {
+      setQueues(data);
+      setLoadingQueues(false);
+    });
+
     socket.on("carddraw:queue:update", () => {
       socket.emit("carddraw:queue:list");
     });
@@ -44,17 +66,25 @@ export default function CardDrawMatchmaking() {
 
     socket.on("carddraw:waiting", () => {
       setSearching(true);
-      toast.info("Finding Match...");
+      toast("🔍 Finding opponent...", { type: "info" });
     });
 
     socket.on("carddraw:matched", ({ roomId }) => {
+      toast.dismiss();
+      toast("⚡ Match found!", { type: "success" });
       setSearching(false);
       navigate(`/carddraw/${roomId}`);
     });
 
-    socket.on("carddraw:cancelled", () => setSearching(false));
+    socket.on("carddraw:cancelled", () => {
+      toast("Cancelled", { type: "info" });
+      setSearching(false);
+    });
 
-    socket.on("error", () => setSearching(false));
+    socket.on("error", () => {
+      toast("Something went wrong", { type: "error" });
+      setSearching(false);
+    });
 
     return () => {
       socket.off("carddraw:waiting");
@@ -102,116 +132,96 @@ export default function CardDrawMatchmaking() {
       {/* Betting Card */}
       <Card className="bg-card border border-border shadow-md">
         <CardContent className="p-3 space-y-3">
+          <div className="mt-3 px-2 space-y-3">
 
-          {!searching ? (
-            <>
-              <div className="text-xs text-muted-foreground text-center">
-                Select Bet Amount
+            {!searching ? (
+              <>
+                <div className="text-[11px] text-muted-foreground text-center">
+                  Select bet
+                </div>
+
+                <div className="flex gap-2">
+                  {[10, 50, 100].map((amount) => (
+                    <button
+                      key={amount}
+                      onClick={() => setBetAmount(amount)}
+                      className={`
+              flex-1 py-2 rounded-md text-xs font-semibold border
+              ${betAmount === amount
+                          ? "bg-primary/15 border-primary text-primary"
+                          : "bg-muted/30 border-border"
+                        }
+            `}
+                    >
+                      {amount}
+                    </button>
+                  ))}
+                </div>
+
+                <Button
+                  onClick={startMatchmaking}
+                  disabled={!betAmount}
+                  className="w-full h-9 text-sm"
+                >
+                  Find Match
+                </Button>
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-2 py-3">
+                <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <p className="text-[11px] text-muted-foreground">
+                  Matching {betAmount} ETB
+                </p>
+
+                <Button
+                  variant="destructive"
+                  onClick={cancelMatchmaking}
+                  className="w-full h-8 text-xs"
+                >
+                  Cancel
+                </Button>
               </div>
-
-              <RadioGroup
-                value={betAmount?.toString() || ""}
-                onValueChange={(v) => setBetAmount(Number(v))}
-                className="grid grid-cols-3 gap-2"
-              >
-                {[10, 50, 100].map((amount) => (
-                  <Label
-                    key={amount}
-                    className={`
-                      flex items-center justify-center
-                      py-2 rounded-md text-sm font-semibold cursor-pointer
-                      border transition-all
-                      ${betAmount === amount
-                        ? "border-primary bg-primary/20 shadow-sm"
-                        : "border-border hover:border-primary/40"
-                      }
-                    `}
-                  >
-                    <RadioGroupItem
-                      value={amount.toString()}
-                      className="hidden"
-                    />
-                    {amount} ETB
-                  </Label>
-                ))}
-              </RadioGroup>
-
-              <Button
-                onClick={startMatchmaking}
-                disabled={!betAmount}
-                className="w-full h-9 text-sm font-semibold"
-              >
-                Find Match
-              </Button>
-            </>
-          ) : (
-            <div className="flex flex-col items-center gap-3 py-3">
-              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-
-              <p className="text-xs text-muted-foreground">
-                Matching ({betAmount} ETB)
-              </p>
-
-              <Button
-                variant="destructive"
-                onClick={cancelMatchmaking}
-                className="w-full h-8 text-xs"
-              >
-                Cancel
-              </Button>
-            </div>
-          )}
+            )}
+          </div>
         </CardContent>
       </Card>
 
       {/* Queue Lobby */}
       {!searching && (
-        <div className="space-y-2">
-          {queues.map((q: { bet: number; count: number; players: [] }) => (
-            <Card
+        <div className="mt-4 space-y-2 px-2">
+          <div className="text-[11px] text-muted-foreground">
+            Live tables
+          </div>
+
+          {loadingQueues ? (
+            <div className="flex justify-center py-4">
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : queues.map((q: any) => (
+            <div
               key={q.bet}
-              className="bg-card border border-border/80 shadow-sm"
+              className="rounded-md border border-border/40 bg-muted/20 p-2"
             >
-              <CardHeader className="flex flex-row items-center justify-between px-3 py-2">
-                <span className="text-xs font-semibold">
-                  {q.bet} ETB
-                </span>
+              <div className="flex justify-between items-center text-[11px] mb-1">
+                <span className="font-semibold">{q.bet} ETB</span>
+                <span className="text-muted-foreground">{q.count} players</span>
+              </div>
 
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] px-2 py-0.5"
-                >
-                  {q.count}
-                </Badge>
-              </CardHeader>
-
-              <CardContent className="px-2 pb-2 space-y-1">
-                {q.players.length === 0 && (
-                  <div className="text-[10px] text-muted-foreground px-1">
-                    Empty queue
+              <div className="space-y-1 max-h-[120px] overflow-y-auto">
+                {q.players.length === 0 ? (
+                  <div className="text-[10px] text-muted-foreground">
+                    Empty
                   </div>
-                )}
-
-                {q.players.map(
-                  (p: { queueId: number; playerId: number }) => (
+                ) : (
+                  q.players.map((p: any) => (
                     <div
                       key={p.queueId}
-                      className="
-                        flex items-center justify-between
-                        px-2 py-1.5 rounded-md
-                        border border-border/60
-                        bg-muted/20
-                        hover:bg-muted/40
-                        transition
-                      "
+                      className="flex justify-between items-center text-[10px] bg-muted/30 px-2 py-1 rounded"
                     >
-                      <span className="text-[11px] font-mono opacity-80">
-                        {p.playerId}
-                      </span>
+                      <span className="truncate">{p.playerId}</span>
 
-                      <Button
-                        size="sm"
-                        className="h-6 px-2 text-[10px]"
+                      <button
+                        className="text-primary text-[10px]"
                         onClick={() =>
                           socket.emit("carddraw:queue:join", {
                             queueId: p.queueId,
@@ -221,15 +231,49 @@ export default function CardDrawMatchmaking() {
                         }
                       >
                         Join
-                      </Button>
+                      </button>
                     </div>
-                  )
+                  ))
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
-      )}
-    </div>
-  );
+      )
+      }
+
+      <Dialog open={showRules} onOpenChange={setShowRules} >
+        <DialogContent className="w-[300px] text-sm">
+          <DialogHeader>
+            <DialogTitle>How to Play</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-2 text-[12px] text-muted-foreground">
+            <p>• Each player draws cards from the deck</p>
+            <p>• Highest total score wins</p>
+            <p>• You take turns picking cards</p>
+            <p>• Game ends after all rounds</p>
+            <p>• Winner takes the bet</p>
+          </div>
+          <label className="flex items-center gap-2 text-[11px] mt-2">
+            <input
+              type="checkbox"
+              onChange={(e) => {
+                if (e.target.checked) {
+                  localStorage.setItem("hide_rules", "1");
+                }
+              }}
+            />
+            Don't show again
+          </label>
+
+          <Button
+            className="mt-3 w-full"
+            onClick={() => setShowRules(false)}
+          >
+            Got it
+          </Button>
+        </DialogContent>
+      </Dialog>
+    </div>);
 }

@@ -11,9 +11,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 export default function CardDrawMatchmaking() {
   const navigate = useNavigate();
   const [showRules, setShowRules] = useState(false);
+
   const [playerId] = useState(() => {
     let id = localStorage.getItem("playerId");
     if (!id) {
@@ -23,19 +25,15 @@ export default function CardDrawMatchmaking() {
     return id;
   });
   useEffect(() => {
+    if (localStorage.getItem("hide_rules")) return;
+
     const t = setTimeout(() => {
       setShowRules(true);
     }, 300);
 
     return () => clearTimeout(t);
   }, []);
-  const [dontShow, setDontShow] = useState(false);
 
-  useEffect(() => {
-    if (!localStorage.getItem("hide_rules")) {
-      setShowRules(true);
-    }
-  }, []);
 
 
   const [loadingQueues, setLoadingQueues] = useState(true);
@@ -106,7 +104,6 @@ export default function CardDrawMatchmaking() {
 
   const cancelMatchmaking = () => {
     setSearching(false);
-    toast.info("Finding Canceled...");
     socket.emit("carddraw:cancel");
   };
 
@@ -118,7 +115,7 @@ export default function CardDrawMatchmaking() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate(-1)}
+          onClick={() => navigate("/carddraw")}
           className="rounded-full h-8 w-8"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -197,7 +194,7 @@ export default function CardDrawMatchmaking() {
             <div className="flex justify-center py-4">
               <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : queues.map((q: any) => (
+          ) : queues.map((q: { bet: number, players: { playerId: number, queueId: number }[], count: number }) => (
             <div
               key={q.bet}
               className="rounded-md border border-border/40 bg-muted/20 p-2"
@@ -213,7 +210,7 @@ export default function CardDrawMatchmaking() {
                     Empty
                   </div>
                 ) : (
-                  q.players.map((p: any) => (
+                  q.players.map((p) => (
                     <div
                       key={p.queueId}
                       className="flex justify-between items-center text-[10px] bg-muted/30 px-2 py-1 rounded"
@@ -255,17 +252,22 @@ export default function CardDrawMatchmaking() {
             <p>• Game ends after all rounds</p>
             <p>• Winner takes the bet</p>
           </div>
-          <label className="flex items-center gap-2 text-[11px] mt-2">
-            <input
-              type="checkbox"
-              onChange={(e) => {
-                if (e.target.checked) {
-                  localStorage.setItem("hide_rules", "1");
-                }
-              }}
-            />
-            Don't show again
-          </label>
+          <div className="flex items-center gap-2 mt-2 text-[11px]">
+            <Label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="w-3 h-3 accent-primary"
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    localStorage.setItem("hide_rules", "1");
+                  } else {
+                    localStorage.removeItem("hide_rules");
+                  }
+                }}
+              />
+              Don't show again
+            </Label>
+          </div>
 
           <Button
             className="mt-3 w-full"

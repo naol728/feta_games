@@ -10,6 +10,8 @@ export const env = {
   APP_URL: process.env.APP_URL as string,
   UPSTASH_REDIS_URL: process.env.UPSTASH_REDIS_URL,
   LOCAL_REDIS: process.env.LOCAL_REDIS,
+  SUPABASE_URL:process.env.SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY:process.env.SUPABASE_SERVICE_ROLE_KEY
 };
 
 if (!env.BOT_TOKEN || !env.ADMIN_CHAT_ID) {

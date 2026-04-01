@@ -1,5 +1,6 @@
 import TelegramBot from "node-telegram-bot-api";
 import { env } from "./config/env";
+import { upsertTelegramUser } from "./services/user";
 
 export const bot = new TelegramBot(env.BOT_TOKEN, {
   polling: true,
@@ -7,7 +8,7 @@ export const bot = new TelegramBot(env.BOT_TOKEN, {
 
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
-
+  const user = await upsertTelegramUser(msg);
   const text = `
 🎮 *Welcome to ${env.APP_NAME}!*
 

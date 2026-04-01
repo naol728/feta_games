@@ -8,6 +8,8 @@ export async function upsertTelegramUser(msg: TelegramBot.Message) {
   const payload = {
     telegram_id: tg.id,
     username: tg.username ?? null,
+    Fname: tg.first_name,
+    Lname: tg.last_name ?? null,
   };
 
   const { data, error } = await supabase

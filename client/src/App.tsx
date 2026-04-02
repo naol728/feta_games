@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Game from "./pages/player/Game";
 import Invite from "./pages/player/Invite";
@@ -12,7 +12,15 @@ import MinesDuel from "./pages/game/minesduel/MinesDuel";
 import CardDraw from "./pages/game/carddraw/CardDraw";
 import CardDrawMatchmaking from "./pages/game/carddraw/CardDrawMatchmaking";
 import { ToastContainer } from "react-toastify"
+import { initAuth } from "./store/slice/auth";
+import { useAppDispatch } from "./store/hook";
+
+
 export default function App() {
+  const dispatch = useAppDispatch()
+  useEffect(() => {
+    dispatch(initAuth());
+  }, [dispatch]);
   return (
     <BrowserRouter>
       <Routes>

@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { Response } from "express";
 import http from "http";
-import connectFour from "./routes/connectfour.route";
+import authRoute from "./routes/auth.route";
 import { Server } from "socket.io";
 import initSocket from "./socket";
 
@@ -23,7 +23,7 @@ const io = new Server(server, {
   transports: ["websocket", "polling"],
 });
 
-app.use("/conectfour", connectFour);
+app.use("/auth", authRoute);
 
 app.use("/", (_, res: Response) => {
   res.status(200).send("<h1>Feta Games</h1>");

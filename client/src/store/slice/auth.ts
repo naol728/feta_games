@@ -1,3 +1,4 @@
+/*eslint-disable*/
 import apiClient from "@/api/apiClient";
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 

@@ -20,7 +20,7 @@ export default function App() {
   const dispatch = useAppDispatch()
   useEffect(() => {
     dispatch(initAuth());
-  }, [dispatch]);
+  });
   return (
     <BrowserRouter>
       <Routes>

@@ -22,7 +22,7 @@ const io = new Server(server, {
   cors: corsConfig,
   transports: ["websocket", "polling"],
 });
-
+app.use(express.json({ limit: "1mb" }));
 app.use("/auth", authRoute);
 
 app.use("/", (_, res: Response) => {

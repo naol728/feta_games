@@ -6,7 +6,6 @@ import jwt from "jsonwebtoken";
 export const telegramAuth = async (req: Request, res: Response) => {
   try {
     const { initData } = req.body;
-
     const tgUser = verifyTelegram(initData, env.BOT_TOKEN);
 
     const { data: user } = await supabase

@@ -38,6 +38,7 @@ const games = [
 ]
 export default function Game() {
   const timeLeft = useCountdown(new Date(Date.now() + 1000 * 60 * 60 * 5))
+  const initdata = window.Telegram?.WebApp?.initData;
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4">
@@ -67,6 +68,10 @@ export default function Game() {
         />
       </div>
 
+      <div className="text-wrap">
+        <code>{initdata}</code>
+
+      </div>
       {/* Quick Actions */}
       <div className="grid grid-cols-4 gap-3 mb-6">
         {[

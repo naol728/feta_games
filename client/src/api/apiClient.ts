@@ -1,4 +1,4 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosError,type InternalAxiosRequestConfig } from "axios";
 
 const BASEURL = import.meta.env.VITE_BACKEND_URL!;
 

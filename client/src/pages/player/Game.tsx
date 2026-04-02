@@ -68,9 +68,15 @@ export default function Game() {
         />
       </div>
 
-      <div className="text-wrap">
-        <code>{initdata}</code>
+      <div className="relative">
+        <code className="block break-all">{initdata}</code>
 
+        <button
+          onClick={() => navigator.clipboard.writeText(initdata)}
+          className="absolute top-0 right-0"
+        >
+          Copy
+        </button>
       </div>
       {/* Quick Actions */}
       <div className="grid grid-cols-4 gap-3 mb-6">

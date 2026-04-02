@@ -1,4 +1,4 @@
-import axios, { AxiosError,type InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
 const BASEURL = import.meta.env.VITE_BACKEND_URL!;
 
@@ -51,7 +51,7 @@ apiClient.interceptors.response.use(
 
       try {
         const res = await axios.post(`${BASEURL}/auth/telegram`, {
-          initData: (window as any).Telegram?.WebApp?.initData,
+          initData: window.Telegram?.WebApp?.initData,
         });
 
         const token = res.data?.access_token;

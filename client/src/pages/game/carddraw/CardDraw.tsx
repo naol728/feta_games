@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { socket } from "@/lib/socket";
-import { CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Trophy, Coins, User, Clock } from "lucide-react";
 import Players from "./Players";
@@ -10,9 +8,11 @@ import { toast } from "react-toastify";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import confetti from "canvas-confetti";
+import { getSocket } from "@/lib/socket";
+import { useAppSelector } from "@/store/hook";
 
 type Pick = { value: number };
-export type Player = { id: string; total: number; picks: Pick[] };
+export type Player = { id: number; total: number; picks: Pick[] };
 export type Match = {
   matchId: string;
   players: Player[];
@@ -20,7 +20,7 @@ export type Match = {
   status: string;
   winner: string | null;
   deck: any[];
-  turn: string;
+  turn: number;
   round: number;
   reason?: string;
 };
@@ -28,15 +28,9 @@ export type Match = {
 export default function CardDraw() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const socket = getSocket();
 
-  const [playerId] = useState(() => {
-    let id = localStorage.getItem("playerId");
-    if (!id) {
-      id = "player_" + Math.floor(Math.random() * 100000);
-      localStorage.setItem("playerId", id);
-    }
-    return id;
-  });
+  const playerId = useAppSelector((state) => state.auth.user?.telegram_id)
 
   const [match, setMatch] = useState<Match | null>(null);
   const [showResult, setShowResult] = useState(false);

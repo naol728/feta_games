@@ -5,6 +5,8 @@ import http from "http";
 import authRoute from "./routes/auth.route";
 import { Server } from "socket.io";
 import initSocket from "./socket";
+import { supabase } from "./config/supabase";
+import jwt from "jsonwebtoken";
 
 const app = express();
 const corsConfig = {
@@ -24,7 +26,29 @@ const io = new Server(server, {
 });
 app.use(express.json({ limit: "1mb" }));
 app.use("/auth", authRoute);
+if (process.env.NODE_ENV === "development") {
+  app.post("/auth/dev", async (req, res) => {
+    const { data: user } = await supabase
+      .from("users")
+      .upsert(
+        { telegram_id: 167588999278, username: "naoll_udev" },
+        { onConflict: "telegram_id" },
+      )
+      .select()
+      .single();
 
+    const token = jwt.sign(
+      { userId: user.id, telegramId: user.telegram_id },
+      process.env.JWT_SECRET!,
+      { expiresIn: "7d" },
+    );
+
+    res.json({
+      access_token: token,
+      user,
+    });
+  });
+}
 app.use("/", (_, res: Response) => {
   res.status(200).send("<h1>Feta Games</h1>");
 });
@@ -45,4 +69,5 @@ app.use(
     });
   },
 );
+
 export default server;

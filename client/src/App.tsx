@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Game from "./pages/player/Game";
 import Invite from "./pages/player/Invite";
@@ -14,13 +14,30 @@ import CardDrawMatchmaking from "./pages/game/carddraw/CardDrawMatchmaking";
 import { ToastContainer } from "react-toastify"
 import { initAuth } from "./store/slice/auth";
 import { useAppDispatch } from "./store/hook";
+import { connectSocket } from "./lib/socket";
 
 
 export default function App() {
   const dispatch = useAppDispatch()
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
-    dispatch(initAuth());
-  });
+    async function init() {
+      try {
+        await dispatch(initAuth()).unwrap();
+        connectSocket(); // ✅ init once
+      } catch (err) {
+        console.error("Init failed", err);
+      } finally {
+        setReady(true);
+      }
+    }
+
+    init();
+  }, [dispatch]);
+
+  if (!ready) return null
+
   return (
     <BrowserRouter>
       <Routes>

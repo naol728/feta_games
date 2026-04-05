@@ -1,7 +1,4 @@
 ### auth
-POST http://localhost:3000/auth/telegram
+POST http://localhost:3000/auth/dev
 Content-Type: application/json
 
-{
-  "initData": "query_id=AAHdF6IQAAAAAN0XohDhrOrc&user=%7B%22id%22%3A1675909278%2C%22first_name%22%3A%22Naol%22%2C%22username%22%3A%22naol_dev%22%7D&auth_date=1710000000&hash=abc123..."
-}

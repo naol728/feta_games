@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { socket } from "@/lib/socket";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,18 +11,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { getSocket } from "@/lib/socket";
+import { useAppSelector } from "@/store/hook";
 export default function CardDrawMatchmaking() {
   const navigate = useNavigate();
   const [showRules, setShowRules] = useState(false);
+  const socket = getSocket();
 
-  const [playerId] = useState(() => {
-    let id = localStorage.getItem("playerId");
-    if (!id) {
-      id = "player_" + Math.floor(Math.random() * 100000);
-      localStorage.setItem("playerId", id);
-    }
-    return id;
-  });
+  const playerId = useAppSelector((state) => state.auth.user?.telegram_id)
   useEffect(() => {
     if (localStorage.getItem("hide_rules")) return;
 
@@ -60,7 +55,7 @@ export default function CardDrawMatchmaking() {
   }, []);
 
   useEffect(() => {
-    socket.emit("player:register", { playerId });
+    socket.emit("player:register");
 
     socket.on("carddraw:waiting", () => {
       setSearching(true);
@@ -90,14 +85,13 @@ export default function CardDrawMatchmaking() {
       socket.off("carddraw:cancelled");
       socket.emit("carddraw:cancel");
     };
-  }, [playerId, navigate]);
+  }, [navigate]);
 
   const startMatchmaking = () => {
     if (!betAmount || searching) return;
 
     setSearching(true);
     socket.emit("carddraw:queue", {
-      playerId,
       bet: Number(betAmount),
     });
   };
@@ -115,7 +109,7 @@ export default function CardDrawMatchmaking() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate("/carddraw")}
+          onClick={() => navigate("/")}
           className="rounded-full h-8 w-8"
         >
           <ArrowLeft className="h-4 w-4" />

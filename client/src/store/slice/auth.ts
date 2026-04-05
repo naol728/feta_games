@@ -3,7 +3,7 @@ import apiClient from "@/api/apiClient";
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
 export const initAuth = createAsyncThunk("auth/init", async () => {
-  const res = await apiClient.post(`/auth/telegram`, {
+  const res = await apiClient.post(`/auth/dev`, {
     initData: window.Telegram.WebApp.initData,
   });
 
@@ -15,8 +15,14 @@ export const initAuth = createAsyncThunk("auth/init", async () => {
 
   return data.user;
 });
-
-const initialState = {
+type User = {
+  telegram_id: number;
+};
+type InitalState = {
+  user: User | null;
+  loading:boolean
+};
+const initialState: InitalState = {
   user: null,
   loading: true,
 };

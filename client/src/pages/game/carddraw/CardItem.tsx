@@ -1,4 +1,4 @@
-import { socket } from '@/lib/socket';
+import { getSocket } from '@/lib/socket';
 import React from 'react';
 
 const cardMap: Record<string, string> = {
@@ -21,13 +21,14 @@ type CardItemProp = {
     card: { value: number | string; revealed: boolean };
     index: number;
     roomId: string | undefined;
-    playerId: string;
+    playerId: number;
     disabled: boolean;
     pickedBy: string;
 };
 
 export default function CardItem({ card, index, roomId, playerId, disabled, pickedBy }: CardItemProp) {
     const isMine = pickedBy === playerId;
+    const socket = getSocket();
 
     function handlePick() {
         if (disabled) return;

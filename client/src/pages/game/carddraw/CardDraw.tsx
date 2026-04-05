@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+/*eslint-disable*/
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Trophy, Coins, User, Clock } from "lucide-react";

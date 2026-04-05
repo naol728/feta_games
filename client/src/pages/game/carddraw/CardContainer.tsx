@@ -4,7 +4,7 @@ import CardItem from "./CardItem";
 type CardContainerProp = {
     deck: { value: number | string; revealed: boolean }[];
     roomId: string | undefined;
-    playerId: number;
+    playerId: number | undefined;
     match: Match;
 };
 
@@ -30,7 +30,7 @@ export default function CardContainer({ deck, roomId, playerId, match }: CardCon
 }
 
 function getPickedMap(match: Match) {
-    const map: Record<number, string> = {};
+    const map: Record<number, number> = {};
     match.players.forEach((p) => {
         p.picks?.forEach((card) => {
             const index = match.deck.findIndex((d) => d === card);

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { socket } from "../../../lib/socket"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import Board from "./Board"
+import { getSocket } from "@/lib/socket"
 
 type Player = {
   id: string
@@ -41,6 +41,7 @@ export default function ConnectFour() {
     }
     return id
   })
+  const socket = getSocket();
 
   const navigate = useNavigate()
 

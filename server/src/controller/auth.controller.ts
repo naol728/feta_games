@@ -26,7 +26,6 @@ export const telegramAuth = async (req: Request, res: Response) => {
       env.JWT_SECRET,
       { expiresIn: "7d" },
     );
-    console.log(token);
 
     res.json({
       access_token: token,

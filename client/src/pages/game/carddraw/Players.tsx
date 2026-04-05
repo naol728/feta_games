@@ -1,17 +1,12 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import React, { useState } from 'react'
+import React from 'react'
 import type { Player } from './CardDraw'
+import { useAppSelector } from '@/store/hook'
 
 export default function Players({ player }: { player: Player }) {
-    const [playerId] = useState(() => {
-        let id = localStorage.getItem("playerId");
-        if (!id) {
-            id = "player_" + Math.floor(Math.random() * 100000);
-            localStorage.setItem("playerId", id);
-        }
-        return id;
-    });
+    const playerId = useAppSelector((state) => state.auth.user?.telegram_id)
+
 
     const isMe = player.id === playerId;
 
@@ -25,7 +20,7 @@ export default function Players({ player }: { player: Player }) {
             <div className="flex items-center gap-2 min-w-0">
                 <Avatar className="h-7 w-7">
                     <AvatarFallback className="text-[10px] font-semibold">
-                        {player.id.substring(0, 2).toUpperCase()}
+                        {player.id}
                     </AvatarFallback>
                 </Avatar>
 

@@ -4,7 +4,7 @@ import CardItem from "./CardItem";
 type CardContainerProp = {
     deck: { value: number | string; revealed: boolean }[];
     roomId: string | undefined;
-    playerId: string;
+    playerId: number;
     match: Match;
 };
 

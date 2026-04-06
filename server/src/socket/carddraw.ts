@@ -54,7 +54,7 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
   // =========================
 
   socket.on("carddraw:queue", async ({ bet }) => {
-      const playerId = socket.user.telegramId;
+    const playerId = socket.user.telegramId;
 
     if (!ALLOWED_BETS.includes(bet)) {
       socket.emit("error", "Invalid bet amount");
@@ -116,7 +116,7 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
   // JOIN SPECIFIC QUEUE
   // =========================
   socket.on("carddraw:queue:join", async ({ queueId, bet }) => {
-      const playerId = socket.user.telegramId;
+    const playerId = socket.user.telegramId;
 
     const queueKey = QUEUE_KEY(bet);
 
@@ -162,7 +162,7 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
   // CANCEL
   // =========================
   socket.on("carddraw:cancel", async () => {
-      const playerId = socket.user.telegramId;
+    const playerId = socket.user.telegramId;
     if (socket.queueKey && socket.queueEntry) {
       await redis.lrem(socket.queueKey, 1, socket.queueEntry);
 
@@ -174,7 +174,7 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
     }
   });
   socket.on("carddraw:join", async ({ roomId }) => {
-      const playerId = socket.user.telegramId;
+    const playerId = socket.user.telegramId;
 
     try {
       const key = `room:carddraw:${roomId}`;
@@ -200,9 +200,8 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
   // GAME LOGIC
   // =========================
   socket.on("carddraw:card-pick", async (data) => {
-
     const { roomId, cardindex } = data;
-  const playerId = socket.user.telegramId;
+    const playerId = socket.user.telegramId;
 
     const key = `room:carddraw:${roomId}`;
     const raw = await redis.get(key);

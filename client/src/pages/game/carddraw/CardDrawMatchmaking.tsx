@@ -17,8 +17,8 @@ export default function CardDrawMatchmaking() {
   const navigate = useNavigate();
   const [showRules, setShowRules] = useState(false);
   const socket = getSocket();
-
   const playerId = useAppSelector((state) => state.auth.user?.telegram_id)
+  console.log(playerId)
   useEffect(() => {
     if (localStorage.getItem("hide_rules")) return;
 
@@ -74,7 +74,8 @@ export default function CardDrawMatchmaking() {
       setSearching(false);
     });
 
-    socket.on("error", () => {
+    socket.on("error", (error) => {
+      console.log(error)
       toast("Something went wrong", { type: "error" });
       setSearching(false);
     });

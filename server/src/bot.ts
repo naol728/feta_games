@@ -10,14 +10,12 @@ bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
   const user = await upsertTelegramUser(msg);
   const text = `
-🎮 *Welcome to ${env.APP_NAME}!*
+🎮 *Welcome to ${env.APP_NAME}!* ${msg.from?.first_name}
 
-Play 1v1 games like:
-♟ Chess  
-❌⭕ XO  
+Play 1v1 games 
 
-💰 Win matches & earn rewards  
-⚡ Fast • Fair • Real-time
+💰 Win matches & earn Money  
+⚡ Fast Cash
 
 👇 Tap the button below to start playing
 `;
@@ -28,7 +26,7 @@ Play 1v1 games like:
       inline_keyboard: [
         [
           {
-            text: "🚀 Open Game",
+            text: "🚀 Play Game",
             web_app: {
               url: env.APP_URL,
             },

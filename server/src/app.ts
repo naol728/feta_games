@@ -31,7 +31,7 @@ if (process.env.NODE_ENV === "development") {
     const { data: user } = await supabase
       .from("users")
       .upsert(
-        { telegram_id: 167588999278, username: "naoll_udev" },
+        { telegram_id: 8899929997899, username: "lll" },
         { onConflict: "telegram_id" },
       )
       .select()

@@ -6,14 +6,15 @@ import jwt from "jsonwebtoken";
 export const telegramAuth = async (req: Request, res: Response) => {
   try {
     const { initData } = req.body;
-    const tgUser = verifyTelegram(initData, env.BOT_TOKEN);
+    console.log(initData);
+    // const tgUser = verifyTelegram(initData, env.BOT_TOKEN);
 
     const { data: user } = await supabase
       .from("users")
       .upsert(
         {
-          telegram_id: tgUser.id,
-          username: tgUser.username,
+          telegram_id: initData.from?.id,
+          username: initData.from?.username,
         },
         { onConflict: "telegram_id" },
       )

@@ -32,7 +32,8 @@ export default function CardDraw() {
   const socket = getSocket();
 
   const playerId = useAppSelector((state) => state.auth.user?.telegram_id)
-
+  const auth = useAppSelector((state) => state.auth)
+  console.log(auth)
   const [match, setMatch] = useState<Match | null>(null);
   const [showResult, setShowResult] = useState(false);
 

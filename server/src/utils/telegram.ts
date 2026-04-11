@@ -1,23 +1,40 @@
 import crypto from "crypto";
 
-export function verifyTelegram(initData: string, botToken: string) {
-  const urlParams = new URLSearchParams(initData);
-  const hash = urlParams.get("hash")!;
-  urlParams.delete("hash");
+export function validateTelegramData(botToken: string, initDataString: string) {
+  const params = new URLSearchParams(initDataString);
+  const hash = params.get("hash");
+  params.delete("hash");
+  params.sort();
 
-  const dataCheckString = [...urlParams.entries()]
-    .sort()
-    .map(([k, v]) => `${k}=${v}`)
+  const dataCheckString = Array.from(params.entries())
+    .map(([key, value]) => `${key}=${value}`)
     .join("\n");
 
-  const secret = crypto.createHash("sha256").update(botToken).digest();
+  const secretKey = crypto
+    .createHmac("sha256", "WebAppData")
+    .update(botToken)
+    .digest();
 
-  const hmac = crypto
-    .createHmac("sha256", secret)
+  const calculatedHash = crypto
+    .createHmac("sha256", secretKey)
     .update(dataCheckString)
     .digest("hex");
 
-  if (hmac !== hash) throw new Error("Invalid Telegram data");
+  if (calculatedHash !== hash) {
+    throw new Error("Invalid hash: Data integrity check failed");
+  }
 
-  return JSON.parse(urlParams.get("user")!);
+  // Convert the search params back into a clean object
+  const data: Record<string, any> = Object.fromEntries(params.entries());
+
+  // If 'user' exists, parse it from a JSON string to an object
+  if (data.user) {
+    try {
+      data.user = JSON.parse(data.user);
+    } catch (e) {
+      console.error("Failed to parse user data JSON");
+    }
+  }
+
+  return data;
 }

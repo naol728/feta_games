@@ -6,21 +6,23 @@ export const initAuth = createAsyncThunk("auth/init", async () => {
   const res = await apiClient.post(`/auth/telegram`, {
     initData: window.Telegram.WebApp.initData,
   });
-
   const data = res.data;
-
   if (!data?.access_token) throw new Error("Auth failed");
-
   localStorage.setItem("access_token", data.access_token);
-
   return data.user;
 });
 type User = {
+  username: string;
   telegram_id: number;
+  balance: number;
+  locked_balance: number;
+  Fname: string;
+  Lnamr: string | null;
 };
+
 type InitalState = {
   user: User | null;
-  loading:boolean
+  loading: boolean;
 };
 const initialState: InitalState = {
   user: null,

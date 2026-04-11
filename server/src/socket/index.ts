@@ -1,9 +1,11 @@
 import { Server, Socket } from "socket.io";
-import jwt from "jsonwebtoken";
 import { redis } from "../config/radis";
-import { env } from "../config/env";
 import connectFourSocket from "./connectfour.socket";
 import CardDrawSocket from "./carddraw";
+import { SocketError } from "../utils/SocketError";
+import { safeSocket } from "./safeSocket";
+import { verifyAccessToken } from "../services/token.service";
+import { safeConnection } from "./safeConnection";
 
 interface JwtPayload {
   userId: string;
@@ -18,45 +20,42 @@ interface CustomSocket extends Socket {
   roomId?: string;
 }
 
-/* =========================
-   INIT SOCKET
-========================= */
-
 export default function initSocket(io: Server) {
-  // 🔐 AUTH MIDDLEWARE
   io.use((socket, next) => {
-    const token = socket.handshake.auth?.token;
-
-    if (!token) return next(new Error("Unauthorized"));
-
     try {
-      const payload = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+      const token = socket.handshake.auth?.token;
+
+      if (!token) {
+        return next(new SocketError("Unauthorized", "NO_TOKEN", 401));
+      }
+
+      const payload = verifyAccessToken(token);
 
       (socket as CustomSocket).user = payload;
       (socket as CustomSocket).playerId = payload.userId;
 
       next();
-    } catch {
-      next(new Error("Invalid token"));
+    } catch (err) {
+      next(new SocketError("Invalid token", "INVALID_TOKEN", 401));
     }
   });
 
-  /* =========================
-     CONNECTION
-  ========================= */
+  io.on(
+    "connection",
+    safeConnection(async (socket: Socket) => {
+      const s = socket as CustomSocket;
+      console.log("user connected:", s.user.telegramId);
+      await redis.set(`player:${s.user.telegramId}`, s.id);
+      socket.on("disconnect", async () => {
+        try {
+          await redis.del(`player:${s.user.userId}`);
+        } catch (err) {
+          console.error("Redis cleanup failed:", err);
+        }
+      });
 
-  io.on("connection", async (socket: Socket) => {
-    const s = socket as CustomSocket;
-
-    console.log("user connected:", s.user.telegramId);
-
-    await redis.set(`player:${s.user.telegramId}`, s.id);
-
-    socket.on("disconnect", async () => {
-      await redis.del(`player:${s.user.userId}`);
-    });
-
-    connectFourSocket(io, s);
-    CardDrawSocket(io, s);
-  });
+      connectFourSocket(io, s);
+      CardDrawSocket(io, s);
+    }),
+  );
 }

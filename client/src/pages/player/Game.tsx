@@ -44,8 +44,7 @@ export default function Game() {
 
       {/* Top Bar */}
       <TopBar
-        balance={100}
-        onDeposit={() => console.log("deposit")}
+
       />
 
       {/* Banner */}
@@ -67,7 +66,7 @@ export default function Game() {
         />
       </div>
 
-     
+
       {/* Quick Actions */}
       <div className="grid grid-cols-4 gap-3 mb-6">
         {[

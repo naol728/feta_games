@@ -19,7 +19,8 @@ import {
     CreditCard,
     History
 } from "lucide-react";
-
+import { useQuery } from "@tanstack/react-query"
+import { me } from "./../../api/auth"
 interface TelegramUser {
     id: number;
     first_name: string;
@@ -49,6 +50,12 @@ interface WithdrawRequest {
 export default function Profile() {
     const [user, setUser] = useState<TelegramUser | null>(null);
     const [balance, setBalance] = useState<number>(0);
+    const { data } = useQuery({
+        queryFn: me,
+        queryKey: ["me"]
+    })
+
+    console.log(data)
     const [transactions, setTransactions] = useState<Transaction[]>([
         { id: 1, type: 'deposit', amount: 500, status: 'completed', date: '2024-03-15', description: ' Deposit' },
         { id: 2, type: 'bet', amount: 100, status: 'completed', date: '2024-03-14', description: ' Bet' },

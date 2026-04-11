@@ -15,28 +15,40 @@ import { ToastContainer } from "react-toastify"
 import { initAuth } from "./store/slice/auth";
 import { useAppDispatch } from "./store/hook";
 import { connectSocket } from "./lib/socket";
+import { toast } from 'react-toastify';
+import Deposit from "./pages/player/Deposit";
 
 
 export default function App() {
-  const dispatch = useAppDispatch()
+  const dispatch = useAppDispatch();
   const [ready, setReady] = useState(false);
-
   useEffect(() => {
     async function init() {
       try {
         await dispatch(initAuth()).unwrap();
-        connectSocket(); // ✅ init once
-      } catch (err) {
-        console.error("Init failed", err);
+        await connectSocket();
+      } catch (err: unknown) {
+        let message = "Initialization failed";
+        if (err instanceof Error) {
+          message = err.message;
+        }
+        toast.error(message);
       } finally {
         setReady(true);
       }
     }
 
     init();
-  }, [dispatch]);
+  }, []);
 
-  if (!ready) return null
+
+  if (!ready) {
+    return (
+      <div className="h-screen flex items-center justify-center ">
+        <div className="animate-pulse text-lg">Connecting...</div>
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter>
@@ -47,6 +59,7 @@ export default function App() {
           <Route path="/invite" element={<Invite />} />
         </Route>
         <Route path="/connectfour" element={<ConnectFourMatchmaking />} />
+        <Route path="/deposit/:trxno" element={<Deposit />} />
         <Route path="/connectfour/:roomId" element={<ConnectFour />} />
         <Route path="/jetxpick" element={<Jetx />} />
         <Route path="/memoryflip" element={<MemoryFlip />} />
@@ -54,6 +67,7 @@ export default function App() {
         <Route path="/carddraw" element={<CardDrawMatchmaking />} />
         <Route path="/carddraw/:roomId" element={<CardDraw />} />
       </Routes>
+
       <ToastContainer
         position="top-center"
         autoClose={2000}

@@ -1,29 +1,28 @@
 // middleware/auth.ts
-import jwt from "jsonwebtoken";
-import { env } from "../config/env";
 import { NextFunction, Request, Response } from "express";
+import { AppError } from "../utils/AppError";
+import { verifyAccessToken, JwtPayload } from "../services/token.service";
 
-interface CutomRequest extends Request {
-  user: unknown;
+export interface AuthRequest extends Request {
+  user?: JwtPayload;
 }
 
-export function authMiddleware(
-  req: CutomRequest,
-  res: Response,
+export const requireAuth = (
+  req: AuthRequest,
+  _res: Response,
   next: NextFunction,
-) {
-  const auth = req.headers.authorization;
+) => {
+  const authHeader = req.headers.authorization;
 
-  if (!auth?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "No token" });
+  if (!authHeader?.startsWith("Bearer ")) {
+    return next(new AppError("Authentication required", 401));
   }
-  const token = auth.split(" ")[1];
-  console.log(token);
-  try {
-    const payload = jwt.verify(token, env.JWT_SECRET);
-    req.user = payload;
-    next();
-  } catch {
-    res.status(401).json({ error: "Invalid token" });
-  }
-}
+
+  const token = authHeader.split(" ")[1];
+
+  const payload = verifyAccessToken(token); // 💥 throws if invalid
+
+  req.user = payload;
+
+  next();
+};

@@ -1,10 +1,123 @@
-import { Button } from '@/components/ui/button'
-import React from 'react'
+import { gettransaction } from "@/api/wallet"
+import { useQuery } from "@tanstack/react-query"
+import { useParams } from "react-router-dom"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 
 export default function Deposit() {
-    return (
-        <div>  
+    const { trxno } = useParams()
 
+    const { data, isLoading, error } = useQuery({
+        queryFn: () => gettransaction({ trxno }),
+        queryKey: ["gettransaction", trxno],
+    })
+
+    const tx = data?.transaction
+
+    return (
+        <div className="p-3 space-y-3">
+
+            {/* Header */}
+            <div className="text-center">
+                <h1 className="text-sm font-semibold">Deposit</h1>
+            </div>
+
+            {/* Loading */}
+            {isLoading && (
+                <Card>
+                    <CardContent className="p-3 space-y-2">
+                        <Skeleton className="h-4 w-1/2" />
+                        <Skeleton className="h-4 w-2/3" />
+                        <Skeleton className="h-4 w-1/3" />
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Error */}
+            {error && (
+                <Card className="border-red-500/40">
+                    <CardContent className="p-3 text-sm text-red-500">
+                        Failed to load transaction
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Data */}
+            {tx && (
+                <Card className="rounded-2xl">
+
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm flex items-center justify-between">
+                            Deposit Status
+
+                            <Badge
+                                className={
+                                    tx.status === "pending"
+                                        ? "bg-yellow-500/20 text-yellow-600"
+                                        : tx.status === "success"
+                                            ? "bg-green-500/20 text-green-600"
+                                            : "bg-red-500/20 text-red-600"
+                                }
+                            >
+                                {tx.status}
+                            </Badge>
+                        </CardTitle>
+                    </CardHeader>
+
+                    <CardContent className="space-y-3 text-xs">
+
+                        {/* Amount */}
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Amount</span>
+                            <span className="font-medium">{tx.amount} ETB</span>
+                        </div>
+
+                        {/* Type */}
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Type</span>
+                            <span className="capitalize">{tx.type}</span>
+                        </div>
+
+                        {/* Date */}
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Date</span>
+                            <span>
+                                {new Date(tx.created_at).toLocaleString()}
+                            </span>
+                        </div>
+
+                        {/* Account */}
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Account</span>
+                            <span>{tx.metadata?.account_number}</span>
+                        </div>
+
+                        {/* Payment Method */}
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Method</span>
+                            <span className="truncate max-w-[140px] text-right">
+                                teleBirr
+                            </span>
+                        </div>
+
+                        {/* INPUT FIELD */}
+                        <div className="pt-2 space-y-2">
+                            <Input
+                                placeholder="Enter transaction number"
+                                className="h-10 text-sm"
+                            />
+
+                            <Button className="w-full h-10 text-sm">
+                                Verify Deposit
+                            </Button>
+                        </div>
+
+                    </CardContent>
+                </Card>
+            )}
         </div>
     )
 }

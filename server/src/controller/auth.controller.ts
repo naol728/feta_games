@@ -1,34 +1,93 @@
-import { Request, Response } from "express";
-import { verifyTelegram } from "../utils/telegram";
+import { NextFunction, Request, Response } from "express";
+import { validateTelegramData } from "../utils/telegram";
 import { env } from "../config/env";
 import { supabase } from "../config/supabase";
 import jwt from "jsonwebtoken";
-export const telegramAuth = async (req: Request, res: Response) => {
-  try {
-    const { initData } = req.body;
-    console.log(initData);
-    // const tgUser = verifyTelegram(initData, env.BOT_TOKEN);
+import { catchAsync } from "../utils/catchAsync";
+import { AppError } from "../utils/AppError";
 
-    const { data: user } = await supabase
+export const telegramAuth = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+
+    // =========================
+    // 1. Try JWT Authentication
+    // =========================
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+
+      try {
+        const payload = jwt.verify(token, env.JWT_SECRET) as any;
+
+        const { data: user, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", payload.userId)
+          .single();
+
+        if (error || !user) {
+          return next(new AppError("User not found", 404));
+        }
+
+        return res.json({
+          access_token: token,
+          user,
+        });
+      } catch (err: any) {
+        if (err.name === "JsonWebTokenError") {
+          return next(new AppError("Invalid token", 401));
+        }
+
+        if (err.name === "TokenExpiredError") {
+          return next(new AppError("Token expired", 401));
+        }
+
+        // Unknown error
+        return next(new AppError("Authentication failed", 401));
+      }
+    }
+
+    // =========================
+    // 2. Telegram Auth Flow
+    // =========================
+    const { initData } = req.body;
+
+    if (!initData) {
+      return next(new AppError("initData is required", 400));
+    }
+
+    let tgUser;
+    try {
+      tgUser = validateTelegramData(env.BOT_TOKEN, initData);
+    } catch (err) {
+      return next(new AppError("Invalid Telegram data", 401));
+    }
+
+    const { data: user, error } = await supabase
       .from("users")
       .upsert(
         {
-          telegram_id: initData.from?.id,
-          username: initData.from?.username,
+          telegram_id: tgUser.user.id,
+          username: tgUser.user.username,
+          Fname: tgUser.user.first_name,
+          Lname: tgUser.user.last_name,
         },
         { onConflict: "telegram_id" },
       )
       .select()
       .single();
 
-    // 🔐 create JWT
+    if (error || !user) {
+      return next(new AppError("Failed to create or fetch user", 500));
+    }
+
     const token = jwt.sign(
       { userId: user.id, telegramId: user.telegram_id },
       env.JWT_SECRET,
       { expiresIn: "7d" },
     );
 
-    res.json({
+    return res.json({
       access_token: token,
       user: {
         id: user.id,
@@ -36,23 +95,27 @@ export const telegramAuth = async (req: Request, res: Response) => {
         locked_balance: user.locked_balance,
       },
     });
-  } catch (err) {
-    res.status(401).json({ error: "Auth failed" });
-  }
-};
-// interface CustomRequest extends Request {
-//   user: {
-//     userId: string;
-//   };
-// }
-export const me = async (req: Request, res: Response) => {
-  const { user } = req;
-  const userId = user.userId;
-  const { data } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", userId)
-    .single();
+  },
+);
 
-  res.json(data);
-};
+interface AuthRequest extends Request {
+  user: {
+    userId: string;
+    telegramId: number;
+  };
+}
+
+export const me = catchAsync(
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const userId = req.user.userId;
+    const { data } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", userId)
+      .single();
+    if (!data) {
+      return next(new AppError("User not Found", 404));
+    }
+    res.json(data);
+  },
+);

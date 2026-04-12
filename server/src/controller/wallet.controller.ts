@@ -2,6 +2,11 @@ import { NextFunction, Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/AppError";
 import { supabase } from "../config/supabase";
+import {
+  CBEReceipt,
+  checkTransactionCBE,
+  getCBEReceipt,
+} from "../services/wallet.service";
 
 interface WalletRequest extends Request {
   user: {
@@ -10,12 +15,104 @@ interface WalletRequest extends Request {
   };
 }
 
-export const deposit = catchAsync(async (req: Request, res: Response) => {
-  const { amount, phonno, transactionno } = req.body;
-  res.status(200).json({
-    message: "Deposited Sucessfully",
-  });
-});
+export const deposit = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const { transactionId, trxno } = req.body;
+
+    if (!transactionId || !trxno) {
+      return next(new AppError("Missing Transaction ID", 400));
+    }
+
+    const { data: trx, error: trxerr } = await supabase
+      .from("transactions")
+      .select(
+        `
+        *,
+        payment_methods (
+          id,
+          account_number,
+          account_name,
+          type
+        )
+      `,
+      )
+      .eq("id", trxno)
+      .single();
+
+    if (trxerr || !trx) {
+      return next(new AppError("Transaction not found", 404));
+    }
+
+    if (trx.status === "completed") {
+      return next(new AppError("Transaction already completed", 400));
+    }
+
+    const { data: existingRef } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("reference_id", transactionId)
+      .maybeSingle();
+
+    if (existingRef) {
+      return next(new AppError("Transaction already used", 400));
+    }
+
+    const receipt = await getCBEReceipt(transactionId);
+
+    if (!receipt.success) {
+      return next(new AppError(receipt.error, 400));
+    }
+
+    const receptdata = receipt.data;
+
+    const result = await checkTransactionCBE({
+      recepit: receptdata,
+      trx,
+    });
+
+    if (!result.success) {
+      return next(new AppError(result.error || "Validation failed", 400));
+    }
+
+    const { error: depositError } = await supabase.from("deposits").upsert({
+      transaction_id: trx.id,
+      payment_method_id: trx.payment_method_id,
+      bank_reference: transactionId,
+      verified: true,
+    });
+
+    if (depositError) {
+      return next(new AppError(depositError.message, 500));
+    }
+
+    const { error: updateError } = await supabase
+      .from("transactions")
+      .update({
+        status: "completed",
+        reference_id: transactionId,
+      })
+      .eq("id", trx.id);
+
+    if (updateError) {
+      return next(new AppError(updateError.message, 500));
+    }
+    const { error: walletError } = await supabase.rpc(
+      "increment_wallet_balance",
+      {
+        user_id_input: trx.user_id,
+        amount_input: trx.amount,
+      },
+    );
+
+    if (walletError) {
+      return next(new AppError("Failed to update wallet", 500));
+    }
+
+    return res.status(200).json({
+      message: "Deposit successful",
+    });
+  },
+);
 
 export const paymentMethod = catchAsync(
   async (req: WalletRequest, res: Response, next: NextFunction) => {
@@ -31,7 +128,6 @@ export const paymentMethod = catchAsync(
     const { data: methods, error } = await supabase
       .from("payment_methods")
       .select("*")
-      .eq("type", "telebirr")
       .eq("is_active", true)
       .lte("min_amount", parsedAmount)
       .gte("max_amount", parsedAmount);
@@ -52,9 +148,9 @@ export const paymentMethod = catchAsync(
         user_id: user.userId,
         type: "deposit",
         amount: parsedAmount,
+        payment_method_id: method.id,
         status: "pending",
         metadata: {
-          payment_method_id: method.id,
           account_number: method.account_number,
         },
       })
@@ -62,7 +158,9 @@ export const paymentMethod = catchAsync(
       .single();
 
     if (txError) {
-      return next(new AppError("Failed to create transaction", 500));
+      return next(
+        new AppError(txError.message || "Failed to create transaction", 500),
+      );
     }
 
     return res.json({
@@ -81,10 +179,6 @@ export const paymentMethod = catchAsync(
     });
   },
 );
-
-export const withDraw = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {},
-);
 export const getTransaction = catchAsync(
   async (req: WalletRequest, res: Response, next: NextFunction) => {
     const { trxno } = req.params;
@@ -96,7 +190,16 @@ export const getTransaction = catchAsync(
 
     const { data: transaction, error } = await supabase
       .from("transactions")
-      .select("*")
+      .select(
+        `*,
+         payment_method:payment_methods (
+     id,
+    type,
+    account_name,
+    account_number
+  )
+    )`,
+      )
       .eq("id", trxno)
       .eq("user_id", user.userId)
       .single();
@@ -105,21 +208,21 @@ export const getTransaction = catchAsync(
     }
 
     return res.json({
-      transaction: {
-        id: transaction.id,
-        type: transaction.type,
-        amount: transaction.amount,
-        status: transaction.status,
-        reference_id: transaction.reference_id,
-        metadata: transaction.metadata,
-        created_at: transaction.created_at,
-      },
+      transaction: transaction,
     });
   },
 );
+
+export const withDraw = catchAsync(
+  async (req: WalletRequest, res: Response, next: NextFunction) => {},
+);
+
 export const wallet = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {},
+  async (req: WalletRequest, res: Response, next: NextFunction) => {
+    
+
+  },
 );
 export const transactions = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {},
+  async (req: WalletRequest, res: Response, next: NextFunction) => {},
 );

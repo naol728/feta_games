@@ -1,18 +1,32 @@
-import { gettransaction } from "@/api/wallet"
-import { useQuery } from "@tanstack/react-query"
+import { gettransaction, varifytransaction } from "@/api/wallet"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useParams } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { toast } from "react-toastify"
+import { useState } from "react"
 
 export default function Deposit() {
     const { trxno } = useParams()
-
+    const [transactionId, setTransactionId] = useState("")
     const { data, isLoading, error } = useQuery({
         queryFn: () => gettransaction({ trxno }),
         queryKey: ["gettransaction", trxno],
+    })
+    const queryclient = useQueryClient()
+    const { mutate, isPending } = useMutation({
+        mutationFn: varifytransaction,
+        mutationKey: ["varifytransaction"],
+        onSuccess: (data) => {
+            toast.success(data.message)
+            queryclient.invalidateQueries({ queryKey: ["gettransaction"] })
+        },
+        onError: (error) => {
+            toast.error(error.message)
+        }
     })
 
     const tx = data?.transaction
@@ -57,7 +71,7 @@ export default function Deposit() {
                                 className={
                                     tx.status === "pending"
                                         ? "bg-yellow-500/20 text-yellow-600"
-                                        : tx.status === "success"
+                                        : tx.status === "completed"
                                             ? "bg-green-500/20 text-green-600"
                                             : "bg-red-500/20 text-red-600"
                                 }
@@ -92,14 +106,18 @@ export default function Deposit() {
                         {/* Account */}
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Account</span>
-                            <span>{tx.metadata?.account_number}</span>
+                            <span>{tx.payment_method?.account_number}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Account Holder Name</span>
+                            <span>{tx.payment_method?.account_name}</span>
                         </div>
 
                         {/* Payment Method */}
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Method</span>
                             <span className="truncate max-w-[140px] text-right">
-                                teleBirr
+                                {tx.payment_method.type}
                             </span>
                         </div>
 
@@ -108,9 +126,13 @@ export default function Deposit() {
                             <Input
                                 placeholder="Enter transaction number"
                                 className="h-10 text-sm"
+                                value={transactionId}
+                                disabled={isPending || tx.status == "completed"} onChange={(e) => setTransactionId(e.target.value)}
                             />
 
-                            <Button className="w-full h-10 text-sm">
+                            <Button disabled={isPending || tx.status == "completed"}
+                                onClick={() => mutate({ trxno, transactionId })}
+                                className="w-full h-10 text-sm">
                                 Verify Deposit
                             </Button>
                         </div>

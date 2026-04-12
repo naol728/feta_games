@@ -21,7 +21,13 @@ export const telegramAuth = catchAsync(
 
         const { data: user, error } = await supabase
           .from("users")
-          .select("*")
+          .select(
+            `*,wallets (
+        balance,
+        locked_balance
+         )
+          `,
+          )
           .eq("id", payload.userId)
           .single();
 
@@ -86,14 +92,21 @@ export const telegramAuth = catchAsync(
       env.JWT_SECRET,
       { expiresIn: "7d" },
     );
+    const { data: userdata, error: userdataerr } = await supabase
+      .from("users")
+      .select(
+        `*,wallets (
+        balance,
+        locked_balance
+         )
+          `,
+      )
+      .eq("id", user.id)
+      .single();
 
     return res.json({
       access_token: token,
-      user: {
-        id: user.id,
-        balance: user.balance,
-        locked_balance: user.locked_balance,
-      },
+      user: userdata,
     });
   },
 );
@@ -110,7 +123,12 @@ export const me = catchAsync(
     const userId = req.user.userId;
     const { data } = await supabase
       .from("users")
-      .select("*")
+      .select(
+        `*,wallets (
+        balance,
+        locked_balance
+      )`,
+      )
       .eq("id", userId)
       .single();
     if (!data) {

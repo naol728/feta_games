@@ -11,14 +11,21 @@ export const initAuth = createAsyncThunk("auth/init", async () => {
   localStorage.setItem("access_token", data.access_token);
   return data.user;
 });
-type User = {
-  username: string;
-  telegram_id: number;
+
+interface Wallet {
   balance: number;
   locked_balance: number;
+}
+interface User {
+  id: string;
+  telegram_id: number;
+  username: string;
+  created_at: string;
+  updated_at: string;
   Fname: string;
-  Lnamr: string | null;
-};
+  Lname: string;
+  wallets: Wallet;
+}
 
 type InitalState = {
   user: User | null;

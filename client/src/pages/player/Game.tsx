@@ -2,7 +2,6 @@ import { Link } from "react-router-dom"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useEffect, useState } from "react"
-import TopBar from "@/layout/TopBar"
 
 function useCountdown(targetDate: Date) {
   const [timeLeft, setTimeLeft] = useState("")
@@ -42,10 +41,7 @@ export default function Game() {
   return (
     <div className="min-h-screen bg-background text-foreground p-4">
 
-      {/* Top Bar */}
-      <TopBar
 
-      />
 
       {/* Banner */}
       <div className="relative rounded-2xl overflow-hidden mb-4 bg-primary/90 p-10 shadow-lg">

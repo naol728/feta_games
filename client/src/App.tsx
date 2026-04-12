@@ -17,6 +17,7 @@ import { useAppDispatch } from "./store/hook";
 import { connectSocket } from "./lib/socket";
 import { toast } from 'react-toastify';
 import Deposit from "./pages/player/Deposit";
+import MatchMakingLayout from "./layout/MatchMakingLayout";
 
 
 export default function App() {
@@ -57,14 +58,20 @@ export default function App() {
           <Route index element={<Game />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/invite" element={<Invite />} />
+
         </Route>
-        <Route path="/connectfour" element={<ConnectFourMatchmaking />} />
+        <Route element={<MatchMakingLayout />}>
+          <Route path="/connectfour" element={<ConnectFourMatchmaking />} />
+          <Route path="/carddraw" element={<CardDrawMatchmaking />} />
+          <Route path="/jetxpick" element={<Jetx />} />
+          <Route path="/memoryflip" element={<MemoryFlip />} />
+          <Route path="/minesduel" element={<MinesDuel />} />
+        </Route>
+
+
         <Route path="/deposit/:trxno" element={<Deposit />} />
         <Route path="/connectfour/:roomId" element={<ConnectFour />} />
-        <Route path="/jetxpick" element={<Jetx />} />
-        <Route path="/memoryflip" element={<MemoryFlip />} />
-        <Route path="/minesduel" element={<MinesDuel />} />
-        <Route path="/carddraw" element={<CardDrawMatchmaking />} />
+
         <Route path="/carddraw/:roomId" element={<CardDraw />} />
       </Routes>
 

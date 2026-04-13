@@ -25,7 +25,7 @@ function shuffleDeck() {
   return deck;
 }
 type QueueEntry = {
-  playerId: number;
+  playerId: string;
   socketId: string;
   queueId: string;
 };
@@ -43,7 +43,7 @@ export function createMatch(
   io: Server,
   socket: CustomSocket,
   opponent: QueueEntry,
-  playerId: number,
+  playerId: string,
   bet: number,
 ) {
   const roomId = `cd_${Date.now()}`;

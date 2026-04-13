@@ -13,7 +13,7 @@ import { getSocket } from "@/lib/socket";
 import { useAppSelector } from "@/store/hook";
 
 type Pick = { value: number };
-export type Player = { id: number; total: number; picks: Pick[] };
+export type Player = { id: string; total: number; picks: Pick[] };
 export type Match = {
   matchId: string;
   players: Player[];
@@ -21,7 +21,7 @@ export type Match = {
   status: string;
   winner: string | null;
   deck: any[];
-  turn: number;
+  turn: string;
   round: number;
   reason?: string;
 };
@@ -31,9 +31,8 @@ export default function CardDraw() {
   const navigate = useNavigate();
   const socket = getSocket();
 
-  const playerId = useAppSelector((state) => state.auth.user?.telegram_id)
+  const playerId = useAppSelector((state) => state.auth.user?.id)
   const auth = useAppSelector((state) => state.auth)
-  console.log(auth)
   const [match, setMatch] = useState<Match | null>(null);
   const [showResult, setShowResult] = useState(false);
 

@@ -21,9 +21,9 @@ type CardItemProp = {
     card: { value: number | string; revealed: boolean };
     index: number;
     roomId: string | undefined;
-    playerId: number | undefined;
+    playerId: string | undefined;
     disabled: boolean;
-    pickedBy: number;
+    pickedBy: string; // ✅ FIXED (was number)
 };
 
 export default function CardItem({ card, index, roomId, playerId, disabled, pickedBy }: CardItemProp) {

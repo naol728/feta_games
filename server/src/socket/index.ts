@@ -3,7 +3,6 @@ import { redis } from "../config/radis";
 import connectFourSocket from "./connectfour.socket";
 import CardDrawSocket from "./carddraw";
 import { SocketError } from "../utils/SocketError";
-import { safeSocket } from "./safeSocket";
 import { verifyAccessToken } from "../services/token.service";
 import { safeConnection } from "./safeConnection";
 
@@ -44,11 +43,11 @@ export default function initSocket(io: Server) {
     "connection",
     safeConnection(async (socket: Socket) => {
       const s = socket as CustomSocket;
-      console.log("user connected:", s.user.telegramId);
-      await redis.set(`player:${s.user.telegramId}`, s.id);
+      console.log("user connected:", s.user.userId);
+      await redis.set(`player:${s.user.userId}`, s.id);
       socket.on("disconnect", async () => {
         try {
-          await redis.del(`player:${s.user.userId}`);
+          await redis.del(`player:${s.user.telegramId}`);
         } catch (err) {
           console.error("Redis cleanup failed:", err);
         }

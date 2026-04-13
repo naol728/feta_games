@@ -19,6 +19,10 @@ export default function CardDrawMatchmaking() {
   const [showRules, setShowRules] = useState(false);
   const socket = getSocket();
   const playerId = useAppSelector((state) => state.auth.user?.telegram_id)
+  const [loadingQueues, setLoadingQueues] = useState(true);
+  const [betAmount, setBetAmount] = useState<number | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [queues, setQueues] = useState<[]>([]);
   useEffect(() => {
     if (localStorage.getItem("hide_rules")) return;
 
@@ -28,14 +32,6 @@ export default function CardDrawMatchmaking() {
 
     return () => clearTimeout(t);
   }, []);
-
-
-
-  const [loadingQueues, setLoadingQueues] = useState(true);
-  const [betAmount, setBetAmount] = useState<number | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [queues, setQueues] = useState<[]>([]);
-
   useEffect(() => {
     socket.emit("carddraw:queue:list");
 
@@ -127,7 +123,7 @@ export default function CardDrawMatchmaking() {
                 </div>
 
                 <div className="flex gap-2">
-                  {[10, 20, 100].map((amount) => (
+                  {[10, 50, 100].map((amount) => (
                     <button
                       key={amount}
                       onClick={() => setBetAmount(amount)}

@@ -5,9 +5,9 @@ import type { Player } from './CardDraw'
 import { useAppSelector } from '@/store/hook'
 
 export default function Players({ player }: { player: Player }) {
-    const playerId = useAppSelector((state) => state.auth.user?.telegram_id)
-
-
+    const user = useAppSelector((state) => state.auth.user)
+    const playerId = user?.telegram_id
+    const Fname = user?.Fname
     const isMe = player.id === playerId;
 
     return (
@@ -20,7 +20,7 @@ export default function Players({ player }: { player: Player }) {
             <div className="flex items-center gap-2 min-w-0">
                 <Avatar className="h-7 w-7">
                     <AvatarFallback className="text-[10px] font-semibold">
-                        {player.id}
+                        {isMe ? Fname?.charAt(0) : "O"}
                     </AvatarFallback>
                 </Avatar>
 

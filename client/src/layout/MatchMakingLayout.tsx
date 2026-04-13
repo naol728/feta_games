@@ -12,7 +12,7 @@ export default function MatchMakingLayout() {
             </header>
 
             {/* Content */}
-            <main className="flex-1 overflow-y-auto px-2 pt-2 pb-24">
+            <main className="flex-1 overflow-y-auto ">
                 <Outlet />
             </main>
 

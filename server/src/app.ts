@@ -19,7 +19,7 @@ app.options("*", cors(corsConfig));
 app.set("trust proxy", 1);
 const server = http.createServer(app);
 
-const io = new Server(server, {
+export const io = new Server(server, {
   path: "/socket.io",
   cors: corsConfig,
   transports: ["websocket", "polling"],

@@ -3,11 +3,12 @@ import { redis } from "../config/radis";
 import { safeSocket } from "./safeSocket";
 import { createMatch } from "./../services/carddraw.service";
 import { SocketError } from "../utils/SocketError";
+import { walletService } from "../services/wallet.service";
 
 const QUEUE_KEY = (bet: number) => `queue:carddraw:${bet}`;
 
 type QueueEntry = {
-  playerId: number;
+  playerId: string;
   socketId: string;
   queueId: string; // ✅ REQUIRED
 };
@@ -30,15 +31,20 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
   socket.on(
     "carddraw:queue",
     safeSocket(socket, async ({ bet }: { bet: number }) => {
-      const playerId = socket.user.telegramId;
+      const playerId = socket.user.userId;
 
       if (!ALLOWED_BETS.includes(bet)) {
-        throw new SocketError("Invalid bet amount", "INVALID BET", 404);
+        socket.emit("error", "Invalid bet ");
+        return;
+      }
+      const ok = await walletService.lockandchcekBalance(playerId, bet);
+      if (!ok) {
+        socket.emit("error", "Inseficent Balance");
+        return;
       }
 
       const queueKey = QUEUE_KEY(bet);
 
-      // remove old
       if (socket.queueKey && socket.queueEntry) {
         await redis.lrem(socket.queueKey, 1, socket.queueEntry);
       }
@@ -91,8 +97,16 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
   socket.on(
     "carddraw:queue:join",
     safeSocket(socket, async ({ queueId, bet }) => {
-      const playerId = socket.user.telegramId;
+      const playerId = socket.user.userId;
+      const ok = await walletService.lockandchcekBalance(
+        socket.user.userId,
+        bet,
+      );
 
+      if (!ok) {
+        socket.emit("error", "Inseficent Balance");
+        return;
+      }
       const queueKey = QUEUE_KEY(bet);
 
       const rawList = await redis.lrange(queueKey, 0, -1);
@@ -137,10 +151,9 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
   socket.on(
     "carddraw:cancel",
     safeSocket(socket, async () => {
-      const playerId = socket.user.telegramId;
       if (socket.queueKey && socket.queueEntry) {
         await redis.lrem(socket.queueKey, 1, socket.queueEntry);
-
+        await walletService.unlockBalance(socket.user.userId);
         socket.queueKey = null;
         socket.queueEntry = null;
 
@@ -152,8 +165,6 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
   socket.on(
     "carddraw:join",
     safeSocket(socket, async ({ roomId }) => {
-      const playerId = socket.user.telegramId;
-
       try {
         const key = `room:carddraw:${roomId}`;
         const raw = await redis.get(key);
@@ -171,7 +182,7 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
         // ✅ ALWAYS send current match state
         socket.emit("carddraw:start", match);
       } catch (err) {
-        console.error("join error:", err);
+        console.error("error:", err);
       }
     }),
   );
@@ -180,7 +191,7 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
     "carddraw:card-pick",
     safeSocket(socket, async (data) => {
       const { roomId, cardindex } = data;
-      const playerId = socket.user.telegramId;
+      const playerId = socket.user.userId;
 
       const key = `room:carddraw:${roomId}`;
       const raw = await redis.get(key);
@@ -238,7 +249,22 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
       });
 
       if (match.status === "finished") {
+        const [p1, p2] = match.players;
+
+        const winnerId = match.winner;
+        const loserId = p1.id === winnerId ? p2.id : p1.id;
+
+        const betAmount = match.betAmount;
+
+        await walletService.resolveMatch(
+          winnerId,
+          loserId,
+          betAmount,
+          "carddraw",
+        );
+
         io.to(roomId).emit("carddraw:result", match);
+
         await redis.expire(key, 30);
       }
     }),

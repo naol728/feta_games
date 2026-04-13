@@ -26,6 +26,15 @@ export const walletService = {
 
     await emitBalance(userId);
   },
+  async lockandchcekBalance(userId: string, bet: number) {
+    const { data, error } = await supabase.rpc("lock_and_check_balance", {
+      user_id_input: userId,
+      amount_input: bet,
+    });
+    if (error) throw error;
+    await emitBalance(userId);
+    return data;
+  },
 
   async lockBalance(userId: string, amount: number) {
     await supabase.rpc("lock_wallet_balance", {
@@ -36,11 +45,14 @@ export const walletService = {
     await emitBalance(userId);
   },
 
-  async unlockBalance(userId: string, amount: number) {
-    await supabase.rpc("unlock_wallet_balance", {
-      user_id_input: userId,
-      amount_input: amount,
+  async unlockBalance(userId: string) {
+    const { error } = await supabase.rpc("unlock_wallet_balance", {
+      p_user_id: userId,
     });
+    if (error) {
+      console.log(error);
+      throw error;
+    }
 
     await emitBalance(userId);
   },
@@ -51,12 +63,16 @@ export const walletService = {
     betAmount: number,
     gamesource: string,
   ) {
-    await supabase.rpc("resolve_match", {
+    const { error } = await supabase.rpc("resolve_match", {
       winner_id: winnerId,
       loser_id: loserId,
       bet_amount: betAmount,
       game_source: gamesource,
     });
+    if (error) {
+      console.log(error)
+      throw error;
+    }
 
     await Promise.all([emitBalance(winnerId), emitBalance(loserId)]);
   },

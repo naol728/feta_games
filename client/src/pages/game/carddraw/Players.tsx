@@ -5,8 +5,8 @@ import type { Player } from './CardDraw'
 import { useAppSelector } from '@/store/hook'
 
 export default function Players({ player }: { player: Player }) {
-    const user = useAppSelector((state) => state.auth.user)
-    const playerId = user?.telegram_id
+    const user = useAppSelector((state) => state.auth?.user)
+    const playerId = user?.id
     const Fname = user?.Fname
     const isMe = player.id === playerId;
 

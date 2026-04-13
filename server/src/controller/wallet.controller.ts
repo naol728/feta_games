@@ -3,10 +3,10 @@ import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/AppError";
 import { supabase } from "../config/supabase";
 import {
-  CBEReceipt,
   checkTransactionCBE,
   getCBEReceipt,
-} from "../services/wallet.service";
+} from "../services/payment/cbe.service";
+import { walletService } from "../services/wallet.service";
 
 interface WalletRequest extends Request {
   user: {
@@ -58,15 +58,12 @@ export const deposit = catchAsync(
     }
 
     const receipt = await getCBEReceipt(transactionId);
-
     if (!receipt.success) {
       return next(new AppError(receipt.error, 400));
     }
 
-    const receptdata = receipt.data;
-
     const result = await checkTransactionCBE({
-      recepit: receptdata,
+      recepit: receipt.data,
       trx,
     });
 
@@ -74,6 +71,9 @@ export const deposit = catchAsync(
       return next(new AppError(result.error || "Validation failed", 400));
     }
 
+    // =========================
+    // SAVE DEPOSIT RECORD
+    // =========================
     const { error: depositError } = await supabase.from("deposits").upsert({
       transaction_id: trx.id,
       payment_method_id: trx.payment_method_id,
@@ -85,6 +85,9 @@ export const deposit = catchAsync(
       return next(new AppError(depositError.message, 500));
     }
 
+    // =========================
+    // UPDATE TRANSACTION
+    // =========================
     const { error: updateError } = await supabase
       .from("transactions")
       .update({
@@ -96,17 +99,11 @@ export const deposit = catchAsync(
     if (updateError) {
       return next(new AppError(updateError.message, 500));
     }
-    const { error: walletError } = await supabase.rpc(
-      "increment_wallet_balance",
-      {
-        user_id_input: trx.user_id,
-        amount_input: trx.amount,
-      },
-    );
 
-    if (walletError) {
-      return next(new AppError("Failed to update wallet", 500));
-    }
+    // =========================
+    // WALLET UPDATE (IMPORTANT)
+    // =========================
+    await walletService.addBalance(trx.user_id, trx.amount);
 
     return res.status(200).json({
       message: "Deposit successful",
@@ -218,10 +215,7 @@ export const withDraw = catchAsync(
 );
 
 export const wallet = catchAsync(
-  async (req: WalletRequest, res: Response, next: NextFunction) => {
-    
-
-  },
+  async (req: WalletRequest, res: Response, next: NextFunction) => {},
 );
 export const transactions = catchAsync(
   async (req: WalletRequest, res: Response, next: NextFunction) => {},

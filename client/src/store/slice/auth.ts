@@ -39,7 +39,14 @@ const initialState: InitalState = {
 const authSlice = createSlice({
   name: "auth",
   initialState,
-  reducers: {},
+  reducers: {
+    setUserWallet: (state, action) => {
+      if (state.user) {
+        state.user.wallets.balance = action.payload.balance;
+        state.user.wallets.locked_balance = action.payload.locked_balance;
+      }
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(initAuth.pending, (state) => {
@@ -54,5 +61,5 @@ const authSlice = createSlice({
       });
   },
 });
-
+export const { setUserWallet } = authSlice.actions;
 export default authSlice.reducer;

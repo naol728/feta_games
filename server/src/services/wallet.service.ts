@@ -1,178 +1,63 @@
-import axios from "axios";
-export interface CBEReceipt {
-  id: string;
-  transactionType: string;
+import { supabase } from "../config/supabase";
+import { redis } from "../config/radis";
+import { io } from "../app";
 
-  debitAccountNo: string;
-  debitCurrency: string;
-  debitAmount: string;
-  debitValueDate: string;
+async function emitBalance(userId: string) {
+  const socketId = await redis.get(`player:${userId}`);
+  if (!socketId) return;
 
-  creditAccountNo: string;
-  creditCurrency: string;
-  creditValueDate: string;
+  const { data: wallet } = await supabase
+    .from("wallets")
+    .select("balance, locked_balance")
+    .eq("user_id", userId)
+    .single();
 
-  processingDate: string;
+  if (!wallet) return;
 
-  debitTheirRef: string;
-  creditTheirRef: string;
-
-  paymentDetails: string[];
-
-  chargeComDisplay: string;
-  commissionCode: string;
-
-  commissionTypes: CommissionType[];
-
-  chargeCode: string;
-  positionType: string;
-
-  taxTypes: TaxType[];
-
-  amountDebitedWithCurrency: string;
-  amountCreditedWithCurrency: string;
-  totalChargeAmountWithCurrency: string;
-  totalTaxAmountWithCurrency: string;
-
-  amountDebited: string;
-  amountCredited: string;
-  totalChargeAmount: string;
-  totalTaxAmount: string;
-
-  debitCustomer: string;
-  creditCustomer: string;
-  chargedCustomer: string;
-
-  totRecComm: string;
-  totRecCommLcl: string;
-  totRecChg: string;
-  totRecChgLcl: string;
-
-  rateFixing: string;
-  authDate: string;
-  roundType: string;
-  currNo: string;
-
-  dateTimes: string[];
-
-  creditAccountHolder: string;
-  debitAccountHolder: string;
-}
-export interface CommissionType {
-  commissionType: string;
-  commissionAmt: string;
+  io.to(socketId).emit("balance:update", wallet);
 }
 
-export interface TaxType {
-  taxType: string;
-  taxAmt: string;
-}
-export interface DBTransaction {
-  id: string;
-  amount: number;
-  status: string;
-  metadata: {
-    account_number: string;
-  };
-}
-
-export async function getCBEReceipt(transactionId: string) {
-  const url = `https://mb.cbe.com.et/api/v1/transactions/public/transaction-detail/${transactionId}`;
-
-  try {
-    const { data } = await axios.get(url, {
-      headers: {
-        "X-App-ID": "d1292e42-7400-49de-a2d3-9731caa4c819",
-        "X-App-Version": "0a01980b-9859-1369-8198-59f403820000",
-        "User-Agent": "Mozilla/5.0",
-        Accept: "application/json",
-      },
+export const walletService = {
+  async addBalance(userId: string, amount: number) {
+    await supabase.rpc("increment_wallet_balance", {
+      user_id_input: userId,
+      amount_input: amount,
     });
 
-    if (!data || Object.keys(data).length === 0) {
-      return {
-        success: false,
-        error: "Receipt not found",
-      };
-    }
+    await emitBalance(userId);
+  },
 
-    return {
-      success: true,
-      data,
-    };
-  } catch (error: any) {
-    // Handle API response errors
-    if (error.response) {
-      const status = error.response.status;
+  async lockBalance(userId: string, amount: number) {
+    await supabase.rpc("lock_wallet_balance", {
+      user_id_input: userId,
+      amount_input: amount,
+    });
 
-      if (status === 404) {
-        return {
-          success: false,
-          error: "Receipt not found",
-        };
-      }
+    await emitBalance(userId);
+  },
 
-      if (status === 400) {
-        return {
-          success: false,
-          error: "Receipt not found",
-        };
-      }
+  async unlockBalance(userId: string, amount: number) {
+    await supabase.rpc("unlock_wallet_balance", {
+      user_id_input: userId,
+      amount_input: amount,
+    });
 
-      return {
-        success: false,
-        error: error.response.data?.error || "Receipt not found",
-      };
-    }
+    await emitBalance(userId);
+  },
 
-    // Network / timeout errors
-    return {
-      success: false,
-      error: "Unable to connect to CBE service",
-    };
-  }
-}
+  async resolveMatch(
+    winnerId: string,
+    loserId: string,
+    betAmount: number,
+    gamesource: string,
+  ) {
+    await supabase.rpc("resolve_match", {
+      winner_id: winnerId,
+      loser_id: loserId,
+      bet_amount: betAmount,
+      game_source: gamesource,
+    });
 
-export async function checkTransactionCBE({
-  recepit,
-  trx,
-}: {
-  recepit: CBEReceipt;
-  trx: DBTransaction;
-}): Promise<{ success: boolean; error?: string }> {
-  try {
-    const dbAccount = trx.metadata?.account_number;
-    const apiAccount = recepit.debitAccountNo;
-
-    if (!dbAccount || dbAccount !== apiAccount) {
-      return {
-        success: false,
-        error: "Account number mismatch",
-      };
-    }
-
-    const dbAmount = Number(trx.amount);
-    const apiAmount = parseFloat(recepit.amountCredited);
-
-    if (dbAmount !== apiAmount) {
-      return {
-        success: false,
-        error: "Amount mismatch",
-      };
-    }
-
-    if (trx.status === "completed") {
-      return {
-        success: false,
-        error: "Transaction already processed",
-      };
-    }
-
-    return { success: true };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err?.message || "Unknown error",
-    };
-  }
-}
+    await Promise.all([emitBalance(winnerId), emitBalance(loserId)]);
+  },
+};

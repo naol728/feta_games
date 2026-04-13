@@ -13,7 +13,7 @@ export default function MainLayout() {
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-y-auto px-2 pt-2 pb-24">
+      <main className="flex-1 overflow-y-auto  pt-2 pb-24">
         <Outlet />
       </main>
 

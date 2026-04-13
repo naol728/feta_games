@@ -18,6 +18,7 @@ import { connectSocket } from "./lib/socket";
 import { toast } from 'react-toastify';
 import Deposit from "./pages/player/Deposit";
 import MatchMakingLayout from "./layout/MatchMakingLayout";
+import { registerSocketListeners } from "./lib/socketListeners";
 
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
       try {
         await dispatch(initAuth()).unwrap();
         await connectSocket();
+        await registerSocketListeners();
       } catch (err: unknown) {
         let message = "Initialization failed";
         if (err instanceof Error) {
@@ -40,7 +42,7 @@ export default function App() {
     }
 
     init();
-  }, []);
+  });
 
 
   if (!ready) {

@@ -62,7 +62,7 @@ export async function createMatch(
   if (!ok1 || !ok2) {
     if (ok1) await walletService.unlockBalance(playerId);
     if (ok2) await walletService.unlockBalance(opponent.playerId);
-
+  
     socket.emit("error", "Insufficient balance");
     opponentSocket.emit("error", "Opponent insufficient balance");
 

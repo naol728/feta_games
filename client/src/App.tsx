@@ -75,7 +75,6 @@ export default function App() {
           <Route path="/deposit/:trxno" element={<Deposit />} />
         </Route>
         <Route path="/connectfour/:roomId" element={<ConnectFour />} />
-
         <Route path="/carddraw/:roomId" element={<CardDraw />} />
       </Routes>
 

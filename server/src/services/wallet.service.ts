@@ -70,10 +70,19 @@ export const walletService = {
       game_source: gamesource,
     });
     if (error) {
-      console.log(error)
+      console.log(error);
       throw error;
     }
 
     await Promise.all([emitBalance(winnerId), emitBalance(loserId)]);
+  },
+  async checkBalance(playerId: string, bet: number) {
+    const { data, error } = await supabase.rpc("check_balance", {
+      user_id_input: playerId,
+      amount_input: bet,
+    });
+    if (error) throw error;
+    await emitBalance(playerId);
+    return data;
   },
 };

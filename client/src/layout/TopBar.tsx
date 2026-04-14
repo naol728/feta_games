@@ -56,7 +56,7 @@ export default function TopBar({
       <div className="flex items-center gap-2">
 
         {showBack && (
-          <button onClick={() => navigate(-1)}>
+          <button onClick={() => navigate("/")}>
             <ArrowLeft className="w-5 h-5" />
           </button>
         )}

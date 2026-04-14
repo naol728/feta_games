@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 const items = [
   { to: '/invite', label: 'Invite', emoji: '👥' },
   { to: '/', label: 'Game', emoji: '🏆' },
-  { to: '/profile', label: 'Profile', emoji: '👤' },
+  { to: '/profile', label: 'Profile', emoji: '⚙️' },
 ]
 
 export default function Nav() {

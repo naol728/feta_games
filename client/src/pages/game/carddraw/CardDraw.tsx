@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import confetti from "canvas-confetti";
 import { getSocket } from "@/lib/socket";
 import { useAppSelector } from "@/store/hook";
+import { playGameplaySound, stopGameplaySound } from "@/lib/sound";
 
 type Pick = { value: number };
 export type Player = { id: string; total: number; picks: Pick[] };
@@ -39,6 +40,20 @@ export default function CardDraw() {
   const isWin = match?.winner === playerId;
   const isLose = match?.winner !== playerId && match?.reason !== "opponent_left";
   const isLeft = match?.reason === "opponent_left";
+
+  useEffect(() => {
+    if (!match) return;
+
+    if (match.status === "playing") {
+      playGameplaySound();
+    }
+
+    if (match.status === "finished") {
+      stopGameplaySound();
+    }
+
+    return () => stopGameplaySound();
+  }, [match?.status]);
 
   // Confetti on win
   useEffect(() => {
@@ -80,6 +95,7 @@ export default function CardDraw() {
       socket.off("carddraw:update");
       socket.off("carddraw:result");
       socket.off("carddraw:opponent-left");
+      stopGameplaySound();
     };
   }, [roomId, playerId, navigate]);
 

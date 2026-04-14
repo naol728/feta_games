@@ -19,6 +19,7 @@ import { toast } from 'react-toastify';
 import Deposit from "./pages/player/Deposit";
 import MatchMakingLayout from "./layout/MatchMakingLayout";
 import { registerSocketListeners } from "./lib/socketListeners";
+import MinimalLayout from "./layout/MinimalLayout";
 
 
 export default function App() {
@@ -70,8 +71,9 @@ export default function App() {
           <Route path="/minesduel" element={<MinesDuel />} />
         </Route>
 
-
-        <Route path="/deposit/:trxno" element={<Deposit />} />
+        <Route element={<MinimalLayout />}>
+          <Route path="/deposit/:trxno" element={<Deposit />} />
+        </Route>
         <Route path="/connectfour/:roomId" element={<ConnectFour />} />
 
         <Route path="/carddraw/:roomId" element={<CardDraw />} />

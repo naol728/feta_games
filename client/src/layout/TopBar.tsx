@@ -1,4 +1,4 @@
-import { Wallet, ArrowLeft } from "lucide-react"
+import { Wallet, ArrowLeft, ArrowDownCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Drawer,
@@ -81,6 +81,7 @@ export default function TopBar({
           <Drawer>
             <DrawerTrigger asChild>
               <Button size="sm" className="h-8 px-3 text-xs ">
+                <ArrowDownCircle className="mr-1 h-2 w-2" />
                 Deposit
               </Button>
             </DrawerTrigger>

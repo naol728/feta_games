@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft } from "lucide-react";
 import { toast } from "react-toastify";
 import {
   Dialog,
@@ -93,18 +92,11 @@ export default function CardDrawMatchmaking() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground px-3 py-2 space-y-3">
+    <div className=" bg-background text-foreground px-3 py-2 space-y-3">
 
       {/* Header */}
       <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate("/")}
-          className="rounded-full h-8 w-8"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+
 
         <h1 className="text-sm font-semibold tracking-wide">
           CARD DRAW

@@ -27,3 +27,7 @@ export const varifytransaction = async (data: {
   });
   return res.data;
 };
+export const gettransactionhistory = async () => {
+  const res = await apiClient.get(`/${BASE}/transactions`);
+  return res.data;
+};

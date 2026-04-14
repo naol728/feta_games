@@ -32,11 +32,11 @@ import {
 } from "@/components/ui/drawer"
 import { Input } from "@/components/ui/input"
 import { useMemo, useState } from "react"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { paymentMethod } from "@/api/wallet"
 import { toast } from "react-toastify"
 import { useNavigate } from "react-router-dom"
-
+import { gettransactionhistory } from "@/api/wallet"
 interface Transaction {
     id: number;
     type: "deposit" | "withdrawal" | "bet" | "win";
@@ -57,6 +57,25 @@ interface WithdrawRequest {
 
 export default function Profile() {
     const user = useAppSelector((state) => state.auth.user);
+    const { data, error, isLoading } = useQuery({
+        queryFn: gettransactionhistory,
+        queryKey: ["gettransactionhistory"]
+    })
+    const mappedTransactions: Transaction[] = useMemo(() => {
+        if (!data?.data) return [];
+
+        return data.data.map((t: any) => ({
+            id: t.id,
+            type: t.type,
+            amount: t.amount,
+            status: t.status,
+            date: t.created_at,
+            description:
+                t.payment_method?.type ||
+                t.type ||
+                "Transaction",
+        }));
+    }, [data]);
     const [amount, setAmount] = useState("")
     const navigate = useNavigate()
 
@@ -75,13 +94,7 @@ export default function Profile() {
     })
 
     const isValid = numericAmount > 10
-    const transactions: Transaction[] = [
-        { id: 1, type: "deposit", amount: 500, status: "completed", date: "2024-03-15", description: "Deposit" },
-        { id: 2, type: "bet", amount: 100, status: "completed", date: "2024-03-14", description: "Bet" },
-        { id: 3, type: "win", amount: 250, status: "completed", date: "2024-03-14", description: "Bet Win" },
-        { id: 4, type: "withdrawal", amount: 200, status: "pending", date: "2024-03-13", description: "Bank Transfer" },
-        { id: 5, type: "deposit", amount: 300, status: "completed", date: "2024-03-12", description: "Telebirr Deposit" },
-    ];
+
 
     const withdrawRequests: WithdrawRequest[] = [
         { id: 1, amount: 200, status: "pending", requestedAt: "2024-03-13", method: "Bank Transfer" },
@@ -150,6 +163,10 @@ export default function Profile() {
                 return <Wallet className="h-5 w-5 text-muted-foreground" />;
         }
     };
+    const handlenavigatetodeposit = (id: string, status: string) => {
+        if (status === "completed") return;
+        navigate(`/deposit/${id}`)
+    }
 
     if (!user) {
         return (
@@ -283,29 +300,37 @@ export default function Profile() {
 
                     {/* Transactions */}
                     <TabsContent value="transactions" className="space-y-3 mt-4">
-                        {transactions.map((t) => (
-                            <Card key={t.id}>
-                                <CardContent className="p-3 flex justify-between">
-                                    <div className="flex gap-3">
-                                        {getTransactionIcon(t.type)}
-                                        <div>
-                                            <p className="font-medium capitalize">{t.type}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {t.description}
-                                            </p>
+                        {isLoading ? (
+                            <p className="text-center text-sm">Loading...</p>
+                        ) : mappedTransactions.length === 0 ? (
+                            <p className="text-center text-sm text-muted-foreground">
+                                No transactions found
+                            </p>
+                        ) : (
+                            mappedTransactions.map((t) => (
+                                <Card key={t.id} onClick={() => handlenavigatetodeposit(t.id, t.status)}>
+                                    <CardContent className="p-3 flex justify-between">
+                                        <div className="flex gap-3">
+                                            {getTransactionIcon(t.type)}
+                                            <div>
+                                                <p className="font-medium capitalize">{t.type}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {t.description}
+                                                </p>
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    <div className="text-right">
-                                        <p className="font-bold">
-                                            {t.type === "deposit" || t.type === "win" ? "+" : "-"}
-                                            {t.amount} ETB
-                                        </p>
-                                        {getStatusBadge(t.status)}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
+                                        <div className="text-right">
+                                            <p className="font-bold">
+                                                {t.type === "deposit" || t.type === "win" ? "+" : "-"}
+                                                {t.amount} ETB
+                                            </p>
+                                            {getStatusBadge(t.status)}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))
+                        )}
                     </TabsContent>
 
                     {/* Withdrawals */}

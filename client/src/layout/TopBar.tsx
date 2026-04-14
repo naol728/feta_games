@@ -80,7 +80,7 @@ export default function TopBar({
         {showDeposit && (
           <Drawer>
             <DrawerTrigger asChild>
-              <Button size="sm" className="h-8 px-3 text-xs">
+              <Button size="sm" className="h-8 px-3 text-xs ">
                 Deposit
               </Button>
             </DrawerTrigger>

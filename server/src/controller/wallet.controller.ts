@@ -223,5 +223,30 @@ export const wallet = catchAsync(
   async (req: WalletRequest, res: Response, next: NextFunction) => {},
 );
 export const transactions = catchAsync(
-  async (req: WalletRequest, res: Response, next: NextFunction) => {},
+  async (req: WalletRequest, res: Response, next: NextFunction) => {
+    const userId = req.user.userId;
+    if (!userId) {
+      return next(new AppError("Anautorized ", 401));
+    }
+
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select(
+        `*,  
+        payment_method:payment_methods (
+     id,
+    type,
+    account_name,
+    account_number
+   )`,
+      )
+      .eq("user_id", userId);
+    if (error) {
+      return next(new AppError(error.message, 500));
+    }
+
+    res.status(200).json({
+      data: transactions,
+    });
+  },
 );

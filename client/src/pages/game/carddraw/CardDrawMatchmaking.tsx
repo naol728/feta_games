@@ -23,6 +23,7 @@ export default function CardDrawMatchmaking() {
   const [betAmount, setBetAmount] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
   const [queues, setQueues] = useState<[]>([]);
+
   useEffect(() => {
     if (localStorage.getItem("hide_rules")) return;
 
@@ -32,6 +33,7 @@ export default function CardDrawMatchmaking() {
 
     return () => clearTimeout(t);
   }, []);
+
   useEffect(() => {
     socket.emit("carddraw:queue:list");
 
@@ -55,12 +57,12 @@ export default function CardDrawMatchmaking() {
 
     socket.on("carddraw:waiting", () => {
       setSearching(true);
-      toast("🔍 Finding opponent...", { type: "info" });
+      toast(" Finding Player...", { type: "info" });
     });
 
     socket.on("carddraw:matched", ({ roomId }) => {
       toast.dismiss();
-      toast("⚡ Match found!", { type: "success" });
+      toast(" Player found!", { type: "success" });
       setSearching(false);
       navigate(`/carddraw/${roomId}`);
     });
@@ -97,6 +99,26 @@ export default function CardDrawMatchmaking() {
     });
   };
 
+  const cardrawqueuejoin = (q: { bet: number }, p: { queueId: number }) => {
+    if (searching) return;
+
+    if (balance == null) {
+      toast.error("Balance not loaded yet");
+      return;
+    }
+
+    if (balance < q.bet) {
+      toast.error("Insufficient Balance");
+      return;
+    }
+
+    socket.emit("carddraw:queue:join", {
+      queueId: p.queueId,
+      bet: q.bet,
+      playerId,
+    })
+  }
+
   const cancelMatchmaking = () => {
     setSearching(false);
     socket.emit("carddraw:cancel");
@@ -105,16 +127,12 @@ export default function CardDrawMatchmaking() {
   return (
     <div className=" bg-background text-foreground px-3 py-2 space-y-3">
 
-      {/* Header */}
       <div className="flex items-center gap-2">
-
-
         <h1 className="text-sm font-semibold tracking-wide">
           CARD DRAW
         </h1>
       </div>
 
-      {/* Betting Card */}
       <Card className="bg-card border border-border shadow-md">
         <CardContent className="p-3 space-y-3">
           <div className="mt-3 px-2 space-y-3">
@@ -171,7 +189,6 @@ export default function CardDrawMatchmaking() {
         </CardContent>
       </Card>
 
-      {/* Queue Lobby */}
       {!searching && (
         <div className="mt-4 space-y-2 px-2">
           <div className="text-[11px] text-muted-foreground">
@@ -195,7 +212,7 @@ export default function CardDrawMatchmaking() {
               <div className="space-y-1 max-h-[120px] overflow-y-auto">
                 {q.players.length === 0 ? (
                   <div className="text-[10px] text-muted-foreground">
-                    Empty
+                    No Player
                   </div>
                 ) : (
                   q.players.map((p) => (
@@ -207,13 +224,7 @@ export default function CardDrawMatchmaking() {
 
                       <button
                         className="text-primary text-[10px]"
-                        onClick={() =>
-                          socket.emit("carddraw:queue:join", {
-                            queueId: p.queueId,
-                            bet: q.bet,
-                            playerId,
-                          })
-                        }
+                        onClick={() => cardrawqueuejoin(q, p)}
                       >
                         Join
                       </button>

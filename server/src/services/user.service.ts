@@ -1,5 +1,5 @@
 import TelegramBot from "node-telegram-bot-api";
-import { supabase } from "./../config/supabase";
+import { supabase } from "../config/supabase";
 
 export async function upsertTelegramUser(msg: TelegramBot.Message) {
   const tg = msg.from;

@@ -37,9 +37,10 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
         socket.emit("error", "Invalid bet ");
         return;
       }
-      const ok = await walletService.lockandchcekBalance(playerId, bet);
-      if (!ok) {
-        socket.emit("error", "Inseficent Balance");
+
+      const hasBalance = await walletService.checkBalance(playerId, bet);
+      if (!hasBalance) {
+        socket.emit("error", "Insufficient balance");
         return;
       }
 
@@ -98,13 +99,9 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
     "carddraw:queue:join",
     safeSocket(socket, async ({ queueId, bet }) => {
       const playerId = socket.user.userId;
-      const ok = await walletService.lockandchcekBalance(
-        socket.user.userId,
-        bet,
-      );
-
-      if (!ok) {
-        socket.emit("error", "Inseficent Balance");
+      const hasBalance = await walletService.checkBalance(playerId, bet);
+      if (!hasBalance) {
+        socket.emit("error", "Insufficient balance");
         return;
       }
       const queueKey = QUEUE_KEY(bet);
@@ -153,7 +150,6 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
     safeSocket(socket, async () => {
       if (socket.queueKey && socket.queueEntry) {
         await redis.lrem(socket.queueKey, 1, socket.queueEntry);
-        await walletService.unlockBalance(socket.user.userId);
         socket.queueKey = null;
         socket.queueEntry = null;
 
@@ -162,6 +158,7 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
       }
     }),
   );
+  
   socket.on(
     "carddraw:join",
     safeSocket(socket, async ({ roomId }) => {
@@ -179,7 +176,6 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
         socket.join(roomId);
         socket.roomId = roomId;
 
-        // ✅ ALWAYS send current match state
         socket.emit("carddraw:start", match);
       } catch (err) {
         console.error("error:", err);

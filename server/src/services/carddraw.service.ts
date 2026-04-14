@@ -1,5 +1,7 @@
 import { Server, Socket } from "socket.io";
 import { redis } from "../config/radis";
+import { walletService } from "./wallet.service";
+
 function shuffleDeck() {
   const values: (number | string)[] = [
     1,
@@ -39,7 +41,7 @@ interface CustomSocket extends Socket {
   queueEntry?: string | null;
   roomId?: string;
 }
-export function createMatch(
+export async function createMatch(
   io: Server,
   socket: CustomSocket,
   opponent: QueueEntry,
@@ -47,6 +49,25 @@ export function createMatch(
   bet: number,
 ) {
   const roomId = `cd_${Date.now()}`;
+
+  const opponentSocket = io.sockets.sockets.get(opponent.socketId);
+  if (!opponentSocket) {
+    socket.emit("error", "Opponent disconnected");
+    return;
+  }
+
+  const ok1 = await walletService.lockandchcekBalance(playerId, bet);
+  const ok2 = await walletService.lockandchcekBalance(opponent.playerId, bet);
+
+  if (!ok1 || !ok2) {
+    if (ok1) await walletService.unlockBalance(playerId);
+    if (ok2) await walletService.unlockBalance(opponent.playerId);
+
+    socket.emit("error", "Insufficient balance");
+    opponentSocket.emit("error", "Opponent insufficient balance");
+
+    return;
+  }
 
   const match = {
     matchId: roomId,
@@ -71,18 +92,17 @@ export function createMatch(
     pickedIndices: [],
     turn: playerId,
     round: 1,
-    maxRounds: 3,
+    maxRounds: 6,
+    resolved: false,
   };
 
-  redis.set(`room:carddraw:${roomId}`, JSON.stringify(match));
+  await redis.set(`room:carddraw:${roomId}`, JSON.stringify(match));
+
   socket.join(roomId);
   socket.roomId = roomId;
 
-  const opponentSocket = io.sockets.sockets.get(opponent.socketId);
-  if (opponentSocket) {
-    opponentSocket.join(roomId);
-    (opponentSocket as CustomSocket).roomId = roomId;
-  }
+  opponentSocket.join(roomId);
+  (opponentSocket as CustomSocket).roomId = roomId;
 
   io.to(opponent.socketId).emit("carddraw:matched", { roomId });
   socket.emit("carddraw:matched", { roomId });

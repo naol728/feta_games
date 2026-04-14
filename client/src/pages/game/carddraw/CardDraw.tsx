@@ -43,7 +43,7 @@ export default function CardDraw() {
   // Confetti on win
   useEffect(() => {
     if (showResult && isWin) {
-      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+      confetti({ particleCount: 200, spread: 70, origin: { y: 0.6 } });
     }
   }, [showResult]);
 
@@ -72,7 +72,7 @@ export default function CardDraw() {
           ? { ...prev, status: "finished", winner: null, reason: "opponent_left" }
           : prev
       );
-      setTimeout(() => navigate("/carddraw"), 2000);
+      setTimeout(() => navigate("/carddraw"), 3000);
     });
 
     return () => {
@@ -89,7 +89,6 @@ export default function CardDraw() {
         <div className="w-96 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-2"></div>
           <p className="text-muted-foreground">Waiting for match to start...</p>
-          <Badge variant="outline" className="text-xs mt-1">Room: {roomId}</Badge>
         </div>
       </div>
     );

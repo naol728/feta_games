@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Game from "./pages/player/Game";
 import Invite from "./pages/player/Invite";
@@ -20,6 +20,7 @@ import Deposit from "./pages/player/Deposit";
 import MatchMakingLayout from "./layout/MatchMakingLayout";
 import { registerSocketListeners } from "./lib/socketListeners";
 import MinimalLayout from "./layout/MinimalLayout";
+import Loading from "./components/layout/Loading";
 
 
 export default function App() {
@@ -48,46 +49,47 @@ export default function App() {
 
   if (!ready) {
     return (
-      <div className="h-screen flex items-center justify-center ">
-        <div className="animate-pulse text-lg">Connecting...</div>
-      </div>
+      <Loading />
     );
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<Mainlayout />}>
-          <Route index element={<Game />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/invite" element={<Invite />} />
+    <Suspense fallback={<Loading />}>
 
-        </Route>
-        <Route element={<MatchMakingLayout />}>
-          <Route path="/connectfour" element={<ConnectFourMatchmaking />} />
-          <Route path="/carddraw" element={<CardDrawMatchmaking />} />
-          <Route path="/jetxpick" element={<Jetx />} />
-          <Route path="/memoryflip" element={<MemoryFlip />} />
-          <Route path="/minesduel" element={<MinesDuel />} />
-        </Route>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<Mainlayout />}>
+            <Route index element={<Game />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/invite" element={<Invite />} />
 
-        <Route element={<MinimalLayout />}>
-          <Route path="/deposit/:trxno" element={<Deposit />} />
-        </Route>
-        <Route path="/connectfour/:roomId" element={<ConnectFour />} />
-        <Route path="/carddraw/:roomId" element={<CardDraw />} />
-      </Routes>
+          </Route>
+          <Route element={<MatchMakingLayout />}>
+            <Route path="/connectfour" element={<ConnectFourMatchmaking />} />
+            <Route path="/carddraw" element={<CardDrawMatchmaking />} />
+            <Route path="/jetxpick" element={<Jetx />} />
+            <Route path="/memoryflip" element={<MemoryFlip />} />
+            <Route path="/minesduel" element={<MinesDuel />} />
+          </Route>
 
-      <ToastContainer
-        position="top-center"
-        autoClose={2000}
-        hideProgressBar
-        newestOnTop
-        closeOnClick
-        draggable={false}
-        pauseOnHover={false}
-        theme="dark"
-      />
-    </BrowserRouter>
+          <Route element={<MinimalLayout />}>
+            <Route path="/deposit/:trxno" element={<Deposit />} />
+          </Route>
+          <Route path="/connectfour/:roomId" element={<ConnectFour />} />
+          <Route path="/carddraw/:roomId" element={<CardDraw />} />
+        </Routes>
+
+        <ToastContainer
+          position="top-center"
+          autoClose={2000}
+          hideProgressBar
+          newestOnTop
+          closeOnClick
+          draggable={false}
+          pauseOnHover={false}
+          theme="dark"
+        />
+      </BrowserRouter>
+    </Suspense>
   );
 }

@@ -35,9 +35,11 @@ if (import.meta.env.DEV && !(window as any).Telegram) {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryclient}>
+
       <Provider store={store} >
         <App />
       </Provider>
+
     </QueryClientProvider>
   </React.StrictMode>
 );

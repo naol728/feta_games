@@ -8,7 +8,7 @@ export default function MatchMakingLayout() {
 
             {/* Top Bar */}
             <header className="sticky top-0 z-50">
-                <TopBar showBack />
+                <TopBar showBack showDeposit={false} />
             </header>
 
             {/* Content */}

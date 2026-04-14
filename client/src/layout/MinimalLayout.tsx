@@ -7,7 +7,7 @@ export default function MinimalLayout() {
         <div className="flex min-h-screen flex-col bg-background max-w-md mx-auto">
 
             <header className="sticky top-0 z-50">
-                <TopBar showBack title="Deposit" />
+                <TopBar showBack title="Deposit" showDeposit={false} />
             </header>
 
             <main className="flex-1 overflow-y-auto">

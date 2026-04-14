@@ -67,18 +67,17 @@ export default function TopBar({
       </div>
 
       {/* RIGHT */}
-      {showDeposit && (
-        <div className="flex items-center gap-2">
 
-          {/* Balance */}
-          <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded-lg">
-            <Wallet className="w-3 h-3 text-muted-foreground" />
-            <span className="text-xs font-medium">
-              {user?.wallets?.balance} ETB
-            </span>
-          </div>
+      <div className="flex items-center gap-2">
 
-          {/* Deposit Drawer */}
+        {/* Balance */}
+        <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded-lg">
+          <Wallet className="w-3 h-3 text-muted-foreground" />
+          <span className="text-xs font-bold">
+            {user?.wallets?.balance} ETB
+          </span>
+        </div>
+        {showDeposit && (
           <Drawer>
             <DrawerTrigger asChild>
               <Button size="sm" className="h-8 px-3 text-xs">
@@ -123,9 +122,10 @@ export default function TopBar({
 
             </DrawerContent>
           </Drawer>
+        )}
 
-        </div>
-      )}
-    </div>
+      </div>
+
+    </div >
   )
 }

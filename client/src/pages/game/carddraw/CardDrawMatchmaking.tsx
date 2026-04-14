@@ -17,7 +17,7 @@ export default function CardDrawMatchmaking() {
   const navigate = useNavigate();
   const [showRules, setShowRules] = useState(false);
   const socket = getSocket();
-  const balance = useAppSelector((state) => state.auth.user?.wallets.balance)
+  const balance = useAppSelector((state) => state.auth.user?.wallets.balance ?? 0)
   const playerId = useAppSelector((state) => state.auth.user?.telegram_id)
   const [loadingQueues, setLoadingQueues] = useState(true);
   const [betAmount, setBetAmount] = useState<number | null>(null);
@@ -80,11 +80,17 @@ export default function CardDrawMatchmaking() {
 
   const startMatchmaking = () => {
     if (!betAmount || searching) return;
-    if (balance < betAmount) {
-      toast.error("Inseficent Balance")
-      return
+
+    if (balance == null) {
+      toast.error("Balance not loaded yet");
+      return;
     }
-    console.log("error")
+
+    if (balance < betAmount) {
+      toast.error("Insufficient Balance");
+      return;
+    }
+
     setSearching(true);
     socket.emit("carddraw:queue", {
       bet: Number(betAmount),

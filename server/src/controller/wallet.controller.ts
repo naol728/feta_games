@@ -17,7 +17,12 @@ interface WalletRequest extends Request {
 
 export const deposit = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const { transactionId, trxno } = req.body;
+    const { transactionUrl, trxno } = req.body;
+
+    if (!transactionUrl) {
+      return next(new AppError("Missing Transaction Url", 400));
+    }
+    const transactionId = transactionUrl.split("/").pop();
 
     if (!transactionId || !trxno) {
       return next(new AppError("Missing Transaction ID", 400));
@@ -118,7 +123,7 @@ export const paymentMethod = catchAsync(
 
     const parsedAmount = Number(amount);
 
-    if (!parsedAmount || parsedAmount < 10 || parsedAmount > 1000) {
+    if (!parsedAmount || parsedAmount < 10 || parsedAmount > 5000) {
       return next(new AppError("Amount must be between 10 and 1000 ETB", 400));
     }
 

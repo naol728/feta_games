@@ -70,7 +70,7 @@ export default function TopBar() {
             <DrawerHeader className="text-left">
               <DrawerTitle>Add Funds</DrawerTitle>
               <DrawerDescription>
-                Enter amount (10 - 1000 ETB)
+                Enter amount (10 - 5000 ETB)
               </DrawerDescription>
             </DrawerHeader>
 

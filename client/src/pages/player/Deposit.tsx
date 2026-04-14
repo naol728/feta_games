@@ -8,10 +8,18 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "react-toastify"
 import { useState } from "react"
-
+import { Copy } from "lucide-react";
 export default function Deposit() {
     const { trxno } = useParams()
-    const [transactionId, setTransactionId] = useState("")
+    const [transactionUrl, setTransactionUrl] = useState("")
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        const text = tx.payment_method?.account_number || "";
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+    };
     const { data, isLoading, error } = useQuery({
         queryFn: () => gettransaction({ trxno }),
         queryKey: ["gettransaction", trxno],
@@ -106,7 +114,14 @@ export default function Deposit() {
                         {/* Account */}
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Account</span>
-                            <span>{tx.payment_method?.account_number}</span>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleCopy}
+                            >
+                                {copied ? "Copied!" : tx.payment_method?.account_number}
+                                <Copy className="ml-2 h-4 w-4" />
+                            </Button>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Account Holder Name</span>
@@ -124,14 +139,14 @@ export default function Deposit() {
                         {/* INPUT FIELD */}
                         <div className="pt-2 space-y-2">
                             <Input
-                                placeholder="Enter transaction number"
+                                placeholder="Enter transaction Url"
                                 className="h-10 text-sm"
-                                value={transactionId}
-                                disabled={isPending || tx.status == "completed"} onChange={(e) => setTransactionId(e.target.value)}
+                                value={transactionUrl}
+                                disabled={isPending || tx.status == "completed"} onChange={(e) => setTransactionUrl(e.target.value)}
                             />
 
                             <Button disabled={isPending || tx.status == "completed"}
-                                onClick={() => mutate({ trxno, transactionId })}
+                                onClick={() => mutate({ trxno, transactionUrl })}
                                 className="w-full h-10 text-sm">
                                 Verify Deposit
                             </Button>

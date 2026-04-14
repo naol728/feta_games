@@ -18,12 +18,12 @@ export const gettransaction = async ({
 
 export const varifytransaction = async (data: {
   trxno: string | undefined;
-  transactionId: string;
+  transactionUrl: string;
 }) => {
-  const { trxno, transactionId } = data;
+  const { trxno, transactionUrl } = data;
   const res = await apiClient.post(`/${BASE}/deposit`, {
     trxno,
-    transactionId,
+    transactionUrl,
   });
   return res.data;
 };

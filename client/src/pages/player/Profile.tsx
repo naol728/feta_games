@@ -163,7 +163,7 @@ export default function Profile() {
                 return <Wallet className="h-5 w-5 text-muted-foreground" />;
         }
     };
-    const handlenavigatetodeposit = (id: string, status: string) => {
+    const handlenavigatetodeposit = (id: number, status: string) => {
         if (status === "completed") return;
         navigate(`/deposit/${id}`)
     }

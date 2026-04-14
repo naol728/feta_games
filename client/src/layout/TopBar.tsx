@@ -47,7 +47,7 @@ export default function TopBar({
     }
   })
 
-  const isValid = numericAmount > 10
+  const isValid = numericAmount > 9
 
   return (
     <div className="backdrop-blur-xl bg-background/80 border-b border-border/40  px-3 h-12 flex items-center justify-between">
@@ -81,7 +81,7 @@ export default function TopBar({
           <Drawer>
             <DrawerTrigger asChild>
               <Button size="sm" className="h-8 px-3 text-xs ">
-                <ArrowDownCircle className="mr-1 h-2 w-2" />
+                <ArrowDownCircle className=" h-2 w-2" />
                 Deposit
               </Button>
             </DrawerTrigger>

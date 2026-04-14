@@ -1,33 +1,9 @@
 import { Link } from "react-router-dom"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { useEffect, useState } from "react"
 
-function useCountdown(targetDate: Date) {
-  const [timeLeft, setTimeLeft] = useState("")
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date().getTime()
-      const distance = targetDate.getTime() - now
 
-      if (distance <= 0) {
-        setTimeLeft("Ended")
-        clearInterval(interval)
-        return
-      }
-
-      const hours = Math.floor((distance / (1000 * 60 * 60)) % 24)
-      const minutes = Math.floor((distance / (1000 * 60)) % 60)
-
-      setTimeLeft(`${hours}h ${minutes}m`)
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [targetDate])
-
-  return timeLeft
-}
 const games = [
   { name: "Card Draw", path: "/carddraw", image: "/carddrawduel.jpg" },
   { name: "JetX Pick", path: "/jetxpick", image: "/jetx.jpeg" },
@@ -36,23 +12,18 @@ const games = [
   { name: "Mines Duel", path: "/minesduel", image: "/mineduel.jpeg" }
 ]
 export default function Game() {
-  const timeLeft = useCountdown(new Date(Date.now() + 1000 * 60 * 60 * 5))
-
   return (
     <div className="min-h-screen bg-background text-foreground p-4">
-
-
-
       {/* Banner */}
-      <div className="relative rounded-2xl overflow-hidden mb-4 bg-primary/90 p-10 shadow-lg">
+      <div className="relative rounded-2xl overflow-hidden mb-4 bg-primary/90 p-10 shadow-lg text-forground">
         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle,_#fff_1px,_transparent_1px)] bg-[size:20px_20px]" />
 
-        <div className="relative z-10 ">
-          <h2 className="text-lg font-bold text-primary-foreground mb-1">
-            Play & Win Rewards
+        <div className="relative z-10  ">
+          <h2 className="text-lg font-extrabold text-forground mb-1">
+            Play & Win Cash💰
           </h2>
-          <p className="text-sm text-bold text-primary-foreground/80">
-            Join games and earn prizes
+          <p className="text-sm text-bold text-forground/80">
+            Join games and earn cash💰
           </p>
         </div>
 
@@ -82,10 +53,9 @@ export default function Game() {
       </div>
 
 
-      <Card className="bg-accent/20 backdrop-blur-xl border border-border shadow-md my-2">
+      {/* <Card className="bg-accent/20 backdrop-blur-xl border border-border shadow-md my-2">
         <CardContent className="px-5  flex items-center justify-between">
 
-          {/* Time Left */}
           <div className="flex flex-col">
             <span className="text-xs text-muted-foreground">
               Time Left
@@ -95,10 +65,8 @@ export default function Game() {
             </span>
           </div>
 
-          {/* Divider */}
           <div className="h-8 w-px bg-border" />
 
-          {/* Total Pool */}
           <div className="flex flex-col">
             <span className="text-sm text-muted-foreground">
               Total Pool
@@ -108,10 +76,8 @@ export default function Game() {
             </span>
           </div>
 
-          {/* Divider */}
           <div className="h-8 w-px bg-border" />
 
-          {/* Rewards */}
           <div className="flex flex-col text-right">
             <span className="text-xs text-muted-foreground">
               Rewards
@@ -122,7 +88,7 @@ export default function Game() {
           </div>
 
         </CardContent>
-      </Card>
+      </Card> */}
       {/* Game List */}
       <div className="space-y-2">
         {games.map((game, i) => (

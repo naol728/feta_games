@@ -12,7 +12,7 @@ import confetti from "canvas-confetti";
 import { getSocket } from "@/lib/socket";
 import { useAppSelector } from "@/store/hook";
 import { playGameplaySound, stopGameplaySound } from "@/lib/sound";
-
+import { Card, CardContent } from "@/components/ui/card";
 type Pick = { value: number };
 export type Player = { id: string; total: number; picks: Pick[] };
 export type Match = {
@@ -42,7 +42,9 @@ export default function CardDraw() {
   const isWin = match?.winner === playerId;
   const isLose = match?.winner !== playerId && match?.reason !== "opponent_left";
   const isLeft = match?.reason === "opponent_left";
+  const profit = match ? match?.winnerAmount - match?.betAmount : 0;
 
+  const status = isWin ? "WIN" : isLose ? "LOSE" : "DRAW";
   useEffect(() => {
     if (!match) return;
 
@@ -158,14 +160,53 @@ export default function CardDraw() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="mt-5">
-            <div className="text-[11px] text-white/50">Result</div>
-            <div className={`text-3xl font-bold mt-1 tracking-wide
-              ${isWin ? "text-emerald-400" : isLose ? "text-red-400" : "text-amber-400"}`}>
-              {isWin || isLeft ? `+ ${match.winnerAmount - match.betAmount}` : `- ${match.betAmount}`}
-              <span className="text-xs ml-1 text-white/60">ETB</span>
-            </div>
-          </div>
+          <Card className="mt-5 bg-muted/40 border-border/60 backdrop-blur-sm">
+            <CardContent className="p-4 space-y-2">
+
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">Result</span>
+
+                <Badge
+                  variant="secondary"
+                  className={`
+              text-[10px] px-2 py-0.5
+              ${isWin ? "bg-emerald-500/10 text-emerald-500" : ""}
+              ${isLose ? "bg-red-500/10 text-red-500" : ""}
+              ${!isWin && !isLose ? "bg-amber-500/10 text-amber-500" : ""}
+            `}
+                >
+                  {status}
+                </Badge>
+              </div>
+
+              {/* Amount */}
+              <div className="flex items-end gap-1">
+                <span
+                  className={`
+              text-3xl font-semibold tracking-tight
+              ${isWin ? "text-emerald-500" : ""}
+              ${isLose ? "text-red-500" : ""}
+              ${!isWin && !isLose ? "text-amber-500" : ""}
+            `}
+                >
+                  {isWin || isLeft
+                    ? `+${profit.toLocaleString()}`
+                    : `-${match.betAmount.toLocaleString()}`}
+                </span>
+
+                <span className="text-xs text-muted-foreground mb-1">
+                  ETB
+                </span>
+              </div>
+
+              {/* Footer Info */}
+              <div className="text-[11px] text-muted-foreground">
+                Bet: {match.betAmount.toLocaleString()} ETB
+              </div>
+
+            </CardContent>
+          </Card>
 
           <Button className="mt-6 w-full text-sm bg-white/10 hover:bg-white/20 text-white border border-white/10" onClick={() => navigate("/carddraw")}>Play Again</Button>
         </DialogContent>

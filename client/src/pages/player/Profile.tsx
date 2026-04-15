@@ -79,7 +79,6 @@ export default function Profile() {
         queryFn: gettransactionhistory,
         queryKey: ["gettransactionhistory"],
     });
-
     const mappedTransactions: Transaction[] = useMemo(() => {
         if (!data?.data) return [];
 
@@ -201,6 +200,12 @@ export default function Profile() {
             account_holder_name: accountName,
         });
     };
+    const numericAmount = useMemo(() => {
+        const val = Number(amount)
+        return Number.isFinite(val) ? val : 0
+    }, [amount])
+    const isValid = numericAmount > 9
+
     const handlenavigatetodeposit = (id: number, status: string) => { if (status === "completed") return; navigate(`/deposit/${id}`) }
     if (!user) {
         return (
@@ -254,32 +259,47 @@ export default function Profile() {
                             {/* DEPOSIT */}
                             <Drawer>
                                 <DrawerTrigger asChild>
-                                    <Button>
-                                        <ArrowDownCircle className="mr-2 h-4 w-4" />
+                                    <Button size="sm" className="h-8 px-3 text-xs ">
+                                        <ArrowDownCircle className=" h-2 w-2" />
                                         Deposit
                                     </Button>
                                 </DrawerTrigger>
 
-                                <DrawerContent>
-                                    <DrawerHeader>
-                                        <DrawerTitle>Deposit</DrawerTitle>
+                                <DrawerContent className="pb-6">
+
+                                    <DrawerHeader className="text-left">
+                                        <DrawerTitle>Add Funds</DrawerTitle>
+                                        <DrawerDescription>
+                                            Enter amount (10 - 5000 ETB)
+                                        </DrawerDescription>
                                     </DrawerHeader>
 
-                                    <div className="p-4 space-y-3">
+                                    <div className="px-4 space-y-3">
                                         <Input
                                             type="number"
-                                            placeholder="Amount"
+                                            placeholder="Amount (ETB)"
                                             value={amount}
                                             onChange={(e) => setAmount(e.target.value)}
+                                            className="h-12 text-base"
                                         />
 
                                         <Button
-                                            disabled={!amount || isPending}
+                                            disabled={!isValid || isPending}
+                                            className="w-full h-12"
                                             onClick={() => mutate({ amount })}
                                         >
-                                            {isPending ? "Processing..." : "Start Deposit"}
+                                            {isPending
+                                                ? "Processing..."
+                                                : `Start Deposit ${isValid ? `${numericAmount} ETB` : ""}`}
                                         </Button>
                                     </div>
+
+                                    <DrawerFooter>
+                                        <DrawerClose asChild>
+                                            <Button variant="ghost">Cancel</Button>
+                                        </DrawerClose>
+                                    </DrawerFooter>
+
                                 </DrawerContent>
                             </Drawer>
 

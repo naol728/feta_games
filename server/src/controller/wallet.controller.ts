@@ -216,7 +216,43 @@ export const getTransaction = catchAsync(
 );
 
 export const withDraw = catchAsync(
-  async (req: WalletRequest, res: Response, next: NextFunction) => {},
+  async (req: WalletRequest, res: Response, next: NextFunction) => {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return next(new AppError("Unauthorized", 401));
+    }
+
+    const { amount, destination_account, bank_name, account_holder_name } =
+      req.body;
+
+    if (
+      !amount ||
+      amount <= 0 ||
+      !destination_account ||
+      !account_holder_name
+    ) {
+      return next(new AppError("Invalid withdrawal data", 400));
+    }
+
+    const { data, error } = await supabase.rpc("process_withdrawal", {
+      p_user_id: userId,
+      p_amount: amount,
+      p_destination: destination_account,
+      p_bank: bank_name || null,
+      p_account_holder_name: account_holder_name,
+    });
+
+    if (error) {
+      return next(new AppError(error.message, 400));
+    }
+
+    return res.status(200).json({
+      status: "success",
+      message: "Withdrawal request submitted",
+      withdrawalId: data,
+    });
+  },
 );
 
 export const wallet = catchAsync(
@@ -240,13 +276,34 @@ export const transactions = catchAsync(
     account_number
    )`,
       )
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("type", "deposit");
     if (error) {
       return next(new AppError(error.message, 500));
     }
 
     res.status(200).json({
       data: transactions,
+    });
+  },
+);
+export const getWithdraws = catchAsync(
+  async (req: WalletRequest, res: Response, next: NextFunction) => {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return next(new AppError("Unauthorized", 401));
+    }
+    const { data, error } = await supabase
+      .from("withdrawals")
+      .select("*")
+      .eq("user_id", userId);
+
+    if (error) {
+      return next(new AppError(error.message, 500));
+    }
+    res.json({
+      data: data,
     });
   },
 );

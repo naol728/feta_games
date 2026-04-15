@@ -6,6 +6,29 @@ export const paymentMethod = async ({ amount }: { amount: string }) => {
   });
   return res.data;
 };
+export const withDrawRequest = async ({
+  amount,
+  destination_account,
+  bank_name,
+  account_holder_name,
+}: {
+  amount: number;
+  destination_account: string;
+  bank_name: string;
+  account_holder_name: string;
+}) => {
+  const res = await apiClient.post(`/${BASE}/withdraw`, {
+    amount,
+    destination_account,
+    bank_name,
+    account_holder_name,
+  });
+  return res.data;
+};
+export const getwithDrawRequest = async () => {
+  const res = await apiClient.get(`/${BASE}/withdraw`);
+  return res.data;
+};
 
 export const gettransaction = async ({
   trxno,

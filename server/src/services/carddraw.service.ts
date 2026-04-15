@@ -62,13 +62,16 @@ export async function createMatch(
   if (!ok1 || !ok2) {
     if (ok1) await walletService.unlockBalance(playerId);
     if (ok2) await walletService.unlockBalance(opponent.playerId);
-  
+
     socket.emit("error", "Insufficient balance");
     opponentSocket.emit("error", "Opponent insufficient balance");
 
     return;
   }
-
+  const totalPot = bet * 2;
+  const feePercent = 0.1;
+  const fee = totalPot * feePercent;
+  const winnerAmount = totalPot - fee;
   const match = {
     matchId: roomId,
     players: [
@@ -86,6 +89,9 @@ export async function createMatch(
       },
     ],
     betAmount: bet,
+    totalPot,
+    fee,
+    winnerAmount,
     status: "playing",
     winner: null,
     deck: shuffleDeck(),

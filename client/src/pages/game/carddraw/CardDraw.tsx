@@ -24,6 +24,9 @@ export type Match = {
   deck: any[];
   turn: string;
   round: number;
+  totalPot: number;
+  fee: number;
+  winnerAmount: number;
   reason?: string;
 };
 
@@ -31,7 +34,6 @@ export default function CardDraw() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const socket = getSocket();
-
   const playerId = useAppSelector((state) => state.auth.user?.id)
   const auth = useAppSelector((state) => state.auth)
   const [match, setMatch] = useState<Match | null>(null);
@@ -84,10 +86,10 @@ export default function CardDraw() {
       toast.error("Opponent Left");
       setMatch((prev) =>
         prev
-          ? { ...prev, status: "finished", winner: null, reason: "opponent_left" }
+          ? { ...prev, status: "finished", winner: playerId || null, reason: "opponent_left" }
           : prev
       );
-      setTimeout(() => navigate("/carddraw"), 3000);
+      setTimeout(() => navigate("/carddraw"), 5000);
     });
 
     return () => {
@@ -115,7 +117,8 @@ export default function CardDraw() {
       <div className="flex justify-between items-center bg-muted/30 border border-border/30 px-3 py-2 rounded-md">
         <div className="flex gap-3 text-[11px]">
           <span className="flex items-center gap-1 font-medium"><Trophy className="w-3 h-3" /> R{match.round}</span>
-          <span className="flex items-center gap-1 text-muted-foreground"><Coins className="w-3 h-3" /> {match.betAmount}</span>
+          <span className="flex items-center gap-1 text-muted-foreground"><Coins className="w-3 h-3" /> bet amount {match.betAmount}</span>
+          <span className="flex items-center gap-1 text-muted-foreground"><Coins className="w-3 h-3" />win amount {match.winnerAmount}</span>
         </div>
         <div className="flex items-center gap-1 text-[11px] whitespace-nowrap">
           <Clock className="w-3.5 h-3.5 text-muted-foreground" />
@@ -141,7 +144,7 @@ export default function CardDraw() {
 
       {/* Result Dialog */}
       <Dialog open={showResult}>
-        <DialogContent className={`w-[300px] text-center p-6 border border-white/10 bg-[#0f172a] text-white backdrop-blur-xl 
+        <DialogContent showCloseButton={false} className={`w-[300px] text-center p-6 border border-white/10 bg-[#0f172a] text-white backdrop-blur-xl 
           ${isWin ? "shadow-[0_0_40px_rgba(16,185,129,0.35)] animate-[winPop_0.4s_ease]" : ""}
           ${isLose ? "shadow-[0_0_40px_rgba(239,68,68,0.35)] animate-[loseShake_0.4s_ease]" : ""}
           ${isLeft ? "shadow-[0_0_40px_rgba(245,158,11,0.35)]" : ""}
@@ -159,7 +162,7 @@ export default function CardDraw() {
             <div className="text-[11px] text-white/50">Result</div>
             <div className={`text-3xl font-bold mt-1 tracking-wide
               ${isWin ? "text-emerald-400" : isLose ? "text-red-400" : "text-amber-400"}`}>
-              {isWin || isLeft ? "+" : "-"}{match.betAmount}
+              {isWin || isLeft ? `+ ${match.winnerAmount - match.betAmount}` : `- ${match.betAmount}`}
               <span className="text-xs ml-1 text-white/60">ETB</span>
             </div>
           </div>

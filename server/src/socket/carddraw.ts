@@ -158,7 +158,7 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
       }
     }),
   );
-  
+
   socket.on(
     "carddraw:join",
     safeSocket(socket, async ({ roomId }) => {
@@ -299,31 +299,57 @@ export default function CardDrawSocket(io: Server, socket: CustomSocket) {
   socket.on(
     "disconnect",
     safeSocket(socket, async () => {
+      // 🔹 Remove from queue
       if (socket.queueKey && socket.queueEntry) {
         await redis.lrem(socket.queueKey, 1, socket.queueEntry);
+
+        // 🔥 IMPORTANT: unlock balance if waiting
+        await walletService.unlockBalance(socket.user.userId);
+
         io.emit("carddraw:queue:update");
       }
 
+      // 🔹 Handle active match
       if (socket.roomId) {
         const key = `room:carddraw:${socket.roomId}`;
         const raw = await redis.get(key);
         if (!raw) return;
 
         const match = JSON.parse(raw);
+
+        // already finished → ignore
         if (match.status !== "playing") return;
+
+        const leaverId = socket.user.userId;
 
         const opponent = match.players.find((p) => p.socketId !== socket.id);
 
         if (!opponent) return;
 
+        const winnerId = opponent.id;
+        const loserId = leaverId;
+        const betAmount = match.betAmount;
+
+        // 🧠 Update match state
         match.status = "finished";
-        match.winner = opponent.id;
+        match.winner = winnerId;
         match.reason = "opponent_left";
 
         await redis.set(key, JSON.stringify(match));
 
+        // 🔥 CRITICAL: resolve wallet
+        await walletService.resolveMatch(
+          winnerId,
+          loserId,
+          betAmount,
+          "carddraw",
+        );
+
+        // 🔔 Notify opponent
         io.to(opponent.socketId).emit("carddraw:opponent-left");
-        io.to(opponent.socketId).emit("carddraw:result", match);
+
+        // 🔔 Send result to room
+        io.to(socket.roomId).emit("carddraw:result", match);
 
         await redis.expire(key, 30);
       }

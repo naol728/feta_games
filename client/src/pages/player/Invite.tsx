@@ -13,7 +13,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAppSelector } from "@/store/hook";
-
+import { useQuery } from "@tanstack/react-query";
+import { getInviteData } from "@/api/invite";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 interface InviteStats {
     totalInvites: number;
     activeInvites: number;
@@ -23,7 +25,13 @@ interface InviteStats {
 
 export default function Invite() {
     const user = useAppSelector((state) => state.auth.user);
-
+    const { data: invitedata, isLoading: getInviteDataloading, error } = useQuery({
+        queryFn: getInviteData,
+        queryKey: ["getInviteData"]
+    })
+    const inviteStats = invitedata?.data;
+    const invitedUsers = inviteStats?.invited_users || [];
+    const totalInvites = inviteStats?.invite_count || 0;
     const [stats] = useState<InviteStats>({
         totalInvites: 0,
         activeInvites: 0,
@@ -114,12 +122,13 @@ export default function Invite() {
 
                 {/* Stats */}
                 <Card>
-                    <CardContent className="p-4">
+                    <CardContent className="p-4 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Users className="w-4 h-4" />
                             <span>Total Invites</span>
                         </div>
-                        <p className="text-2xl font-bold">{stats.totalInvites}</p>
+
+                        <p className="text-2xl font-bold">{totalInvites}</p>
                     </CardContent>
                 </Card>
 
@@ -167,6 +176,49 @@ export default function Invite() {
                             </Button>
                         </div>
 
+                    </CardContent>
+                </Card>
+
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>People You Invited</CardTitle>
+                    </CardHeader>
+
+                    <CardContent className="space-y-3">
+                        {invitedUsers.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                                No invites yet
+                            </p>
+                        ) : (
+                            invitedUsers.map((u: any) => (
+                                <div
+                                    key={u.id}
+                                    className="flex items-center justify-between p-2 rounded-lg border"
+                                >
+                                    <div className="flex items-center gap-3">
+
+                                        {/* Avatar */}
+                                        <Avatar className="h-9 w-9">
+                                            <AvatarFallback>
+                                                {u?.Fname?.charAt(0)?.toUpperCase() || "U"}
+                                            </AvatarFallback>
+                                        </Avatar>
+
+                                        {/* Name */}
+                                        <div>
+                                            <p className="font-medium">
+                                                {u?.Fname || "Unknown"}
+                                            </p>
+
+                                            <p className="text-xs text-muted-foreground">
+                                                Joined user
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </CardContent>
                 </Card>
 

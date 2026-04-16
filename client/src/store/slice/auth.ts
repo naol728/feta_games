@@ -24,6 +24,7 @@ interface User {
   updated_at: string;
   Fname: string;
   Lname: string;
+  referral_id:string;
   wallets: Wallet;
 }
 

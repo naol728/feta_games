@@ -204,6 +204,19 @@ export default function Profile() {
         const val = Number(amount)
         return Number.isFinite(val) ? val : 0
     }, [amount])
+    const formatDate = (dateString: string) => {
+        const date = new Date(dateString);
+
+        return date.toLocaleString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    };
+
+
     const isValid = numericAmount > 9
 
     const handlenavigatetodeposit = (id: number, status: string) => { if (status === "completed") return; navigate(`/deposit/${id}`) }
@@ -324,6 +337,7 @@ export default function Profile() {
                                         <Input
                                             placeholder="Amount"
                                             type="number"
+                                            min={10}
                                             value={withdrawamount}
                                             onChange={(e) => setWithdrawAmount(e.target.value)}
                                         />
@@ -352,7 +366,7 @@ export default function Profile() {
 
                                     <Button
                                         className="w-full mt-4"
-                                        disabled={withdrawalreqpending || !withdrawamount || accountNumber.length !== 13 || !accountName}
+                                        disabled={withdrawalreqpending || !withdrawamount || Number(withdrawamount) < 10 || accountNumber.length !== 13 || !accountName}
                                         onClick={handleWithdraw}
                                     >
                                         {withdrawalreqpending ? "Processing..." : "Confirm Withdraw"}
@@ -426,6 +440,7 @@ export default function Profile() {
                                 <Card key={w.id}>
                                     <CardContent className="flex justify-between p-4">
 
+                                        {/* LEFT SIDE */}
                                         <div className="flex gap-3">
                                             {getStatusIcon(w.processed)}
 
@@ -437,12 +452,18 @@ export default function Profile() {
                                                 <p className="text-xs text-muted-foreground">
                                                     {w.bank_name} • {w.destination_account}
                                                 </p>
+
+                                                {/* 👇 NEW: REQUEST DATE */}
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    Requested: {formatDate(w.created_at)}
+                                                </p>
                                             </div>
                                         </div>
 
+                                        {/* RIGHT SIDE */}
                                         <div className="text-right">
                                             <p className="font-bold text-red-500">
-                                                - {w.amount} {" "}ETB
+                                                - {w.amount} ETB
                                             </p>
 
                                             {getStatusBadge(w.processed)}

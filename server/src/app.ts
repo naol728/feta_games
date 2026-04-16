@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import http from "http";
 import authRoute from "./routes/auth.route";
+import inviteRoute from "./routes/invite.route";
 import walletRoute from "./routes/wallet.route";
 import { Server } from "socket.io";
 import initSocket from "./socket";
@@ -27,7 +28,7 @@ export const io = new Server(server, {
 app.use(express.json({ limit: "1mb" }));
 app.use("/auth", authRoute);
 app.use("/wallet", walletRoute);
-
+app.use("/invites", inviteRoute);
 app.all("*", (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl}`, 404));
 });

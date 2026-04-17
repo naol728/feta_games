@@ -135,7 +135,7 @@ export default function CardDrawMatchmaking() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground px-3 py-3 space-y-4">
+    <div className=" bg-background text-foreground px-3 py-3 space-y-4">
 
       {/* HEADER */}
       <div className="flex items-start justify-between">

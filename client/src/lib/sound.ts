@@ -1,6 +1,21 @@
 let gameplayAudio: HTMLAudioElement | null = null;
+let isMuted = false;
+
+export const toggleMute = () => {
+  isMuted = !isMuted;
+
+  if (gameplayAudio) {
+    gameplayAudio.muted = isMuted;
+  }
+
+  return isMuted;
+};
+
+export const getMuteState = () => isMuted;
 
 export const playGameplaySound = () => {
+  if (isMuted) return;
+
   if (!gameplayAudio) {
     gameplayAudio = new Audio("/sounds/gameplay.mp3");
     gameplayAudio.volume = 0.12;
@@ -20,6 +35,7 @@ export const playGameplaySound = () => {
     });
   }
 
+  gameplayAudio.muted = isMuted;
   gameplayAudio.play().catch(() => {});
 };
 

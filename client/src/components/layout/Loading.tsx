@@ -140,7 +140,7 @@ export default function Loading() {
 
                     {/* small status hint */}
                     <p className="text-[11px] text-muted-foreground">
-                        connecting to server please wait...
+                        CONNECTING TO SERVER PLEASE WAIT...
                     </p>
                 </CardContent>
             </Card>

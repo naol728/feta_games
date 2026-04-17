@@ -4,8 +4,8 @@ import Game from "./pages/player/Game";
 import Invite from "./pages/player/Invite";
 import Mainlayout from "./layout/Mainlayout";
 import Profile from "./pages/player/Profile";
-import ConnectFour from "./pages/game/connectfour/ConnectFour";
-import ConnectFourMatchmaking from "./pages/game/connectfour/ConnectFourMatchmaking";
+// import ConnectFour from "./pages/game/connectfour/ConnectFour";
+// import ConnectFourMatchmaking from "./pages/game/connectfour/ConnectFourMatchmaking";
 import Jetx from "./pages/game/Jetx/Jetx";
 import MemoryFlip from "./pages/game/memoryflip/MemoryFlip";
 import MinesDuel from "./pages/game/minesduel/MinesDuel";
@@ -65,7 +65,7 @@ export default function App() {
 
           </Route>
           <Route element={<MatchMakingLayout />}>
-            <Route path="/connectfour" element={<ConnectFourMatchmaking />} />
+            {/* <Route path="/connectfour" element={<ConnectFourMatchmaking />} /> */}
             <Route path="/carddraw" element={<CardDrawMatchmaking />} />
             <Route path="/jetxpick" element={<Jetx />} />
             <Route path="/memoryflip" element={<MemoryFlip />} />
@@ -75,7 +75,7 @@ export default function App() {
           <Route element={<MinimalLayout />}>
             <Route path="/deposit/:trxno" element={<Deposit />} />
           </Route>
-          <Route path="/connectfour/:roomId" element={<ConnectFour />} />
+          {/* <Route path="/connectfour/:roomId" element={<ConnectFour />} /> */}
           <Route path="/carddraw/:roomId" element={<CardDraw />} />
         </Routes>
 

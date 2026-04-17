@@ -86,7 +86,8 @@ export default function CardItem({
                     src={cardMap[String(card.value)]}
                     className="
             absolute inset-0 w-full h-full
-            rounded-lg
+            rounded-sm
+            bg-white
             border border-white/10
             shadow-md
             object-cover
@@ -100,7 +101,7 @@ export default function CardItem({
             {isPicked && (
                 <div
                     className={`
-            absolute inset-0 rounded-lg border-2
+            absolute inset-0 rounded-sm border-2
             ${isMine ? "border-emerald-400 animate-pulse" : "border-red-500"}
           `}
                 />

@@ -32,7 +32,7 @@ export const telegramAuth = catchAsync(
           .single();
 
         if (error || !user) {
-          return next(new AppError("User not found", 404));
+          return next(new AppError("User not found", 401));
         }
 
         return res.json({
@@ -92,6 +92,7 @@ export const telegramAuth = catchAsync(
       env.JWT_SECRET,
       { expiresIn: "7d" },
     );
+    console.log(token);
     const { data: userdata, error: userdataerr } = await supabase
       .from("users")
       .select(

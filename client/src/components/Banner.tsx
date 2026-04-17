@@ -44,7 +44,7 @@ export default function GameHeroCarousel() {
     const current = banners[index];
 
     return (
-        <div className="relative w-full h-[260px] md:h-[320px] overflow-hidden rounded-2xl mb-5">
+        <div className="relative w-full h-[200px] md:h-[220px] overflow-hidden rounded-2xl mb-5">
 
             {/* IMAGE LAYER */}
             <AnimatePresence mode="wait">

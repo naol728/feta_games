@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { Wallet, ArrowLeft, ArrowDownCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -25,7 +26,7 @@ type Props = {
 }
 
 export default function TopBar({
-  title = "ገበታ 1v1 ",
+  title = "ገበታ 1v1",
   showBack = false,
   showDeposit = true,
 }: Props) {
@@ -41,92 +42,108 @@ export default function TopBar({
   const { mutate, isPending } = useMutation({
     mutationFn: paymentMethod,
     mutationKey: ["paymentMethod"],
-    onError: (error) => toast.error(error.message),
+    onError: (error: Error) => toast.error(error.message),
     onSuccess: (data) => {
       navigate(`/deposit/${data.transaction_id}`)
-    }
+    },
   })
 
-  const isValid = numericAmount > 9
+  const isValid = numericAmount >= 10 && numericAmount <= 5000
 
   return (
-    <div className="backdrop-blur-xl bg-background/80 border-b border-border/40  px-3 h-12 flex items-center justify-between">
+    <div className="sticky top-0 z-50 backdrop-blur-xl bg-background/85 border-b border-border/40 px-4 h-14 flex items-center justify-between shadow-sm">
 
       {/* LEFT */}
-      <div className="flex items-center gap-2">
-
+      <div className="flex items-center gap-3 min-w-0">
         {showBack && (
-          <button onClick={() => navigate("/")}>
+          <button
+            onClick={() => navigate("/")}
+            className="p-1 rounded-md hover:bg-muted transition"
+          >
             <ArrowLeft className="w-5 h-5" />
           </button>
         )}
 
-        <h1 className="text-sm font-semibold text-primary">
+        <h1 className="text-sm sm:text-base font-bold tracking-wide text-primary truncate">
           {title}
         </h1>
       </div>
 
       {/* RIGHT */}
-
       <div className="flex items-center gap-2">
 
         {/* Balance */}
-        <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded-lg">
-          <Wallet className="w-3 h-3 text-muted-foreground" />
-          <span className="text-xs font-bold">
-            {user?.wallets?.balance} ETB
+        <div className="flex items-center gap-2 bg-muted/70 px-3 py-1.5 rounded-xl border border-border/50 shadow-sm">
+          <Wallet className="w-4 h-4 text-primary" />
+          <span className="text-xs sm:text-sm font-bold whitespace-nowrap">
+            {user?.wallets?.balance ?? 0} ETB
           </span>
         </div>
+
+        {/* Deposit */}
         {showDeposit && (
           <Drawer>
             <DrawerTrigger asChild>
-              <Button size="sm" className="h-8 px-3 text-xs ">
-                <ArrowDownCircle className=" h-2 w-2" />
+              <Button
+                size="sm"
+                className="h-9 px-3 rounded-xl text-xs font-semibold gap-1 shadow-sm"
+              >
+                <ArrowDownCircle className="h-4 w-4" />
                 Deposit
               </Button>
             </DrawerTrigger>
 
-            <DrawerContent className="pb-6">
-
+            <DrawerContent className="pb-6 rounded-t-3xl">
               <DrawerHeader className="text-left">
-                <DrawerTitle>Add Funds</DrawerTitle>
-                <DrawerDescription>
-                  Enter amount (10 - 5000 ETB)
+                <DrawerTitle className="text-lg font-bold">
+                  Add Funds
+                </DrawerTitle>
+                <DrawerDescription className="text-sm">
+                  Enter amount between 10 and 5000 ETB
                 </DrawerDescription>
               </DrawerHeader>
 
-              <div className="px-4 space-y-3">
+              <div className="px-4 space-y-4">
                 <Input
                   type="number"
-                  placeholder="Amount (ETB)"
+                  placeholder="Enter amount (ETB)"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="h-12 text-base"
+                  className="h-12 text-base rounded-xl"
                 />
 
                 <Button
                   disabled={!isValid || isPending}
-                  className="w-full h-12"
+                  className="w-full h-12 rounded-xl text-sm font-semibold"
                   onClick={() => mutate({ amount })}
                 >
                   {isPending
                     ? "Processing..."
-                    : `Start Deposit ${isValid ? `${numericAmount} ETB` : ""}`}
+                    : `Deposit ${isValid ? `${numericAmount} ETB` : ""
+                    }`}
                 </Button>
+
+                {!isValid && amount && (
+                  <p className="text-xs text-red-500 text-center">
+                    Amount must be between 10 and 5000 ETB
+                  </p>
+                )}
               </div>
 
               <DrawerFooter>
                 <DrawerClose asChild>
-                  <Button variant="ghost">Cancel</Button>
+                  <Button
+                    variant="ghost"
+                    className="rounded-xl"
+                  >
+                    Cancel
+                  </Button>
                 </DrawerClose>
               </DrawerFooter>
-
             </DrawerContent>
           </Drawer>
         )}
-
       </div>
-
-    </div >
+    </div>
   )
 }

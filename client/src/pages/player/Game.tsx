@@ -81,6 +81,40 @@ export default function Game() {
           </Card>
         ))}
       </div>
+
+      {/* SUPPORT CARD */}
+      <Card className="bg-card border border-border rounded-xl py-3 mt-3">
+        <CardContent className="flex items-center justify-between px-2">
+
+          <div className="flex items-center gap-3">
+
+            {/* icon */}
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10">
+              <span className="text-xl">🧑‍💻</span>
+            </div>
+
+            {/* text */}
+            <div className="flex flex-col">
+              <p className="text-xs font-semibold">Contact Support</p>
+              <span className="text-[10px] text-muted-foreground">
+                24/7 help & assistance
+              </span>
+            </div>
+          </div>
+
+          {/* action */}
+          <a
+            href="https://t.me/mrdef4fult"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Button size="sm">
+              Open
+            </Button>
+          </a>
+
+        </CardContent>
+      </Card>
     </div>
   )
 }

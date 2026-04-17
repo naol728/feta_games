@@ -25,7 +25,7 @@ interface CustomSocket extends Socket {
   roomId?: string;
 }
 
-const ALLOWED_BETS = [10, 50, 100];
+const ALLOWED_BETS = [10, 50, 100, 500, 1000, 1500];
 
 export default function CardDrawSocket(io: Server, socket: CustomSocket) {
   socket.on(

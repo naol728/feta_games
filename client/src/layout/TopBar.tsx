@@ -25,7 +25,7 @@ type Props = {
 }
 
 export default function TopBar({
-  title = "Feta Games",
+  title = "ገበታ 1v1 ",
   showBack = false,
   showDeposit = true,
 }: Props) {

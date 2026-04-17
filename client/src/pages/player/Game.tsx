@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import Banner from "@/components/Banner"
 
 
 
@@ -8,31 +9,13 @@ const games = [
   { name: "Card Draw", path: "/carddraw", image: "/carddrawduel.jpg" },
   { name: "JetX Pick", path: "/jetxpick", image: "/jetx.jpeg" },
   { name: "Memory Flip", path: "/memoryflip", image: "/memoryflip.jpeg" },
-  { name: "Connect Four", path: "/connectfour", image: "/connectfour.jpeg" },
   { name: "Mines Duel", path: "/minesduel", image: "/mineduel.jpeg" }
 ]
 export default function Game() {
   return (
     <div className="min-h-screen bg-background text-foreground p-4">
       {/* Banner */}
-      <div className="relative rounded-2xl overflow-hidden mb-4 bg-primary/90 p-10 shadow-lg text-forground">
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle,_#fff_1px,_transparent_1px)] bg-[size:20px_20px]" />
-
-        <div className="relative z-10  ">
-          <h2 className="text-lg font-extrabold text-forground mb-1">
-            Play & Win Cash💰
-          </h2>
-          <p className="text-sm text-bold text-forground/80">
-            Join games and earn cash💰
-          </p>
-        </div>
-
-        <img
-          src="/casino.png"
-          className="absolute right-0 bottom-0 w-full opacity-90"
-        />
-      </div>
-
+      <Banner />
 
       {/* Quick Actions */}
       <div className="grid grid-cols-4 gap-3 mb-6">

@@ -228,58 +228,66 @@ export default function Profile() {
         );
     }
 
+
     return (
-        <div className="min-h-screen bg-background p-4 pb-16">
-            <div className="max-w-2xl mx-auto space-y-6">
+        <div className="min-h-screen bg-background pb-20 px-3">
+            <div className="max-w-xl mx-auto space-y-5">
 
-                {/* ================= PROFILE ================= */}
-                <Card>
-                    <CardContent className="p-4 text-center space-y-3">
+                {/* ================= PROFILE CARD ================= */}
+                <Card className="rounded-2xl shadow-sm border border-border/60">
+                    <CardContent className="p-5 space-y-4">
 
-                        <Avatar className="h-20 w-20 mx-auto">
-                            <AvatarFallback>
-                                {user.Fname?.charAt(0)}
-                                {user.Lname?.charAt(0)}
-                            </AvatarFallback>
-                        </Avatar>
+                        {/* USER */}
+                        <div className="flex items-center gap-4">
+                            <Avatar className="h-14 w-14">
+                                <AvatarFallback className="text-lg font-bold">
+                                    {user.Fname?.charAt(0)}
+                                    {user.Lname?.charAt(0)}
+                                </AvatarFallback>
+                            </Avatar>
 
-                        <div>
-                            <h2 className="font-semibold">
-                                {user.Fname} {user.Lname}
-                            </h2>
-                            <p className="text-sm text-muted-foreground">
-                                @{user.username}
-                            </p>
+                            <div className="flex-1">
+                                <h2 className="font-semibold text-base leading-tight">
+                                    {user.Fname} {user.Lname}
+                                </h2>
+                                <p className="text-xs text-muted-foreground">
+                                    @{user.username}
+                                </p>
+                            </div>
                         </div>
 
-                        {/* BALANCE */}
-                        <div className="border p-3 rounded-lg text-left">
-                            <div className="flex items-center gap-2">
-                                <Wallet className="h-4 w-4" />
-                                <span className="text-sm">Balance</span>
+                        {/* BALANCE CARD */}
+                        <div className="rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 p-4 border border-primary/20">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                                    <Wallet className="h-4 w-4" />
+                                    Balance
+                                </div>
+
+                                <span className="text-[11px] text-muted-foreground">
+                                    Locked: {user.wallets.locked_balance} ETB
+                                </span>
                             </div>
-                            <p className="font-bold">
+
+                            <p className="text-xl font-bold mt-1">
                                 {user.wallets.balance} ETB
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                Locked: {user.wallets.locked_balance} ETB
                             </p>
                         </div>
 
                         {/* ACTIONS */}
                         <div className="grid grid-cols-2 gap-3">
 
-                            {/* DEPOSIT */}
+                            {/* DEPOSIT (UNCHANGED LOGIC) */}
                             <Drawer>
                                 <DrawerTrigger asChild>
-                                    <Button size="sm" className="h-8 px-3 text-xs ">
-                                        <ArrowDownCircle className=" h-2 w-2" />
+                                    <Button className="w-full h-10 text-sm">
+                                        <ArrowDownCircle className="mr-2 h-4 w-4" />
                                         Deposit
                                     </Button>
                                 </DrawerTrigger>
 
+                                {/* KEEP YOUR ORIGINAL DRAWER CONTENT */}
                                 <DrawerContent className="pb-6">
-
                                     <DrawerHeader className="text-left">
                                         <DrawerTitle>Add Funds</DrawerTitle>
                                         <DrawerDescription>
@@ -312,20 +320,19 @@ export default function Profile() {
                                             <Button variant="ghost">Cancel</Button>
                                         </DrawerClose>
                                     </DrawerFooter>
-
                                 </DrawerContent>
                             </Drawer>
 
                             {/* WITHDRAW */}
                             <Dialog>
                                 <DialogTrigger asChild>
-                                    <Button variant="destructive">
+                                    <Button variant="destructive" className="w-full h-10 text-sm">
                                         <ArrowUpCircle className="mr-2 h-4 w-4" />
                                         Withdraw
                                     </Button>
                                 </DialogTrigger>
 
-                                <DialogContent>
+                                <DialogContent className="rounded-2xl">
                                     <DialogHeader>
                                         <DialogTitle>Withdraw Funds</DialogTitle>
                                         <DialogDescription>
@@ -365,8 +372,14 @@ export default function Profile() {
                                     </div>
 
                                     <Button
-                                        className="w-full mt-4"
-                                        disabled={withdrawalreqpending || !withdrawamount || Number(withdrawamount) < 10 || accountNumber.length !== 13 || !accountName}
+                                        className="w-full mt-4 h-10"
+                                        disabled={
+                                            withdrawalreqpending ||
+                                            !withdrawamount ||
+                                            Number(withdrawamount) < 10 ||
+                                            accountNumber.length !== 13 ||
+                                            !accountName
+                                        }
                                         onClick={handleWithdraw}
                                     >
                                         {withdrawalreqpending ? "Processing..." : "Confirm Withdraw"}
@@ -383,44 +396,57 @@ export default function Profile() {
                 </Card>
 
                 {/* ================= TABS ================= */}
-                <Tabs defaultValue="transactions">
+                <Tabs defaultValue="transactions" className="space-y-3">
 
-                    <TabsList className="grid grid-cols-2">
-                        <TabsTrigger value="transactions">
-                            <History className="w-4 h-4 mr-2" />
+                    <TabsList className="flex w-fit mx-auto h-10 rounded-xl bg-muted p-1">
+                        <TabsTrigger value="transactions" className="text-xs px-4">
+                            <History className="w-4 h-4 mr-1" />
                             Transactions
                         </TabsTrigger>
 
-                        <TabsTrigger value="withdrawals">
-                            <CreditCard className="w-4 h-4 mr-2" />
+                        <TabsTrigger value="withdrawals" className="text-xs px-4">
+                            <CreditCard className="w-4 h-4 mr-1" />
                             Withdrawals
                         </TabsTrigger>
                     </TabsList>
 
                     {/* TRANSACTIONS */}
-                    <TabsContent value="transactions">
+                    <TabsContent value="transactions" className="space-y-2">
                         {isLoading ? (
-                            <p>Loading...</p>
+                            <div className="flex justify-center py-6">
+                                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            </div>
                         ) : (
                             mappedTransactions.map((t) => (
-                                <Card key={t.id} onClick={() => handlenavigatetodeposit(t.id, t.status)}>
-                                    <CardContent className="flex justify-between p-3">
-                                        <div className="flex gap-2">
+                                <Card
+                                    key={t.id}
+                                    onClick={() => handlenavigatetodeposit(t.id, t.status)}
+                                    className="rounded-xl border border-border/60 hover:bg-muted/30 transition cursor-pointer"
+                                >
+                                    <CardContent className="flex justify-between items-center p-3">
+
+                                        <div className="flex items-center gap-3">
                                             {getTransactionIcon(t.type)}
+
                                             <div>
-                                                <p className="capitalize">{t.type}</p>
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className="text-sm font-medium capitalize">
+                                                    {t.type}
+                                                </p>
+                                                <p className="text-[11px] text-muted-foreground">
                                                     {t.description}
                                                 </p>
                                             </div>
                                         </div>
 
                                         <div className="text-right">
-                                            <p className="font-bold">
+                                            <p className="text-sm font-semibold">
                                                 {t.amount} ETB
                                             </p>
-                                            <Badge>{t.status}</Badge>
+                                            <Badge variant="outline" className="text-[10px]">
+                                                {t.status}
+                                            </Badge>
                                         </div>
+
                                     </CardContent>
                                 </Card>
                             ))
@@ -428,41 +454,40 @@ export default function Profile() {
                     </TabsContent>
 
                     {/* WITHDRAWALS */}
-                    <TabsContent value="withdrawals">
+                    <TabsContent value="withdrawals" className="space-y-2">
                         {withdrawLoading ? (
-                            <p>Loading...</p>
+                            <div className="flex justify-center py-6">
+                                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            </div>
                         ) : withdrawals.length === 0 ? (
                             <p className="text-center text-sm text-muted-foreground">
                                 No withdrawal requests
                             </p>
                         ) : (
                             withdrawals.map((w: any) => (
-                                <Card key={w.id}>
-                                    <CardContent className="flex justify-between p-4">
+                                <Card key={w.id} className="rounded-xl border border-border/60">
+                                    <CardContent className="flex justify-between items-center p-4">
 
-                                        {/* LEFT SIDE */}
-                                        <div className="flex gap-3">
+                                        <div className="flex items-center gap-3">
                                             {getStatusIcon(w.processed)}
 
                                             <div>
-                                                <p className="font-medium">
+                                                <p className="text-sm font-medium">
                                                     {w.account_holder_name}
                                                 </p>
 
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className="text-[11px] text-muted-foreground">
                                                     {w.bank_name} • {w.destination_account}
                                                 </p>
 
-                                                {/* 👇 NEW: REQUEST DATE */}
-                                                <p className="text-[11px] text-muted-foreground">
-                                                    Requested: {formatDate(w.created_at)}
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    {formatDate(w.created_at)}
                                                 </p>
                                             </div>
                                         </div>
 
-                                        {/* RIGHT SIDE */}
                                         <div className="text-right">
-                                            <p className="font-bold text-red-500">
+                                            <p className="text-sm font-semibold text-red-500">
                                                 - {w.amount} ETB
                                             </p>
 
@@ -476,7 +501,8 @@ export default function Profile() {
                     </TabsContent>
 
                 </Tabs>
+
             </div>
         </div>
-    );
+    )
 }

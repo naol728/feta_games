@@ -136,6 +136,57 @@ export default function Deposit() {
                             </span>
                         </div>
 
+
+                        {/* Instructions */}
+                        <Card className="border border-primary/10 bg-muted/30 rounded-xl">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm">📌 How to Deposit</CardTitle>
+                            </CardHeader>
+
+                            <CardContent className="space-y-4 text-xs">
+
+                                {/* Step 1 */}
+                                <div className="flex gap-2">
+                                    <span className="font-bold text-primary">1.</span>
+                                    <p>
+                                        ከላይ ባለው <span className="font-semibold">CBE አካውንት</span> ገንዘቡን ያስገቡ
+                                        <br />
+                                        <span className="text-red-500">🚨 ከ CBE ብቻ ይላኩ</span>
+                                        <br />
+                                        <span className="text-red-500">🚨 የተጠየቀውን መጠን ብቻ ይላኩ</span>
+                                    </p>
+                                </div>
+
+                                {/* Step 2 */}
+                                <div className="flex gap-2">
+                                    <span className="font-bold text-primary">2.</span>
+                                    <p>
+                                        ከላኩ በኋላ ከ <span className="font-semibold">CBE</span> የክፍያ መረጃ ያለው
+                                        <span className="font-semibold"> SMS</span> ይደርሳችኋል
+                                    </p>
+                                </div>
+
+                                {/* Step 3 */}
+                                <div className="flex gap-2">
+                                    <span className="font-bold text-primary">3.</span>
+                                    <p>
+                                        የደረሰውን SMS <span className="font-semibold">Link</span> ኮፒ በማድረግ
+                                        ከታች ባለው መስክ ውስጥ ፔስት ያድርጉ
+                                    </p>
+                                </div>
+
+                                {/* Image */}
+                                <div className="rounded-lg overflow-hidden border">
+                                    <img
+                                        src="/depositinfo.png"
+                                        alt="Deposit Info"
+                                        className="w-full h-auto object-cover"
+                                    />
+                                </div>
+
+                            </CardContent>
+                        </Card>
+
                         {/* INPUT FIELD */}
                         <div className="pt-2 space-y-2">
                             <Input

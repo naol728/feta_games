@@ -92,7 +92,6 @@ export const telegramAuth = catchAsync(
       env.JWT_SECRET,
       { expiresIn: "7d" },
     );
-    console.log(token);
     const { data: userdata, error: userdataerr } = await supabase
       .from("users")
       .select(

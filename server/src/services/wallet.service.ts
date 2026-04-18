@@ -73,6 +73,15 @@ export const walletService = {
       console.log(error);
       throw error;
     }
+    // ✅ MARK BOTH PLAYERS AS PLAYED
+    const { error: markError } = await supabase.rpc("mark_users_played_game", {
+      p_user_ids: [winnerId, loserId],
+    });
+
+    if (markError) {
+      console.error("MARK PLAYED ERROR:", markError);
+      // ❗ don't throw → not critical for match result
+    }
     await Promise.allSettled([emitBalance(winnerId), emitBalance(loserId)]);
   },
   async checkBalance(playerId: string, bet: number) {

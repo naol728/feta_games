@@ -74,7 +74,7 @@ export const walletService = {
       throw error;
     }
     // ✅ MARK BOTH PLAYERS AS PLAYED
-    const { error: markError } = await supabase.rpc("mark_users_played_game", {
+    const { error: markError } = await supabase.rpc("mark_game_played", {
       p_user_ids: [winnerId, loserId],
     });
 

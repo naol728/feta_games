@@ -104,7 +104,7 @@ export default function Game() {
 
           {/* action */}
           <a
-            href="https://t.me/mrdef4fult"
+            href="https://t.me/gebetagamesadmin"
             target="_blank"
             rel="noreferrer"
           >

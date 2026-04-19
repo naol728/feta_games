@@ -277,7 +277,8 @@ export const transactions = catchAsync(
    )`,
       )
       .eq("user_id", userId)
-      .in("type", ["deposit", "win", "lose"]);
+      .in("type", ["deposit", "win", "lose"])
+      .order("created_at", { ascending: false });
 
     if (error) {
       return next(new AppError(error.message, 500));

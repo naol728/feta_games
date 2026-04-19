@@ -151,8 +151,11 @@ export default function Deposit() {
                                     <p>
                                         ከላይ ባለው <span className="font-semibold">CBE አካውንት</span> ገንዘቡን ያስገቡ
                                         <br />
-                                        <span className="text-red-500">🚨 ከ CBE ብቻ ይላኩ</span>
+                                        <span className="text-red-500">🚨 ከ CBE Mobile banking ብቻ ይላኩ</span>
                                         <br />
+                                        <span className="text-red-500">🚨 ከ CBE bank branch ayasgebu </span>
+                                        <br />
+
                                         <span className="text-red-500">🚨 የተጠየቀውን መጠን ብቻ ይላኩ</span>
                                     </p>
                                 </div>

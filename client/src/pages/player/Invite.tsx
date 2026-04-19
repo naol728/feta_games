@@ -110,7 +110,7 @@ export default function Invite() {
                     <div>
                         <h1 className="text-xl font-bold">Invite Friends</h1>
                         <p className="text-sm text-muted-foreground">
-                            Earn 50 ETB by inviting friends
+                            Earn 50 ETB by inviting 40 friends
                         </p>
                     </div>
 

@@ -173,8 +173,8 @@ export default function Profile() {
     const handleWithdraw = () => {
         const amount = Number(withdrawamount);
 
-        if (!amount || amount < 50) {
-            toast.error("Minimum withdrawal is 50 ETB");
+        if (!amount || amount < 100) {
+            toast.error("Minimum withdrawal is 100 ETB");
             return;
         }
 
@@ -338,13 +338,16 @@ export default function Profile() {
                                         <DialogDescription>
                                             Enter correct details. Wrong info may delay payout.
                                         </DialogDescription>
+                                        <DialogDescription>
+                                            min: 100ETB
+                                        </DialogDescription>
                                     </DialogHeader>
 
                                     <div className="space-y-3">
                                         <Input
                                             placeholder="Amount"
                                             type="number"
-                                            min={10}
+                                            min={100}
                                             value={withdrawamount}
                                             onChange={(e) => setWithdrawAmount(e.target.value)}
                                         />
@@ -376,7 +379,7 @@ export default function Profile() {
                                         disabled={
                                             withdrawalreqpending ||
                                             !withdrawamount ||
-                                            Number(withdrawamount) < 50 ||
+                                            Number(withdrawamount) < 100 ||
                                             accountNumber.length !== 13 ||
                                             !accountName
                                         }

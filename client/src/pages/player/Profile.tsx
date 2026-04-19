@@ -173,8 +173,8 @@ export default function Profile() {
     const handleWithdraw = () => {
         const amount = Number(withdrawamount);
 
-        if (!amount || amount < 10) {
-            toast.error("Minimum withdrawal is 10 ETB");
+        if (!amount || amount < 50) {
+            toast.error("Minimum withdrawal is 50 ETB");
             return;
         }
 
@@ -376,7 +376,7 @@ export default function Profile() {
                                         disabled={
                                             withdrawalreqpending ||
                                             !withdrawamount ||
-                                            Number(withdrawamount) < 10 ||
+                                            Number(withdrawamount) < 50 ||
                                             accountNumber.length !== 13 ||
                                             !accountName
                                         }

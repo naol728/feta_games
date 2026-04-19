@@ -277,9 +277,7 @@ export const transactions = catchAsync(
    )`,
       )
       .eq("user_id", userId)
-      .eq("type", "deposit")
-      .eq("type", "win")
-      .eq("type", "lose");
+      .in("type", ["deposit", "win", "lose"]);
 
     if (error) {
       return next(new AppError(error.message, 500));

@@ -21,6 +21,8 @@ import MatchMakingLayout from "./layout/MatchMakingLayout";
 import { registerSocketListeners } from "./lib/socketListeners";
 import MinimalLayout from "./layout/MinimalLayout";
 import Loading from "./components/layout/Loading";
+import { SessionStatsProvider } from "./store/slice/SessionStatesContext";
+import Slots from "./pages/game/Slot/Slot";
 
 
 export default function App() {
@@ -55,41 +57,43 @@ export default function App() {
 
   return (
     <Suspense fallback={<Loading />}>
+      <SessionStatsProvider >
 
-      <BrowserRouter>
-        <Routes>
-          <Route element={<Mainlayout />}>
-            <Route index element={<Game />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/invite" element={<Invite />} />
+        <BrowserRouter>
+          <Routes>
+            <Route element={<Mainlayout />}>
+              <Route index element={<Game />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/invite" element={<Invite />} />
+            </Route>
+            <Route element={<MatchMakingLayout />}>
+              {/* <Route path="/connectfour" element={<ConnectFourMatchmaking />} /> */}
+              <Route path="/carddraw" element={<CardDrawMatchmaking />} />
+              <Route path="/jetxpick" element={<Jetx />} />
+              <Route path="/memoryflip" element={<MemoryFlip />} />
+              <Route path="/minesduel" element={<MinesDuel />} />
+              <Route path="/slot" element={<Slots />} />
+            </Route>
 
-          </Route>
-          <Route element={<MatchMakingLayout />}>
-            {/* <Route path="/connectfour" element={<ConnectFourMatchmaking />} /> */}
-            <Route path="/carddraw" element={<CardDrawMatchmaking />} />
-            <Route path="/jetxpick" element={<Jetx />} />
-            <Route path="/memoryflip" element={<MemoryFlip />} />
-            <Route path="/minesduel" element={<MinesDuel />} />
-          </Route>
+            <Route element={<MinimalLayout />}>
+              <Route path="/deposit/:trxno" element={<Deposit />} />
+            </Route>
+            {/* <Route path="/connectfour/:roomId" element={<ConnectFour />} /> */}
+            <Route path="/carddraw/:roomId" element={<CardDraw />} />
+          </Routes>
 
-          <Route element={<MinimalLayout />}>
-            <Route path="/deposit/:trxno" element={<Deposit />} />
-          </Route>
-          {/* <Route path="/connectfour/:roomId" element={<ConnectFour />} /> */}
-          <Route path="/carddraw/:roomId" element={<CardDraw />} />
-        </Routes>
-
-        <ToastContainer
-          position="top-center"
-          autoClose={2000}
-          hideProgressBar
-          newestOnTop
-          closeOnClick
-          draggable={false}
-          pauseOnHover={false}
-          theme="dark"
-        />
-      </BrowserRouter>
+          <ToastContainer
+            position="top-center"
+            autoClose={2000}
+            hideProgressBar
+            newestOnTop
+            closeOnClick
+            draggable={false}
+            pauseOnHover={false}
+            theme="dark"
+          />
+        </BrowserRouter>
+      </SessionStatsProvider>
     </Suspense>
   );
 }

@@ -185,7 +185,6 @@ export const getTransaction = catchAsync(
   async (req: WalletRequest, res: Response, next: NextFunction) => {
     const { trxno } = req.params;
     const user = req.user;
-    console.log(trxno);
     if (!trxno) {
       return next(new AppError("Transaction number is required", 400));
     }
@@ -228,7 +227,7 @@ export const withDraw = catchAsync(
 
     if (
       !amount ||
-      amount <= 0 ||
+      amount <= 100 ||
       !destination_account ||
       !account_holder_name
     ) {

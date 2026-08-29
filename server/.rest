@@ -1,3 +1,6 @@
 ### auth
-POST http://localhost:3000/auth/dev
+GET  https://mb.cbe.com.et/api/v1/transactions/public/transaction-detail/FT261095MN4X
 Content-Type: application/json
+X-App-ID: "d1292e42-7400-49de-a2d3-9731caa4c819"
+X-App-Version: "0a01980b-9859-1369-8198-59f403820000"
+User-Agent: "Mozilla/5.0"

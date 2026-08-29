@@ -6,9 +6,10 @@ import QuickActions from "./QuickActions"
 
 const games = [
   { name: "Card Draw", path: "/carddraw", image: "/carddrawduel.jpg", isNew: true, uderdevelopmnet: false },
-  { name: "JetX Pick", path: "/jetxpick", image: "/jetx.jpeg", isNew: false, uderdevelopmnet: true },
-  { name: "Memory Flip", path: "/memoryflip", image: "/memoryflip.jpeg", isNew: false, uderdevelopmnet: true },
-  { name: "Mines Duel", path: "/minesduel", image: "/mineduel.jpeg", isNew: false, uderdevelopmnet: true },
+
+  {
+    name: "Slot", path: "/slot", image: "/carddrawduel.jpg", isNew: true, uderdevelopmnet: false
+  }
 ]
 
 export default function Game() {

@@ -20,13 +20,13 @@ const SYMBOLS = [
 type SymbolName = (typeof SYMBOLS)[number];
 
 const PAYOUTS: Record<SymbolName, number> = {
-  red: 2,
-  blue: 2,
-  green: 2,
-  yin_yang: 2,
-  hakkero: 2,
-  yellow: 2,
-  wild: 10,
+  red: 1.1,
+  blue: 1.2,
+  green: 1.3,
+  yin_yang: 1.4,
+  hakkero: 1.5,
+  yellow: 1.6,
+  wild: 5,
 };
 
 const WIN_LINES = [

@@ -24,6 +24,7 @@ import Loading from "./components/layout/Loading";
 import { SessionStatsProvider } from "./stats/SessionStatsContext";
 import Slots from "./pages/game/Slot/Slot";
 import LeaderBoard from "./pages/player/LeaderBoard";
+import CrashGame from "./pages/Crash/Crash";
 
 
 export default function App() {
@@ -76,7 +77,7 @@ export default function App() {
               <Route path="/memoryflip" element={<MemoryFlip />} />
               <Route path="/minesduel" element={<MinesDuel />} />
               <Route path="/slot" element={<Slots />} />
-              <Route path="/aviator" element={<Slots />} />
+              <Route path="/aviator" element={<CrashGame />} />
               <Route path="/keno" element={<Slots />} />
               <Route path="/keno" element={<Slots />} />
               <Route path="/wheel" element={<Slots />} />

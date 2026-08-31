@@ -37,19 +37,19 @@ const LiveStats = () => {
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-raised text-secondary-light">
                     <MdOutlineShowChart className="text-base" />
                 </span>
-                <span className="flex-1 text-sm font-bold">{i18n.t("liveStats.title")}</span>
+                <span className="flex-1 text-sm font-bold">{("liveStats.title")}</span>
                 <button
                     onClick={reset}
-                    aria-label={i18n.t("liveStats.reset")}
-                    title={i18n.t("liveStats.reset")}
+                    aria-label={("liveStats.reset")}
+                    title={("liveStats.reset")}
                     className="rounded-lg border-0 bg-transparent p-1.5 text-lg text-ink-faint transition-colors hover:bg-surface hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary-light"
                 >
                     <MdRefresh />
                 </button>
                 <button
                     onClick={() => setOpen(false)}
-                    aria-label={i18n.t("liveStats.hide")}
-                    title={i18n.t("liveStats.hide")}
+                    aria-label={("liveStats.hide")}
+                    title={("liveStats.hide")}
                     className="rounded-lg border-0 bg-transparent p-1.5 text-base text-ink-faint transition-colors hover:bg-surface hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary-light"
                 >
                     <AiOutlineClose />
@@ -58,17 +58,17 @@ const LiveStats = () => {
 
             <div className="flex flex-col gap-3 px-3 pb-3">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg bg-surface p-4">
-                    <Figure label={i18n.t("liveStats.profit")} value={<span className={profitTone}><Monetary value={profit} /></span>} />
-                    <Figure label={i18n.t("liveStats.wins")} value={<span className="text-green-400">{stats.wins}</span>} />
-                    <Figure label={i18n.t("liveStats.wagered")} value={<Monetary value={stats.wagered} />} />
-                    <Figure label={i18n.t("liveStats.losses")} value={<span className="text-red-400">{stats.losses}</span>} />
+                    <Figure label={("liveStats.profit")} value={<span className={profitTone}><Monetary value={profit} /></span>} />
+                    <Figure label={("liveStats.wins")} value={<span className="text-green-400">{stats.wins}</span>} />
+                    <Figure label={("liveStats.wagered")} value={<Monetary value={stats.wagered} />} />
+                    <Figure label={("liveStats.losses")} value={<span className="text-red-400">{stats.losses}</span>} />
                 </div>
 
                 <div className="flex h-32 items-center justify-center rounded-lg bg-surface p-3">
                     {stats.rounds === 0 ? (
                         <div className="flex w-full flex-col items-center gap-3">
                             <span className="h-px w-2/3 bg-line-strong" />
-                            <span className="px-2 text-center text-xs text-ink-muted">{i18n.t("liveStats.empty")}</span>
+                            <span className="px-2 text-center text-xs text-ink-muted">{("liveStats.empty")}</span>
                         </div>
                     ) : (
                         <Sparkline points={stats.points} />

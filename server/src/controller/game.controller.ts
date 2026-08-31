@@ -21,12 +21,12 @@ type SymbolName = (typeof SYMBOLS)[number];
 
 const PAYOUTS: Record<SymbolName, number> = {
   red: 2,
-  blue: 3,
-  green: 4,
-  yin_yang: 5,
-  hakkero: 8,
-  yellow: 10,
-  wild: 20,
+  blue: 2,
+  green: 2,
+  yin_yang: 2,
+  hakkero: 2,
+  yellow: 2,
+  wild: 10,
 };
 
 const WIN_LINES = [
@@ -226,6 +226,8 @@ export const spinSlote = catchAsync(
       success: true,
 
       userId,
+      balance: newBalance,
+      walletBalance: newBalance,
 
       betAmount,
 

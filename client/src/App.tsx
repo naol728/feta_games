@@ -21,8 +21,9 @@ import MatchMakingLayout from "./layout/MatchMakingLayout";
 import { registerSocketListeners } from "./lib/socketListeners";
 import MinimalLayout from "./layout/MinimalLayout";
 import Loading from "./components/layout/Loading";
-import  {SessionStatsProvider}  from "./stats/SessionStatsContext";
+import { SessionStatsProvider } from "./stats/SessionStatsContext";
 import Slots from "./pages/game/Slot/Slot";
+import LeaderBoard from "./pages/player/LeaderBoard";
 
 
 export default function App() {
@@ -64,7 +65,9 @@ export default function App() {
             <Route element={<Mainlayout />}>
               <Route index element={<Game />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/leaderboard" element={<LeaderBoard />} />
               <Route path="/invite" element={<Invite />} />
+              <Route path="/promo" element={<Invite />} />
             </Route>
             <Route element={<MatchMakingLayout />}>
               {/* <Route path="/connectfour" element={<ConnectFourMatchmaking />} /> */}
@@ -73,6 +76,12 @@ export default function App() {
               <Route path="/memoryflip" element={<MemoryFlip />} />
               <Route path="/minesduel" element={<MinesDuel />} />
               <Route path="/slot" element={<Slots />} />
+              <Route path="/aviator" element={<Slots />} />
+              <Route path="/keno" element={<Slots />} />
+              <Route path="/keno" element={<Slots />} />
+              <Route path="/wheel" element={<Slots />} />
+              <Route path="/chicken-road" element={<Slots />} />
+              <Route path="/joker-x" element={<Slots />} />
             </Route>
 
             <Route element={<MinimalLayout />}>

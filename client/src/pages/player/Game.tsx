@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import Banner from "@/components/Banner";
-import QuickActions from "./QuickActions";
+// import QuickActions from "./QuickActions";
 import { Star } from "lucide-react";
 
 const games = [
@@ -53,13 +53,6 @@ const games = [
     image: "/chicken-road.jpg",
     isNew: true,
     underdevelopment: false,
-  },
-  {
-    name: "Jets X",
-    path: "/jets-x",
-    image: "/jets-x.jpg",
-    isNew: false,
-    underdevelopment: true,
   },
   {
     name: "Joker X",

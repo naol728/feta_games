@@ -19,7 +19,7 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer"
 import { Input } from "@/components/ui/input"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useMutation } from "@tanstack/react-query"
 import { paymentMethod } from "@/api/wallet"
 import { toast } from "react-toastify"
@@ -40,9 +40,18 @@ export default function TopBar({
   const user = useAppSelector((state) => state.auth.user)
 
   const [amount, setAmount] = useState("")
-  const [showBalance, setShowBalance] = useState(true)
+  const [showBalance, setShowBalance] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true
+
+    const saved = window.localStorage.getItem("showBalance")
+    return saved === null ? true : saved === "true"
+  })
 
   const navigate = useNavigate()
+
+  useEffect(() => {
+    window.localStorage.setItem("showBalance", String(showBalance))
+  }, [showBalance])
 
   const numericAmount = useMemo(() => {
     const value = Number(amount)
@@ -52,7 +61,7 @@ export default function TopBar({
 
   const isValid =
     numericAmount >= 10 &&
-    numericAmount <= 5000
+    numericAmount <= 50000
 
   const { mutate, isPending } = useMutation({
     mutationFn: paymentMethod,
@@ -66,6 +75,9 @@ export default function TopBar({
       navigate(`/deposit/${data.transaction_id}`)
     },
   })
+  const handleshow = () => {
+    setShowBalance((prev) => !prev)
+  }
 
   const handleReload = () => {
     // Add your balance refetch here
@@ -183,8 +195,8 @@ export default function TopBar({
             {/* Visibility */}
             <button
               type="button"
-              onClick={() =>
-                setShowBalance((prev) => !prev)
+              onClick={handleshow
+
               }
               className="
                 flex h-6 w-6 items-center justify-center

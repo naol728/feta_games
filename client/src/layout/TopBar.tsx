@@ -140,9 +140,9 @@ export default function TopBar({
               h-8
               rounded-xl
               border border-border/50
-              bg-muted/50
+              bg-muted/90
               px-1
-              shadow-sm
+              shadow-lg
             "
           >
 
@@ -177,7 +177,7 @@ export default function TopBar({
             >
               {showBalance
                 ? `${user?.wallets?.balance ?? 0} ETB`
-                : "••••"}
+                : "••••••"}
             </span>
 
             {/* Visibility */}

@@ -4,6 +4,7 @@ import http from "http";
 import authRoute from "./routes/auth.route";
 import inviteRoute from "./routes/invite.route";
 import walletRoute from "./routes/wallet.route";
+import GameRoute from "./routes/game.route";
 import { Server } from "socket.io";
 import initSocket from "./socket";
 import { globalErrorHandler } from "./middleware/globalErrorHandler";
@@ -28,6 +29,7 @@ export const io = new Server(server, {
 app.use(express.json({ limit: "1mb" }));
 app.use("/auth", authRoute);
 app.use("/wallet", walletRoute);
+app.use("/games", GameRoute);
 app.use("/invites", inviteRoute);
 app.all("*", (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl}`, 404));

@@ -1,24 +1,42 @@
-/*eslint-disable*/
-import { useEffect, useRef, useState } from 'react';
-import Game from './Game';
-import { spinSlots } from '@/service/games/GamesServices';
-import { toast } from 'react-toastify';
-import { type SlotProps } from './Types';
-import BigWinAlert from './BigWinAlert';
-import RenderMike from './RenderMike';
-import bigwin from "/bigwin.mp3"
-import ValueViewer from './ValueViewer';
+/* eslint-disable */
+
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "react-toastify";
+
+import Game from "./Game";
+import { spinSlots } from "@/service/games/GamesServices";
+import { type SlotProps } from "./Types";
+import BigWinAlert from "./BigWinAlert";
+import RenderMike from "./RenderMike";
+import bigwin from "/bigwin.mp3";
+import ValueViewer from "./ValueViewer";
 import GameBar from "./../../../components/game/GameBar";
 import LiveStatsButton from "./../../../components/LiveStats/LiveStatsButton";
-import { useAppSelector } from '@/store/hook';
-// import { RotatingLines } from "react-loader-spinner";
+import { useAppDispatch, useAppSelector } from "@/store/hook";
+import { setUserWallet } from "@/store/slice/auth";
 
 const renderPlaceholder = () => {
-    const options = ['red', 'blue', 'green', 'yin_yang', 'hakkero', 'yellow', 'wild'];
-    return Array.from({ length: 9 }, () => options[Math.floor(Math.random() * options.length)]);
+    const options = [
+        "red",
+        "blue",
+        "green",
+        "yin_yang",
+        "hakkero",
+        "yellow",
+        "wild",
+    ];
+
+    return Array.from(
+        { length: 9 },
+        () => options[Math.floor(Math.random() * options.length)]
+    );
 };
 
 const Slots = () => {
+    const queryClient = useQueryClient();
+    const dispatch = useAppDispatch();
+
     const [grid, setGrid] = useState<string[]>(renderPlaceholder());
     const [response, setResponse] = useState<SlotProps | null>(null);
     const [betAmount, setBetAmount] = useState<number>(10);
@@ -28,14 +46,104 @@ const Slots = () => {
     const [openBigWin, setOpenBigWin] = useState<boolean>(false);
     const [lostCount, setLostCount] = useState<number>(0);
     const [loadedImages, setLoadedImages] = useState<number>(0);
+
     const audioRef = useRef<HTMLAudioElement | null>(null);
+
     const user = useAppSelector((state) => state.auth?.user);
+
+    /*
+     * ============================
+     * SPIN MUTATION
+     * ============================
+     */
+
+    const spinMutation = useMutation({
+        mutationFn: (amount: number) => spinSlots(amount),
+
+        onSuccess: (data) => {
+            /*
+             * Store game result
+             */
+            setResponse(data);
+            setGrid(data.gridState);
+
+            setWinningLines(
+                data?.lastSpinResult?.map(
+                    (result: { line: any }) => result.line
+                ) || []
+            );
+
+
+            if (data) {
+                dispatch(
+                    setUserWallet({
+                        balance: data.balance,
+                        locked_balance: data.betAmount,
+                    })
+                );
+
+                /*
+                 * Optional:
+                 * If wallet is also cached by TanStack Query,
+                 * update that cache too.
+                 */
+                queryClient.setQueryData(
+                    ["wallet"],
+                    data.wallet
+                );
+            }
+
+            /*
+             * Big win
+             */
+            if (data.totalPayout >= betAmount * 8) {
+                setOpenBigWin(true);
+                startAudio();
+            }
+
+            /*
+             * Losing streak
+             */
+            if (data.totalPayout === 0) {
+                setLostCount((prev) => prev + 1);
+            } else {
+                setLostCount(0);
+            }
+
+            /*
+             * Let the animation finish
+             */
+            setTimeout(() => {
+                setIsSpinning(false);
+            }, 3000);
+        },
+
+        onError: (error: any) => {
+            console.error(
+                error?.response?.data?.message ||
+                "Error spinning slots"
+            );
+
+            toast.error(
+                error?.response?.data?.message ||
+                "Error spinning slots"
+            );
+
+            setIsSpinning(false);
+        },
+    });
+
+    /*
+     * ============================
+     * AUDIO
+     * ============================
+     */
 
     const startAudio = () => {
         setTimeout(() => {
             if (audioRef.current) {
                 audioRef.current.volume = 0.05;
-                audioRef.current.play();
+                audioRef.current.play().catch(() => { });
             }
         }, 2800);
     };
@@ -47,6 +155,11 @@ const Slots = () => {
         }
     };
 
+    /*
+     * ============================
+     * BIG WIN CLICK
+     * ============================
+     */
 
     const handleClick = () => {
         if (openBigWin) {
@@ -56,149 +169,273 @@ const Slots = () => {
     };
 
     useEffect(() => {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
             setTotalWins(response?.totalPayout || 0);
         }, 3000);
+
+        return () => clearTimeout(timer);
     }, [response]);
 
     useEffect(() => {
-        window.addEventListener('click', handleClick);
+        window.addEventListener("click", handleClick);
 
         return () => {
-            window.removeEventListener('click', handleClick);
+            window.removeEventListener("click", handleClick);
         };
     }, [openBigWin]);
 
+    /*
+     * ============================
+     * SPIN
+     * ============================
+     */
 
-    const handleSpin = async () => {
-        if (user == null) {
+    const handleSpin = () => {
+        if (!user) {
             return;
         }
 
-        if (user?.wallets.balance < betAmount) {
-            toast.error(("blackjack.insufficientFunds"));
+        /*
+         * Frontend check for better UX.
+         *
+         * Backend MUST perform the real balance
+         * validation again.
+         */
+        if (Number(user.wallets.balance) < betAmount) {
+            toast.error("Insufficient funds");
             return;
         }
 
-        setIsSpinning(true)
+        if (spinMutation.isPending) {
+            return;
+        }
+
+        setIsSpinning(true);
         setOpenBigWin(false);
         setTotalWins(0);
 
-        try {
-            const response = await spinSlots(betAmount);
-            setResponse(response);
-            setGrid(response.gridState);
-            setWinningLines(response?.lastSpinResult.map((result: { line: any; }) => result.line) || [])
-            if (response.totalPayout >= betAmount * 8) {
-                setOpenBigWin(true);
-                startAudio();
-            }
+        spinMutation.mutate(betAmount);
+    };
 
-            if (response.totalPayout == 0) {
-                setLostCount(lostCount + 1);
-            } else {
-                setLostCount(0);
-            }
+    /*
+     * ============================
+     * BET AMOUNT
+     * ============================
+     */
 
-            setTimeout(() => {
-                setIsSpinning(false);
-                // only once the reels have stopped, or the panel reads out the spin early
-            }, 3000);
-        } catch (e: any) {
-            console.error(e.response?.data.message || "Error spinning slots");
-            toast.error(e.response?.data.message || ("slot.errorSpinningSlots"));
-            setIsSpinning(false);
+    const handleChangeBet = (
+        type: "add" | "subtract"
+    ) => {
+        const newBetAmount =
+            type === "subtract"
+                ? Math.floor(betAmount / 2)
+                : betAmount * 2;
+
+        if (
+            newBetAmount >= 1 &&
+            newBetAmount <= 50000
+        ) {
+            setBetAmount(newBetAmount);
         }
     };
 
-    const handleChangeBet = (type: "add" | "subtract") => {
-        return (
-            <button
-                onClick={() => {
-                    // bets are whole coins: halving 5 must not offer 2.5
-                    const newBetAmount = type === "subtract"
-                        ? Math.floor(betAmount / 2)
-                        : betAmount * 2;
-                    if (newBetAmount >= 1 && newBetAmount <= 50000) {
-                        setBetAmount(newBetAmount);
-                    }
-                }}
-                className={`w-6 h-10 bg-transparent text-white font-bold py-2 px-4 
-                       rounded-full transition-all border-4 hover:border-unique flex items-center justify-center
-                       border-[#ECA823]`}
-            >
-                {type === "subtract" ? "-" : "+"}
-            </button>
-        );
-    };
+    /*
+     * ============================
+     * MIKE STATUS
+     * ============================
+     */
 
     const getCurrentMike = () => {
         if (response) {
             if (openBigWin) {
                 return "jackpot";
-            } else if (response?.totalPayout > 0) {
-                return "win";
-            } else if (lostCount >= 3) {
-                return "losing";
-            } else {
-                return "normal";
             }
+
+            if (response.totalPayout > 0) {
+                return "win";
+            }
+
+            if (lostCount >= 3) {
+                return "losing";
+            }
+
+            return "normal";
         }
-    }
+
+        return "normal";
+    };
 
     return (
-        <div className='w-full flex justify-center px-2 pb-2 pt-1'>
-            {
-                openBigWin && <BigWinAlert value={response?.totalPayout || 0} />
-            }
+        <div className="w-full flex justify-center px-2 pb-2 pt-1">
+
+            {openBigWin && (
+                <BigWinAlert
+                    value={response?.totalPayout || 0}
+                />
+            )}
+
             <audio
                 ref={audioRef}
                 src={bigwin}
             />
-            {/* <div className={`md:p-4 pb-1 ${loadedImages > 1 ? "flex flex-col items-center justify-center" : "hidden"}`}>
-                <RotatingLines strokeColor="grey" strokeWidth="5" animationDuration="0.75" width="50px" visible={true} />
-                <span className='text-[#656569]'>loading assets ({loadedImages}/4)</span>
-            </div> */}
 
-            <div className="w-full max-w-[600px] min-w-[300px]">
-                <RenderMike status={
-                    getCurrentMike() as "normal" | "win" | "losing" | "jackpot"
-                } />
-                <Game grid={grid} isSpinning={isSpinning} data={response} winningLines={winningLines} loadedImages={loadedImages} setLoadedImages={setLoadedImages} />
+            <div
+                className="
+                    w-full
+                    max-w-[600px]
+                    min-w-[300px]
+                    rounded-3xl
+                    border
+                    border-[#f4d778]/40
+                    bg-[#210905]
+                    p-2
+                    shadow-[inset_0_0_35px_rgba(0,0,0,0.7)]
+                "
+                style={{
+                    backgroundImage:
+                        "linear-gradient(rgba(0,0,0,0.28), rgba(0,0,0,0.28)), url('/images/slot/chicken/mainBgMobile.png')",
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    backgroundRepeat: "no-repeat",
+                }}
+            >
+                <RenderMike
+                    status={
+                        getCurrentMike() as
+                        | "normal"
+                        | "win"
+                        | "losing"
+                        | "jackpot"
+                    }
+                />
 
+                <Game
+                    grid={grid}
+                    isSpinning={isSpinning}
+                    data={response}
+                    winningLines={winningLines}
+                    loadedImages={loadedImages}
+                    setLoadedImages={setLoadedImages}
+                />
 
-                <div className="flex flex-col justify-center p-3 bg-[#B52D26] border-t-4 border-red-800 gap-3"
+                <div
+                    className="
+                        flex
+                        flex-col
+                        justify-center
+                        p-3
+                        bg-[#B52D26]
+                        border-t-4
+                        border-red-800
+                        gap-3
+                    "
                     style={{
-                        boxShadow: "inset 0px 0px 60px 4px #000",
-                    }}>
-
+                        boxShadow:
+                            "inset 0px 0px 60px 4px #000",
+                    }}
+                >
                     <div className="flex w-full items-center justify-center gap-2">
-                        {
-                            ["balance", "bet", "wins"].map((type) => <ValueViewer key={type} type={type as "balance" | "bet" | "wins"} betAmount={betAmount} totalWins={totalWins} />
+                        {["balance", "bet", "wins"].map(
+                            (type) => (
+                                <ValueViewer
+                                    key={type}
+                                    type={
+                                        type as
+                                        | "balance"
+                                        | "bet"
+                                        | "wins"
+                                    }
+                                    betAmount={betAmount}
+                                    totalWins={totalWins}
+                                />
                             )
-                        }
+                        )}
                     </div>
+
                     <div className="flex items-center justify-center gap-3 sm:gap-6">
-                        {handleChangeBet("subtract")}
-                        <button onClick={handleSpin} disabled={isSpinning} className="bg-[#25D160] w-14 h-14 sm:w-16 sm:h-16 text-white 
-                            font-bold py-2 px-4 rounded-full transition-all 
-                            hover:bg-[#b0ff7c] hover:border-unique border-4 border-[#ECA823] text-[10px] sm:text-sm flex items-center justify-center"
+
+                        <button
+                            onClick={() =>
+                                handleChangeBet("subtract")
+                            }
+                            disabled={spinMutation.isPending}
+                            className="
+                                w-6
+                                h-10
+                                bg-transparent
+                                text-white
+                                font-bold
+                                rounded-full
+                                border-4
+                                border-[#ECA823]
+                                flex
+                                items-center
+                                justify-center
+                            "
+                        >
+                            -
+                        </button>
+
+                        <button
+                            onClick={handleSpin}
+                            disabled={spinMutation.isPending}
+                            className="
+                                bg-[#25D160]
+                                w-14
+                                h-14
+                                sm:w-16
+                                sm:h-16
+                                text-white
+                                font-bold
+                                rounded-full
+                                border-4
+                                border-[#ECA823]
+                                flex
+                                items-center
+                                justify-center
+                                disabled:opacity-50
+                                disabled:cursor-not-allowed
+                            "
                             style={{
-                                boxShadow: "inset 0px 0px 14px 1px #000",
+                                boxShadow:
+                                    "inset 0px 0px 14px 1px #000",
                             }}
                         >
-                            {("Spin")}
+                            {spinMutation.isPending
+                                ? "..."
+                                : "Spin"}
                         </button>
-                        {handleChangeBet("add")}
+
+                        <button
+                            onClick={() =>
+                                handleChangeBet("add")
+                            }
+                            disabled={spinMutation.isPending}
+                            className="
+                                w-6
+                                h-10
+                                bg-transparent
+                                text-white
+                                font-bold
+                                rounded-full
+                                border-4
+                                border-[#ECA823]
+                                flex
+                                items-center
+                                justify-center
+                            "
+                        >
+                            +
+                        </button>
+
                     </div>
                 </div>
 
                 <GameBar>
                     <LiveStatsButton />
                 </GameBar>
-            </div >
+            </div>
         </div>
-
     );
 };
 

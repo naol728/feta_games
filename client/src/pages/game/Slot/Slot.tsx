@@ -1,98 +1,41 @@
-/* eslint-disable */
-
-import { useEffect, useRef, useState } from "react";
-import Game from "./Game";
-import { spinSlots } from "@/service/games/GamesServices";
-import { toast } from "react-toastify";
-import BigWinAlert from "./BigWinAlert";
-import RenderMike from "./RenderMike";
-import bigwin from "/bigwin.mp3";
-import ValueViewer from "./ValueViewer";
-import { useSessionStats } from "@/store/slice/SessionStatesContext";
-import { useAppSelector } from "@/store/hook";
-
-export interface SlotProps {
-    userId: string;
-    betAmount: number;
-    gridState: string[];
-    lastSpinResult: any[];
-    totalPayout: number;
-}
+/*eslint-disable*/
+import { useEffect, useRef, useState } from 'react';
+import Game from './Game';
+import { spinSlots } from '@/service/games/GamesServices';
+import { toast } from 'react-toastify';
+import { type SlotProps } from './Types';
+import BigWinAlert from './BigWinAlert';
+import RenderMike from './RenderMike';
+import bigwin from "/bigwin.mp3"
+import ValueViewer from './ValueViewer';
+import GameBar from "./../../../components/game/GameBar";
+import LiveStatsButton from "./../../../components/LiveStats/LiveStatsButton";
+import { useAppSelector } from '@/store/hook';
+// import { RotatingLines } from "react-loader-spinner";
 
 const renderPlaceholder = () => {
-    const options = [
-        "grapes",
-        "cherry",
-        "bell",
-        "watermelon",
-        "plum",
-        "lemon",
-        "orange",
-        "bar",
-        "wild",
-        "major",
-        "minor",
-        "mini",
-        "grand",
-        "strike",
-        "super_strike",
-        "bonus",
-    ];
-
-    return Array.from(
-        { length: 9 },
-        () => options[Math.floor(Math.random() * options.length)]
-    );
+    const options = ['red', 'blue', 'green', 'yin_yang', 'hakkero', 'yellow', 'wild'];
+    return Array.from({ length: 9 }, () => options[Math.floor(Math.random() * options.length)]);
 };
 
 const Slots = () => {
     const [grid, setGrid] = useState<string[]>(renderPlaceholder());
+    const [response, setResponse] = useState<SlotProps | null>(null);
+    const [betAmount, setBetAmount] = useState<number>(10);
+    const [isSpinning, setIsSpinning] = useState<boolean>(false);
+    const [winningLines, setWinningLines] = useState<any[]>([]);
+    const [totalWins, setTotalWins] = useState<number>(0);
+    const [openBigWin, setOpenBigWin] = useState<boolean>(false);
+    const [lostCount, setLostCount] = useState<number>(0);
+    const [loadedImages, setLoadedImages] = useState<number>(0);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const user = useAppSelector((state) => state.auth?.user);
 
-    const [response, setResponse] =
-        useState<SlotProps | null>(null);
-
-    const [betAmount, setBetAmount] =
-        useState<number>(10);
-
-    const [isSpinning, setIsSpinning] =
-        useState<boolean>(false);
-
-    const [winningLines, setWinningLines] =
-        useState<any[]>([]);
-
-    const [totalWins, setTotalWins] =
-        useState<number>(0);
-
-    const [openBigWin, setOpenBigWin] =
-        useState<boolean>(false);
-
-    const [lostCount, setLostCount] =
-        useState<number>(0);
-
-    const [loadedImages, setLoadedImages] =
-        useState<number>(0);
-
-    const audioRef =
-        useRef<HTMLAudioElement | null>(null);
-
-    const { user } =
-        useAppSelector((state) => state.auth);
-
-    const { track } = useSessionStats();
-
-    /*
-     * BIG WIN AUDIO
-     */
     const startAudio = () => {
         setTimeout(() => {
             if (audioRef.current) {
                 audioRef.current.volume = 0.05;
-
-                audioRef.current
-                    .play()
-                    .catch(() => {
-                        // Browser may block autoplay.
-                    });
+                audioRef.current.play();
             }
         }, 2800);
     };
@@ -104,9 +47,7 @@ const Slots = () => {
         }
     };
 
-    /*
-     * CLOSE BIG WIN WHEN USER TAPS
-     */
+
     const handleClick = () => {
         if (openBigWin) {
             setOpenBigWin(false);
@@ -115,461 +56,149 @@ const Slots = () => {
     };
 
     useEffect(() => {
-        window.addEventListener("click", handleClick);
+        setTimeout(() => {
+            setTotalWins(response?.totalPayout || 0);
+        }, 3000);
+    }, [response]);
+
+    useEffect(() => {
+        window.addEventListener('click', handleClick);
 
         return () => {
-            window.removeEventListener("click", handleClick);
+            window.removeEventListener('click', handleClick);
         };
     }, [openBigWin]);
 
-    /*
-     * UPDATE TOTAL WINS
-     */
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setTotalWins(response?.totalPayout || 0);
-        }, 3000);
 
-        return () => clearTimeout(timer);
-    }, [response]);
-
-    /*
-     * =========================
-     * SPIN
-     * =========================
-     */
     const handleSpin = async () => {
-        if (!user) {
-            toast.error("User not found");
+        if (user == null) {
             return;
         }
 
-        if (user.wallets.balance < betAmount) {
-            toast.error("Insufficient funds");
+        if (user?.wallets.balance < betAmount) {
+            toast.error(("blackjack.insufficientFunds"));
             return;
         }
 
-        if (isSpinning) return;
-
-        setIsSpinning(true);
+        setIsSpinning(true)
         setOpenBigWin(false);
         setTotalWins(0);
 
         try {
-            const result = await spinSlots(betAmount);
-
-            setResponse(result);
-
-            /*
-             * 3 × 3 RESULT
-             */
-            setGrid(result.gridState);
-
-            /*
-             * WINNING LINES
-             */
-            setWinningLines(
-                result?.lastSpinResult?.map(
-                    (item: { line: any }) => item.line
-                ) || []
-            );
-
-            /*
-             * BIG WIN
-             */
-            if (
-                result.totalPayout >=
-                betAmount * 8
-            ) {
+            const response = await spinSlots(betAmount);
+            setResponse(response);
+            setGrid(response.gridState);
+            setWinningLines(response?.lastSpinResult.map((result: { line: any; }) => result.line) || [])
+            if (response.totalPayout >= betAmount * 8) {
                 setOpenBigWin(true);
                 startAudio();
             }
 
-            /*
-             * LOSING STREAK
-             */
-            if (result.totalPayout === 0) {
-                setLostCount((prev) => prev + 1);
+            if (response.totalPayout == 0) {
+                setLostCount(lostCount + 1);
             } else {
                 setLostCount(0);
             }
 
-            /*
-             * REEL ANIMATION
-             *
-             * Keep this synchronized with Game/SlotColumn.
-             */
             setTimeout(() => {
                 setIsSpinning(false);
-
-                track({
-                    game: "slots",
-                    wagered: betAmount,
-                    payout: result.totalPayout || 0,
-                });
-            }, 2600);
+                // only once the reels have stopped, or the panel reads out the spin early
+            }, 3000);
         } catch (e: any) {
-            console.error(
-                e?.response?.data?.message ||
-                "Error spinning slots"
-            );
-
-            toast.error(
-                e?.response?.data?.message ||
-                "Error spinning slots"
-            );
-
+            console.error(e.response?.data.message || "Error spinning slots");
+            toast.error(e.response?.data.message || ("slot.errorSpinningSlots"));
             setIsSpinning(false);
         }
     };
 
-    /*
-     * =========================
-     * BET CONTROL
-     * =========================
-     */
-    const handleChangeBet = (
-        type: "add" | "subtract"
-    ) => {
-        const newBetAmount =
-            type === "subtract"
-                ? Math.floor(betAmount / 2)
-                : betAmount * 2;
-
-        if (
-            newBetAmount >= 1 &&
-            newBetAmount <= 50000
-        ) {
-            setBetAmount(newBetAmount);
-        }
+    const handleChangeBet = (type: "add" | "subtract") => {
+        return (
+            <button
+                onClick={() => {
+                    // bets are whole coins: halving 5 must not offer 2.5
+                    const newBetAmount = type === "subtract"
+                        ? Math.floor(betAmount / 2)
+                        : betAmount * 2;
+                    if (newBetAmount >= 1 && newBetAmount <= 50000) {
+                        setBetAmount(newBetAmount);
+                    }
+                }}
+                className={`w-6 h-10 bg-transparent text-white font-bold py-2 px-4 
+                       rounded-full transition-all border-4 hover:border-unique flex items-center justify-center
+                       border-[#ECA823]`}
+            >
+                {type === "subtract" ? "-" : "+"}
+            </button>
+        );
     };
 
-    /*
-     * =========================
-     * MIKE STATUS
-     * =========================
-     */
     const getCurrentMike = () => {
-        if (!response) {
-            return "normal";
+        if (response) {
+            if (openBigWin) {
+                return "jackpot";
+            } else if (response?.totalPayout > 0) {
+                return "win";
+            } else if (lostCount >= 3) {
+                return "losing";
+            } else {
+                return "normal";
+            }
         }
-
-        if (openBigWin) {
-            return "jackpot";
-        }
-
-        if (response.totalPayout > 0) {
-            return "win";
-        }
-
-        if (lostCount >= 3) {
-            return "losing";
-        }
-
-        return "normal";
-    };
+    }
 
     return (
-        <div className="flex w-full min-w-0 justify-center overflow-x-hidden">
-            {openBigWin && (
-                <BigWinAlert
-                    value={
-                        response?.totalPayout || 0
-                    }
-                />
-            )}
-
+        <div className='w-full flex justify-center px-2 pb-2 pt-1'>
+            {
+                openBigWin && <BigWinAlert value={response?.totalPayout || 0} />
+            }
             <audio
                 ref={audioRef}
                 src={bigwin}
-                preload="auto"
             />
+            {/* <div className={`md:p-4 pb-1 ${loadedImages > 1 ? "flex flex-col items-center justify-center" : "hidden"}`}>
+                <RotatingLines strokeColor="grey" strokeWidth="5" animationDuration="0.75" width="50px" visible={true} />
+                <span className='text-[#656569]'>loading assets ({loadedImages}/4)</span>
+            </div> */}
 
-            {/*
-             * MAIN CONTAINER
-             *
-             * max-width prevents the casino from becoming
-             * huge on desktop while remaining fluid on mobile.
-             */}
-            <div
-                className="
-                    flex
-                    w-full
-                    max-w-[430px]
-                    min-w-0
-                    flex-col
-                    items-center
-                    px-1
-                    pb-2
-                "
-            >
-                {/*
-                 * ==========================
-                 * CHARACTER / DEALER
-                 * ==========================
-                 */}
-                <div className="w-full">
-                    <RenderMike
-                        status={
-                            getCurrentMike() as
-                            | "normal"
-                            | "win"
-                            | "losing"
-                            | "jackpot"
-                        }
-                    />
-                </div>
+            <div className="w-full max-w-[600px] min-w-[300px]">
+                <RenderMike status={
+                    getCurrentMike() as "normal" | "win" | "losing" | "jackpot"
+                } />
+                <Game grid={grid} isSpinning={isSpinning} data={response} winningLines={winningLines} loadedImages={loadedImages} setLoadedImages={setLoadedImages} />
 
-                {/*
-                 * ==========================
-                 * SLOT MACHINE
-                 * ==========================
-                 */}
-                <div className="w-full min-w-0">
-                    <Game
-                        grid={grid}
-                        isSpinning={isSpinning}
-                        data={response}
-                        winningLines={winningLines}
-                        loadedImages={loadedImages}
-                        setLoadedImages={
-                            setLoadedImages
-                        }
-                    />
-                </div>
 
-                {/*
-                 * ==========================
-                 * CONTROL PANEL
-                 * ==========================
-                 */}
-                <div
-                    className="
-                        mt-1
-                        flex
-                        w-full
-                        min-w-0
-                        flex-col
-                        gap-2
-                        rounded-b-xl
-                        border-t
-                        border-red-950
-                        px-2
-                        py-2
-                    "
+                <div className="flex flex-col justify-center p-3 bg-[#B52D26] border-t-4 border-red-800 gap-3"
                     style={{
-                        background:
-                            "linear-gradient(180deg,#9f1d25 0%,#74131a 100%)",
+                        boxShadow: "inset 0px 0px 60px 4px #000",
+                    }}>
 
-                        boxShadow:
-                            "inset 0 0 35px rgba(0,0,0,.7)",
-                    }}
-                >
-                    {/*
-                     * ==========================
-                     * BALANCE / BET / WIN
-                     * ==========================
-                     */}
-                    <div
-                        className="
-                            grid
-                            w-full
-                            grid-cols-3
-                            gap-1
-                            sm:gap-2
-                        "
-                    >
-                        {[
-                            "balance",
-                            "bet",
-                            "wins",
-                        ].map((type) => (
-                            <div
-                                key={type}
-                                className="min-w-0"
-                            >
-                                <ValueViewer
-                                    type={
-                                        type as
-                                        | "balance"
-                                        | "bet"
-                                        | "wins"
-                                    }
-                                    betAmount={
-                                        betAmount
-                                    }
-                                    totalWins={
-                                        totalWins
-                                    }
-                                />
-                            </div>
-                        ))}
+                    <div className="flex w-full items-center justify-center gap-2">
+                        {
+                            ["balance", "bet", "wins"].map((type) => <ValueViewer key={type} type={type as "balance" | "bet" | "wins"} betAmount={betAmount} totalWins={totalWins} />
+                            )
+                        }
                     </div>
-
-                    {/*
-                     * ==========================
-                     * BET + SPIN CONTROLS
-                     * ==========================
-                     */}
-                    <div
-                        className="
-                            flex
-                            w-full
-                            items-center
-                            justify-center
-                            gap-3
-                            py-1
-                            sm:gap-5
-                        "
-                    >
-                        {/*
-                         * MINUS
-                         */}
-                        <button
-                            type="button"
-                            onClick={() =>
-                                handleChangeBet(
-                                    "subtract"
-                                )
-                            }
-                            disabled={
-                                isSpinning ||
-                                betAmount <= 1
-                            }
-                            aria-label="Decrease bet"
-                            className="
-                                flex
-                                h-9
-                                w-9
-                                shrink-0
-                                items-center
-                                justify-center
-                                rounded-full
-                                border-2
-                                border-[#ECA823]
-                                bg-[#70131A]
-                                text-lg
-                                font-bold
-                                text-white
-                                shadow-md
-                                transition-transform
-                                active:scale-90
-                                disabled:cursor-not-allowed
-                                disabled:opacity-40
-                                sm:h-10
-                                sm:w-10
-                            "
+                    <div className="flex items-center justify-center gap-3 sm:gap-6">
+                        {handleChangeBet("subtract")}
+                        <button onClick={handleSpin} disabled={isSpinning} className="bg-[#25D160] w-14 h-14 sm:w-16 sm:h-16 text-white 
+                            font-bold py-2 px-4 rounded-full transition-all 
+                            hover:bg-[#b0ff7c] hover:border-unique border-4 border-[#ECA823] text-[10px] sm:text-sm flex items-center justify-center"
+                            style={{
+                                boxShadow: "inset 0px 0px 14px 1px #000",
+                            }}
                         >
-                            −
+                            {("Spin")}
                         </button>
-
-                        {/*
-                         * SPIN BUTTON
-                         */}
-                        <button
-                            type="button"
-                            onClick={handleSpin}
-                            disabled={isSpinning}
-                            aria-label="Spin"
-                            className="
-                                flex
-                                h-14
-                                w-14
-                                shrink-0
-                                items-center
-                                justify-center
-                                rounded-full
-                                border-[3px]
-                                border-[#ECA823]
-                                bg-[#20c85a]
-                                text-[11px]
-                                font-black
-                                tracking-wide
-                                text-white
-                                shadow-[inset_0_0_12px_rgba(0,0,0,.65),0_3px_8px_rgba(0,0,0,.35)]
-                                transition-all
-                                active:scale-90
-                                disabled:cursor-not-allowed
-                                disabled:opacity-60
-                                sm:h-16
-                                sm:w-16
-                            "
-                        >
-                            {isSpinning ? (
-                                <span className="animate-pulse">
-                                    ...
-                                </span>
-                            ) : (
-                                "SPIN"
-                            )}
-                        </button>
-
-                        {/*
-                         * PLUS
-                         */}
-                        <button
-                            type="button"
-                            onClick={() =>
-                                handleChangeBet(
-                                    "add"
-                                )
-                            }
-                            disabled={
-                                isSpinning ||
-                                betAmount >= 50000
-                            }
-                            aria-label="Increase bet"
-                            className="
-                                flex
-                                h-9
-                                w-9
-                                shrink-0
-                                items-center
-                                justify-center
-                                rounded-full
-                                border-2
-                                border-[#ECA823]
-                                bg-[#70131A]
-                                text-lg
-                                font-bold
-                                text-white
-                                shadow-md
-                                transition-transform
-                                active:scale-90
-                                disabled:cursor-not-allowed
-                                disabled:opacity-40
-                                sm:h-10
-                                sm:w-10
-                            "
-                        >
-                            +
-                        </button>
-                    </div>
-
-                    {/*
-                     * BET DISPLAY
-                     */}
-                    <div className="flex justify-center">
-                        <div
-                            className="
-                                rounded-full
-                                border
-                                border-[#ECA823]/70
-                                bg-black/20
-                                px-3
-                                py-0.5
-                                text-[10px]
-                                font-semibold
-                                text-white/80
-                            "
-                        >
-                            BET&nbsp;
-                            {betAmount}
-                        </div>
+                        {handleChangeBet("add")}
                     </div>
                 </div>
-            </div>
+
+                <GameBar>
+                    <LiveStatsButton />
+                </GameBar>
+            </div >
         </div>
+
     );
 };
 

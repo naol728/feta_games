@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import mike1 from "/images/slot/chicken/startScreen2.png";
+import mike1 from "/images/slot/mike1.webp";
 import mike2 from "/images/slot/mike2.webp";
 import mike3 from "/images/slot/mike3.webp";
 import mike4 from "/images/slot/mike4.webp";

@@ -21,7 +21,7 @@ import MatchMakingLayout from "./layout/MatchMakingLayout";
 import { registerSocketListeners } from "./lib/socketListeners";
 import MinimalLayout from "./layout/MinimalLayout";
 import Loading from "./components/layout/Loading";
-import { SessionStatsProvider } from "./store/slice/SessionStatesContext";
+import  {SessionStatsProvider}  from "./stats/SessionStatsContext";
 import Slots from "./pages/game/Slot/Slot";
 
 

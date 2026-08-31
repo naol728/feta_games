@@ -3,6 +3,7 @@
 import { NavLink } from "react-router-dom"
 import {
   BarChart3,
+  Gamepad2,
   Gift,
   Headset,
   UserRound,
@@ -12,6 +13,11 @@ import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 const items = [
+  {
+    to: "/",
+    label: "Games",
+    icon: Gamepad2,
+  },
   {
     to: "/leaderboard",
     label: "Leaderboard",
@@ -35,6 +41,11 @@ const items = [
 ]
 
 export default function Nav() {
+  const handleSupportClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    window.open("https://t.me/winbetsupport01", "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div
       className="
@@ -84,6 +95,7 @@ export default function Nav() {
             <NavLink
               key={to}
               to={to}
+              onClick={to === "/support" ? handleSupportClick : undefined}
               className="h-full min-w-0 flex-1"
             >
               {({ isActive }) => (
@@ -175,7 +187,7 @@ export default function Nav() {
         {/* =====================================
             DEPOSIT
         ===================================== */}
-        <NavLink
+        {/* <NavLink
           to="/deposit"
           className="shrink-0"
         >
@@ -223,7 +235,7 @@ export default function Nav() {
 
             </motion.div>
           )}
-        </NavLink>
+        </NavLink> */}
 
       </div>
     </div>

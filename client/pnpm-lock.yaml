@@ -77,6 +77,9 @@ importers:
       react-loader-spinner:
         specifier: ^8.0.2
         version: 8.0.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react-loading-skeleton:
+        specifier: ^3.5.0
+        version: 3.5.0(react@19.2.8)
       react-redux:
         specifier: ^9.2.0
         version: 9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1)
@@ -2166,6 +2169,11 @@ packages:
     peerDependencies:
       react: '>=17.0.0 <20.0.0'
       react-dom: '>=17.0.0 <20.0.0'
+
+  react-loading-skeleton@3.5.0:
+    resolution: {integrity: sha512-gxxSyLbrEAdXTKgfbpBEFZCO/P153DnqSCQau2+o6lNy1jgMRr2MmRmOzMmyrwSaSYLRB8g7b0waYPmUjz7IhQ==}
+    peerDependencies:
+      react: '>=16.8.0'
 
   react-redux@9.3.0:
     resolution: {integrity: sha512-KQopgqFo/p/fgmAs5qz6p5RWaNAzq40WAu7fJIXnQpYxFPbJYtsJPWvGeF2rOBaY/kEuV77AVsX8TsQzKm+A/g==}
@@ -4522,6 +4530,10 @@ snapshots:
     transitivePeerDependencies:
       - css-to-react-native
       - react-native
+
+  react-loading-skeleton@3.5.0(react@19.2.8):
+    dependencies:
+      react: 19.2.8
 
   react-redux@9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1):
     dependencies:

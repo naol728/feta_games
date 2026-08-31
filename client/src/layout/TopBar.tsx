@@ -63,7 +63,7 @@ export default function TopBar({
     },
 
     onSuccess: (data) => {
-      navigate(`/ deposit / ${data.transaction_id} `)
+      navigate(`/deposit/${data.transaction_id}`)
     },
   })
 

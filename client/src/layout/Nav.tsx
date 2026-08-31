@@ -187,7 +187,7 @@ export default function Nav() {
         {/* =====================================
             DEPOSIT
         ===================================== */}
-        <NavLink
+        {/* <NavLink
           to="/deposit"
           className="shrink-0"
         >
@@ -235,7 +235,7 @@ export default function Nav() {
 
             </motion.div>
           )}
-        </NavLink>
+        </NavLink> */}
 
       </div>
     </div>

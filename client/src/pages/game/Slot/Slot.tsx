@@ -46,8 +46,10 @@ const Slots = () => {
     const [openBigWin, setOpenBigWin] = useState<boolean>(false);
     const [lostCount, setLostCount] = useState<number>(0);
     const [loadedImages, setLoadedImages] = useState<number>(0);
+    const [isAutoSpin, setIsAutoSpin] = useState<boolean>(false);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const autoSpinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const user = useAppSelector((state) => state.auth?.user);
 
@@ -75,10 +77,13 @@ const Slots = () => {
 
 
             if (data) {
+                const nextBalance =
+                    data.balance ?? data.walletBalance ?? user?.wallets?.balance ?? 0;
+
                 dispatch(
                     setUserWallet({
-                        balance: data.balance,
-                        locked_balance: data.betAmount,
+                        balance: Number(nextBalance),
+                        locked_balance: user?.wallets?.locked_balance ?? 0,
                     })
                 );
 
@@ -87,10 +92,9 @@ const Slots = () => {
                  * If wallet is also cached by TanStack Query,
                  * update that cache too.
                  */
-                queryClient.setQueryData(
-                    ["wallet"],
-                    data.wallet
-                );
+                queryClient.setQueryData(["wallet"], {
+                    balance: Number(nextBalance),
+                });
             }
 
             /*
@@ -216,6 +220,31 @@ const Slots = () => {
 
         spinMutation.mutate(betAmount);
     };
+
+    useEffect(() => {
+        if (!isAutoSpin || !user || spinMutation.isPending || isSpinning) {
+            return;
+        }
+
+        autoSpinTimeoutRef.current = setTimeout(() => {
+            handleSpin();
+        }, 800);
+
+        return () => {
+            if (autoSpinTimeoutRef.current) {
+                clearTimeout(autoSpinTimeoutRef.current);
+                autoSpinTimeoutRef.current = null;
+            }
+        };
+    }, [isAutoSpin, user, isSpinning, spinMutation.isPending, betAmount]);
+
+    useEffect(() => {
+        return () => {
+            if (autoSpinTimeoutRef.current) {
+                clearTimeout(autoSpinTimeoutRef.current);
+            }
+        };
+    }, []);
 
     /*
      * ============================
@@ -374,6 +403,19 @@ const Slots = () => {
                             "
                         >
                             -
+                        </button>
+
+                        <button
+                            onClick={() => setIsAutoSpin((prev) => !prev)}
+                            disabled={spinMutation.isPending}
+                            className={
+                                "h-10 rounded-full border-2 px-3 text-[10px] font-bold uppercase tracking-wide transition " +
+                                (isAutoSpin
+                                    ? "border-[#25D160] bg-[#25D160]/20 text-[#C8FFD7]"
+                                    : "border-[#ECA823] bg-[#35170A] text-[#F8E7B1]")
+                            }
+                        >
+                            {isAutoSpin ? "Auto On" : "Auto"}
                         </button>
 
                         <button

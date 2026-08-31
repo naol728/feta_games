@@ -1,121 +1,393 @@
-import { Link } from "react-router-dom"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import Banner from "@/components/Banner"
-import QuickActions from "./QuickActions"
+import { Link } from "react-router-dom";
+import { Card } from "@/components/ui/card";
+import Banner from "@/components/Banner";
+import QuickActions from "./QuickActions";
+import { Star } from "lucide-react";
 
 const games = [
-  { name: "Card Draw", path: "/carddraw", image: "/carddrawduel.jpg", isNew: true, uderdevelopmnet: false },
-
+  // {
+  //   name: "Card Draw",
+  //   path: "/carddraw",
+  //   image: "/carddrawduel.jpg",
+  //   isNew: true,
+  //   underdevelopment: false,
+  // },
   {
-    name: "Slot", path: "/slot", image: "/carddrawduel.jpg", isNew: true, uderdevelopmnet: false
-  }
-]
+    name: "Chicken Coin",
+    path: "/slot",
+    image: "/images/slot/chicken/chickencoin.png",
+    isNew: true,
+    underdevelopment: false,
+  },
+  {
+    name: "Aviator",
+    path: "/aviator",
+    image: "/images/slot/chicken/aviator.png",
+    isNew: false,
+    underdevelopment: false,
+  },
+  {
+    name: "Fast Keno",
+    path: "/keno",
+    image: "/images/slot/chicken/keno.png",
+    isNew: false,
+    underdevelopment: false,
+  },
+  {
+    name: "Wheel of Fortune",
+    path: "/wheel",
+    image: "/wheel.jpg",
+    isNew: false,
+    underdevelopment: false,
+  },
+  {
+    name: "Rocket Star",
+    path: "/rocket",
+    image: "/rocket-star.jpg",
+    isNew: true,
+    underdevelopment: false,
+  },
+  {
+    name: "Chicken Road 2",
+    path: "/chicken-road",
+    image: "/chicken-road.jpg",
+    isNew: true,
+    underdevelopment: false,
+  },
+  {
+    name: "Jets X",
+    path: "/jets-x",
+    image: "/jets-x.jpg",
+    isNew: false,
+    underdevelopment: true,
+  },
+  {
+    name: "Joker X",
+    path: "/joker-x",
+    image: "/joker-x.jpg",
+    isNew: false,
+    underdevelopment: true,
+  },
+];
 
 export default function Game() {
   return (
-    <div className="min-h-screen bg-background text-foreground p-4">
+    <div
+      className="
+        min-h-screen
+        w-full
+        overflow-x-hidden
+        bg-background
+        text-foreground
+        px-2
+        pb-24
+        sm:px-3
+      "
+    >
       {/* Banner */}
       <Banner />
 
       {/* Quick Actions */}
-      <QuickActions />
+      {/* <div className="mt-3">
+        <QuickActions />
+      </div> */}
 
-      {/* SECTION TITLE */}
-      <div className="mt-6 mb-3 ml-1">
-        <h2 className="text-sm font-bold text-muted-foreground tracking-wide">
+      {/* Section Header */}
+      <div className="mt-5 mb-2 flex items-center justify-between px-1">
+        <h2 className="text-sm font-bold tracking-wide text-foreground">
           የተመረጡ ጨዋታዎች
         </h2>
+
+        <button
+          type="button"
+          className="
+            text-[11px]
+            font-semibold
+            text-primary
+            active:opacity-70
+          "
+        >
+          See All →
+        </button>
       </div>
 
-      {/* Game List */}
-      <div className="space-y-2">
+      {/* ========================= */}
+      {/* GAME GRID */}
+      {/* ========================= */}
+
+      <div
+        className="
+          grid
+          grid-cols-3
+          gap-1.5
+          sm:gap-2
+        "
+      >
         {games.map((game, i) => (
-          <Card
+          <Link
             key={i}
-            className="bg-card border border-border rounded-xl py-3 relative overflow-hidden"
+            to={game.path}
+            className="block min-w-0"
           >
-            <CardContent className="flex items-center justify-between px-2">
+            <Card
+              className="
+                group
+                relative
+                aspect-[0.82/1]
+                w-full
+                overflow-hidden
+                rounded-lg
+                border
+                border-border/80
+                bg-card
+                p-0
+                shadow-sm
+                transition-all
+                duration-200
+                active:scale-[0.97]
+              "
+            >
+              {/* GAME IMAGE */}
+              <img
+                src={game.image}
+                alt={game.name}
+                loading="lazy"
+                className="
+                  absolute
+                  inset-0
+                  h-full
+                  w-full
+                  object-cover
+                  transition-transform
+                  duration-300
+                  group-hover:scale-105
+                "
+              />
 
-              {/* LEFT SIDE */}
-              <div className="flex items-center gap-3">
+              {/* DARK GRADIENT */}
+              <div
+                className="
+                  absolute
+                  inset-0
+                  bg-gradient-to-t
+                  from-black/80
+                  via-black/10
+                  to-transparent
+                "
+              />
 
-                <div className="relative w-10 h-10 rounded-xl overflow-hidden">
-                  <div className="absolute inset-0 rounded-xl blur-md bg-primary opacity-60 animate-pulse" />
 
-                  <img
-                    src={game.image}
-                    alt={game.name}
-                    className="relative w-full h-full object-cover rounded-xl border border-primary"
-                  />
-                </div>
-
-                <div className="flex flex-col">
-                  <p className="text-xs font-semibold">{game.name}</p>
-
-                  {game.uderdevelopmnet ? (
-                    <span className="text-[10px] text-destructive font-bold">
-                      coming soon
-                    </span>
-                  ) : game.isNew ? (
-                    <span className="text-[10px] text-green-500 font-bold">
-                      NEW
-                    </span>
-                  ) : null}
-                </div>
+              <div
+                className="
+                  absolute
+                  left-1.5
+                  top-1.5
+                  z-10
+                  flex
+                  h-7
+                  w-7
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-blue-500
+                  shadow-md
+                  ring-2
+                  ring-black/30
+                "
+              >
+                <Star
+                  size={15}
+                  strokeWidth={2.5}
+                  fill="white"
+                  className="text-white"
+                />
               </div>
 
-              {/* RIGHT SIDE */}
-              <Link to={game.path}>
-                <Button size="sm" className="relative pl-6">
-                  {/* blinking dot */}
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
+              {/* NEW BADGE */}
+
+              {game.isNew && (
+                <span
+                  className="
+                    absolute
+                    right-1
+                    top-1
+                    z-10
+                    rounded-md
+                    bg-green-500
+                    px-1.5
+                    py-0.5
+                    text-[8px]
+                    font-black
+                    uppercase
+                    text-white
+                    shadow
+                  "
+                >
+                  NEW
+                </span>
+              )}
+
+              {/* COMING SOON */}
+
+              {game.underdevelopment && (
+                <div
+                  className="
+                    absolute
+                    inset-0
+                    z-20
+                    flex
+                    items-center
+                    justify-center
+                    bg-black/45
+                  "
+                >
+                  <span
+                    className="
+                      rounded-full
+                      bg-black/70
+                      px-2
+                      py-1
+                      text-[8px]
+                      font-bold
+                      text-white
+                    "
+                  >
+                    COMING SOON
                   </span>
+                </div>
+              )}
 
-                  Play
-                </Button>
-              </Link>
+              {/* ================= */}
+              {/* GAME NAME */}
+              {/* ================= */}
 
-            </CardContent>
-          </Card>
+              <div
+                className="
+                  absolute
+                  bottom-0
+                  left-0
+                  right-0
+                  z-10
+                  px-1.5
+                  pb-1.5
+                  pt-6
+                "
+              >
+                <p
+                  className="
+                    truncate
+                    text-[10px]
+                    font-bold
+                    leading-tight
+                    text-white
+                    drop-shadow-md
+                    sm:text-xs
+                  "
+                >
+                  {game.name}
+                </p>
+
+                {!game.underdevelopment && (
+                  <div
+                    className="
+                      mt-0.5
+                      flex
+                      items-center
+                      gap-1
+                    "
+                  >
+                    <span
+                      className="
+                        h-1.5
+                        w-1.5
+                        rounded-full
+                        bg-green-400
+                      "
+                    />
+
+                    <span
+                      className="
+                        text-[8px]
+                        font-medium
+                        text-white/80
+                      "
+                    >
+                      Play now
+                    </span>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </Link>
         ))}
       </div>
 
-      {/* SUPPORT CARD */}
-      <Card className="bg-card border border-border rounded-xl py-3 mt-3">
-        <CardContent className="flex items-center justify-between px-2">
+      {/* ========================= */}
+      {/* SUPPORT */}
+      {/* ========================= */}
 
-          <div className="flex items-center gap-3">
-
-            {/* icon */}
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10">
-              <span className="text-xl">🧑‍💻</span>
+      <Card
+        className="
+          mt-3
+          rounded-xl
+          border
+          border-border
+          bg-card
+          p-3
+        "
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div
+              className="
+                flex
+                h-9
+                w-9
+                shrink-0
+                items-center
+                justify-center
+                rounded-xl
+                bg-primary/10
+              "
+            >
+              <span className="text-lg">
+                🧑‍💻
+              </span>
             </div>
 
-            {/* text */}
-            <div className="flex flex-col">
-              <p className="text-xs font-semibold">Contact Support</p>
-              <span className="text-[10px] text-muted-foreground">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold">
+                Contact Support
+              </p>
+
+              <span className="text-[9px] text-muted-foreground">
                 24/7 help & assistance
               </span>
             </div>
           </div>
 
-          {/* action */}
           <a
             href="https://t.me/gebetagamesadmin"
             target="_blank"
             rel="noreferrer"
           >
-            <Button size="sm">
+            <button
+              className="
+                rounded-lg
+                bg-primary
+                px-3
+                py-1.5
+                text-[10px]
+                font-bold
+                text-primary-foreground
+                active:scale-95
+              "
+            >
               Open
-            </Button>
+            </button>
           </a>
-
-        </CardContent>
+        </div>
       </Card>
     </div>
-  )
+  );
 }

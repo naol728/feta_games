@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import BigWin from "/images/slot/bigwin.webp";
-import { Monetary } from './ValueViewer';
+import Monetary from './../../../components/Monetary';
 
 interface BigWinAlertProps {
     value: number;
@@ -10,7 +10,7 @@ const BigWinAlert: React.FC<BigWinAlertProps> = ({ value }) => {
     const [scale, setScale] = useState(0);
     const [animatedValue, setAnimatedValue] = useState(0);
 
-    const animateValue = () => {
+    const animateValue = useCallback(() => {
         let start = 0;
         const end = Math.round(value);
 
@@ -21,14 +21,16 @@ const BigWinAlert: React.FC<BigWinAlertProps> = ({ value }) => {
                 clearInterval(timer);
             }
         }, 30);
-    };
+    }, [value]);
 
     useEffect(() => {
-        setTimeout(() => {
+        const timeout = setTimeout(() => {
             setScale(1);
             animateValue();
         }, 3000);
-    }, [value]);
+
+        return () => clearTimeout(timeout);
+    }, [animateValue]);
 
     return (
         <div className='absolute z-50 transition-all flex items-center justify-center bg-black/30 w-screen h-[110vh]'

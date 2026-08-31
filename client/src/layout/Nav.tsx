@@ -1,86 +1,230 @@
 /* eslint-disable */
+
 import { NavLink } from "react-router-dom"
-import { cn } from "@/lib/utils"
+import {
+  BarChart3,
+  Gift,
+  Headset,
+  UserRound,
+  Plus,
+} from "lucide-react"
 import { motion } from "framer-motion"
+import { cn } from "@/lib/utils"
 
 const items = [
-  { to: "/invite", label: "Invite", emoji: "👥" },
-  { to: "/", label: "Game", emoji: "🏆" },
-  { to: "/profile", label: "Profile", emoji: "⚙️" },
+  {
+    to: "/leaderboard",
+    label: "Leaderboard",
+    icon: BarChart3,
+  },
+  {
+    to: "/promo",
+    label: "Promo",
+    icon: Gift,
+  },
+  {
+    to: "/support",
+    label: "Support",
+    icon: Headset,
+  },
+  {
+    to: "/profile",
+    label: "Profile",
+    icon: UserRound,
+  },
 ]
 
 export default function Nav() {
   return (
-    <div className="fixed bottom-4 left-0 right-0 flex justify-center z-50">
-      <div className="flex w-[92%] max-w-md items-center justify-between px-6 py-2.5 rounded-2xl bg-card/80 backdrop-blur-xl border border-border shadow-xl">
+    <div
+      className="
+        fixed
+        inset-x-0
+        bottom-0
+        z-50
+        flex
+        justify-center
+        px-1.5
+        pb-[calc(env(safe-area-inset-bottom)+6px)]
+        pointer-events-none
+      "
+    >
+      <div
+        className="
+          flex
+          w-full
+          max-w-[390px]
+          items-center
+          justify-center
+          gap-1.5
+          pointer-events-auto
+        "
+      >
 
-        {items.map(({ to, label, emoji }) => (
-          <NavLink key={to} to={to} className="flex-1">
-            {({ isActive }) => (
-              <motion.div
-                whileTap={{ scale: 0.9 }}
-                animate={{
-                  scale: isActive ? 1.1 : 1,
-                }}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                className={cn(
-                  "flex flex-col items-center justify-center gap-1 text-[10px] cursor-pointer",
-                  isActive ? "text-primary" : "text-muted-foreground"
-                )}
-              >
-                {/* ICON CONTAINER */}
+        {/* =====================================
+            MAIN NAVIGATION
+        ===================================== */}
+        <nav
+          className="
+            flex
+            min-w-0
+            flex-1
+            h-[68px]
+            items-center
+            rounded-[22px]
+            border
+            border-border/60
+            bg-card/95
+            px-1
+            shadow-lg
+            backdrop-blur-xl
+          "
+        >
+          {items.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className="h-full min-w-0 flex-1"
+            >
+              {({ isActive }) => (
                 <motion.div
-                  animate={{
-                    y: isActive ? -4 : 0,
-                  }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                  className={cn(
-                    "flex items-center justify-center rounded-full transition-all",
-                    isActive
-                      ? "w-12 h-12 bg-primary/20 shadow-[0_0_20px_hsl(var(--primary)),0_0_40px_hsl(var(--primary))]"
-                      : "w-9 h-9"
-                  )}
+                  whileTap={{ scale: 0.92 }}
+                  className="
+                    relative
+                    flex
+                    h-full
+                    w-full
+                    flex-col
+                    items-center
+                    justify-center
+                    gap-1
+                    cursor-pointer
+                    select-none
+                  "
                 >
-                  <motion.span
+
+                  {/* ICON */}
+                  <motion.div
                     animate={{
-                      rotate: isActive ? [0, 10, -10, 0] : 0,
-                      scale: isActive ? 1.2 : 1,
+                      y: isActive ? -1 : 0,
+                      scale: isActive ? 1.04 : 1,
                     }}
-                    transition={{ duration: 0.4 }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 400,
+                      damping: 22,
+                    }}
                     className={cn(
-                      "text-xl",
-                      isActive &&
-                      "drop-shadow-[0_0_8px_hsl(var(--primary))]"
+                      "flex items-center justify-center transition-colors",
+                      isActive
+                        ? "text-foreground"
+                        : "text-muted-foreground"
                     )}
                   >
-                    {emoji}
-                  </motion.span>
-                </motion.div>
+                    <Icon
+                      className="h-[20px] w-[20px]"
+                      strokeWidth={2.4}
+                    />
+                  </motion.div>
 
-                {/* LABEL */}
-                <motion.span
-                  animate={{
-                    opacity: isActive ? 1 : 0.7,
-                  }}
-                  className={cn(
-                    "transition-all",
-                    isActive && "font-semibold"
+                  {/* LABEL */}
+                  <span
+                    className={cn(
+                      `
+                        max-w-full
+                        truncate
+                        px-0.5
+                        text-[9px]
+                        leading-none
+                        transition-colors
+                      `,
+                      isActive
+                        ? "font-semibold text-foreground"
+                        : "font-medium text-muted-foreground"
+                    )}
+                  >
+                    {label}
+                  </span>
+
+                  {/* ACTIVE INDICATOR */}
+                  {isActive && (
+                    <motion.div
+                      layoutId="nav-active"
+                      transition={{
+                        type: "spring",
+                        stiffness: 500,
+                        damping: 35,
+                      }}
+                      className="
+                        absolute
+                        bottom-1
+                        h-0.5
+                        w-4
+                        rounded-full
+                        bg-primary
+                      "
+                    />
                   )}
-                >
-                  {label}
-                </motion.span>
 
-                {/* ACTIVE DOT */}
-                {/* {isActive && (
-                  <motion.div
-                    layoutId="active-dot"
-                    className="w-1.5 h-1.5 rounded-full bg-primary mt-1"
-                  />
-                )} */}
-              </motion.div>
-            )}
-          </NavLink>
-        ))}
+                </motion.div>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* =====================================
+            DEPOSIT
+        ===================================== */}
+        <NavLink
+          to="/deposit"
+          className="shrink-0"
+        >
+          {({ isActive }) => (
+            <motion.div
+              whileTap={{ scale: 0.91 }}
+              whileHover={{ scale: 1.02 }}
+              className={cn(
+                `
+                  flex
+                  h-[68px]
+                  w-[68px]
+                  flex-col
+                  items-center
+                  justify-center
+                  gap-1
+                  rounded-full
+                  border
+                  shadow-lg
+                  backdrop-blur-xl
+                  cursor-pointer
+                  select-none
+                  transition-colors
+                `,
+                isActive
+                  ? "border-primary/40 bg-primary text-primary-foreground"
+                  : "border-border/60 bg-card text-foreground"
+              )}
+            >
+
+              <Plus
+                className="h-[23px] w-[23px]"
+                strokeWidth={2}
+              />
+
+              <span
+                className="
+                  text-[9px]
+                  font-semibold
+                  leading-none
+                "
+              >
+                Deposit
+              </span>
+
+            </motion.div>
+          )}
+        </NavLink>
+
       </div>
     </div>
   )

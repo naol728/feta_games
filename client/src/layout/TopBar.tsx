@@ -1,5 +1,4 @@
 
-/* eslint-disable */
 import {
   ArrowDownCircle,
   ArrowLeft,
@@ -28,7 +27,6 @@ import { useNavigate } from "react-router-dom"
 import { useAppSelector } from "@/store/hook"
 
 type Props = {
-  title?: string
   showBack?: boolean
   showDeposit?: boolean
 }
@@ -36,7 +34,6 @@ type Props = {
 const QUICK_AMOUNTS = [50, 100, 500, 1000]
 
 export default function TopBar({
-  title = "ገበታ 1v1",
   showBack = false,
   showDeposit = true,
 }: Props) {
@@ -126,9 +123,11 @@ export default function TopBar({
             </button>
           )}
 
-          <h1 className="truncate text-[13px] sm:text-sm font-bold tracking-tight text-foreground">
-            {title}
-          </h1>
+          <img
+            src="/logo.jpg"
+            alt="Feta logo"
+            className="h-8 w-auto max-w-[120px] object-contain"
+          />
         </div>
 
         {/* ================= RIGHT ================= */}

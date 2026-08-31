@@ -1,5 +1,4 @@
 import Monetary from "../Monetary";
-import i18n from "../../i18n";
 
 interface BetAmountProps {
   value: string;
@@ -31,13 +30,13 @@ const BetAmount: React.FC<BetAmountProps> = ({
   const steps = [
     { key: "half", text: "½", run: onHalve },
     { key: "double", text: "2×", run: onDouble },
-    ...(onMax ? [{ key: "max", text: i18n.t("common.max"), run: onMax }] : []),
+    ...(onMax ? [{ key: "max", text: ("common.max"), run: onMax }] : []),
   ];
 
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between text-xs font-semibold text-ink-muted">
-        <span>{label || i18n.t("common.betAmount")}</span>
+        <span>{label || ("common.betAmount")}</span>
         <span><Monetary value={betValue} /></span>
       </div>
       <div className="flex">
@@ -58,11 +57,10 @@ const BetAmount: React.FC<BetAmountProps> = ({
             key={step.key}
             onClick={step.run}
             disabled={disabled}
-            className={`px-3 bg-surface-raised hover:bg-surface-hover text-sm font-semibold disabled:opacity-50 ${
-              i === steps.length - 1
-                ? "border border-line rounded-r rounded-l-none"
-                : "border-y border-line rounded-none"
-            }`}
+            className={`px-3 bg-surface-raised hover:bg-surface-hover text-sm font-semibold disabled:opacity-50 ${i === steps.length - 1
+              ? "border border-line rounded-r rounded-l-none"
+              : "border-y border-line rounded-none"
+              }`}
           >
             {step.text}
           </button>

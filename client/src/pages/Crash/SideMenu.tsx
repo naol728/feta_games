@@ -1,9 +1,17 @@
-/*eslint-disable*/
-import { AiFillCaretDown, AiFillCaretUp } from 'react-icons/ai';
-import Monetary from '../../components/Monetary';
-import GameButton from '../../components/game/GameButton';
-import BetAmount from '../../components/game/BetAmount';
-import { type User } from '../../components/Types';
+/* eslint-disable */
+
+import {
+  AiFillCaretDown,
+  AiFillCaretUp,
+} from "react-icons/ai";
+
+import Monetary from "../../components/Monetary";
+import BetAmount from "../../components/game/BetAmount";
+import { type User } from "../../components/Types";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 
 interface SideMenuProps {
   bet: number | null;
@@ -25,13 +33,37 @@ interface SideMenuProps {
 
 const MAX_BET = 1000000;
 
-const SideMenu: React.FC<SideMenuProps> = ({ bet, setBet, cashoutAt, setCashoutAt, queued, multiplier, gameStarted, handleBet, handleCashout, isLogged, userGambled, userCashedOut, userData, userMultiplier, disableButton }) => {
-
+const SideMenu: React.FC<SideMenuProps> = ({
+  bet,
+  setBet,
+  cashoutAt,
+  setCashoutAt,
+  queued,
+  multiplier,
+  gameStarted,
+  handleBet,
+  handleCashout,
+  isLogged,
+  userGambled,
+  userCashedOut,
+  userData,
+  userMultiplier,
+  disableButton,
+}) => {
   const target = parseFloat(cashoutAt);
-  const hasTarget = Number.isFinite(target) && target >= 1.01;
 
-  // live profit while the player's bet rides the curve, planned profit otherwise
-  const inRound = userGambled && gameStarted && !userCashedOut;
+  const hasTarget =
+    Number.isFinite(target) && target >= 1.01;
+
+  /*
+   * Live profit while the player's bet is riding.
+   * Otherwise show the planned profit.
+   */
+  const inRound =
+    userGambled &&
+    gameStarted &&
+    !userCashedOut;
+
   const profit = inRound
     ? (bet ?? 0) * multiplier - (bet ?? 0)
     : hasTarget
@@ -39,98 +71,333 @@ const SideMenu: React.FC<SideMenuProps> = ({ bet, setBet, cashoutAt, setCashoutA
       : 0;
 
   const stepTarget = (dir: 1 | -1) => {
-    // from "off", either arrow lands on the classic default first
-    if (!hasTarget) return setCashoutAt("2.00");
-    const next = Math.max(1.01, Math.round((target + dir * 0.5) * 100) / 100);
+    if (!hasTarget) {
+      setCashoutAt("2.00");
+      return;
+    }
+
+    const next = Math.max(
+      1.01,
+      Math.round((target + dir * 0.5) * 100) / 100
+    );
+
     setCashoutAt(next.toFixed(2));
   };
 
   const invalidBet =
-    !bet || bet < 1 || bet > MAX_BET || (userData && userData.walletBalance < bet);
+    !bet ||
+    bet < 1 ||
+    bet > MAX_BET ||
+    (userData && userData.walletBalance < bet);
 
   const renderMessage = () => {
-    let message = "";
-
     if (!isLogged) {
-      message = ("upgrade.signInToPlay");
-    } else if (userCashedOut && gameStarted) {
-      message = `Cashed out at ${userMultiplier.toFixed(2)}x`;
-    } else if (userGambled) {
-      message = gameStarted ? ("common.cashOut") : "You're in!";
-    } else if (!bet || bet < 1) {
-      message = ("coin.placeTheBetValue");
-    } else if (bet > MAX_BET) {
-      message = ("coin.maxBetIs1m");
-    } else if (userData.walletBalance < bet) {
-      message = ("coin.notEnoughMoney");
-    } else if (queued) {
-      message = ("crash.queuedClickToCancel");
-    } else if (gameStarted) {
-      message = ("crash.betNextRound");
-    } else {
-      message = ("crash.placeBet");
+      return "Sign in to play";
     }
-    return message;
-  }
+
+    if (userCashedOut && gameStarted) {
+      return `Cashed out at ${userMultiplier.toFixed(2)}x`;
+    }
+
+    if (userGambled) {
+      return gameStarted
+        ? "Cash Out"
+        : "You're in!";
+    }
+
+    if (!bet || bet < 1) {
+      return "Enter bet amount";
+    }
+
+    if (bet > MAX_BET) {
+      return "Max bet is 1M";
+    }
+
+    if (userData.walletBalance < bet) {
+      return "Not enough balance";
+    }
+
+    if (queued) {
+      return "Queued • Cancel";
+    }
+
+    if (gameStarted) {
+      return "Bet Next Round";
+    }
+
+    return "Place Bet";
+  };
 
   const disabled =
     disableButton ||
-    (isLogged && (userGambled ? !gameStarted || userCashedOut : invalidBet));
+    (isLogged &&
+      (userGambled
+        ? !gameStarted || userCashedOut
+        : invalidBet));
 
   return (
-    <div className="w-full min-w-0 xl:w-[340px] xl:shrink-0 flex flex-col gap-2 border-b xl:border-b-0 xl:border-r border-gray-700 py-4 px-6">
-      <BetAmount
-        value={bet === null ? "" : String(bet)}
-        onChange={(value) => setBet(value === "" ? null : Math.min(MAX_BET, Number(value)))}
-        onHalve={() => setBet(Math.max(1, Math.floor((bet || 0) / 2)))}
-        onDouble={() => setBet(Math.min(MAX_BET, (bet || 1) * 2))}
-        betValue={bet || 0}
-      />
+    <Card
+      className="
+        w-full
+        rounded-none
+        border-x-0
+        border-b
+        border-t-0
+        bg-[#171720]
+        p-0
+        shadow-none
+        xl:w-[340px]
+        xl:shrink-0
+        xl:rounded-xl
+        xl:border
+      "
+    >
+      <div className="flex w-full flex-col gap-2 p-2.5 sm:p-3">
 
-      <div className="flex items-center justify-between text-xs font-semibold text-ink-muted mt-2">
-        <span>{("crash.cashoutAt")}</span>
-        <span>{hasTarget ? `x${target.toFixed(2)}` : "Off"}</span>
-      </div>
-      <div className="flex">
-        <input
-          type="text"
-          inputMode="decimal"
-          value={cashoutAt}
-          placeholder={("crash.off")}
-          onChange={(e) => setCashoutAt(e.target.value.replace(/[^0-9.]/g, ""))}
-          className="p-2 bg-surface-nav border border-line rounded-l rounded-r-none w-full text-sm"
-        />
-        <button
-          onClick={() => stepTarget(-1)}
-          className="px-3 bg-surface-raised hover:bg-surface-hover border-y border-line rounded-none"
+        {/* =========================
+            BET AMOUNT
+        ========================== */}
+        <div className="w-full">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+              Bet Amount
+            </span>
+
+            <span className="text-[10px] text-white/30">
+              Balance:{" "}
+              <Monetary
+                value={userData?.walletBalance ?? 0}
+                showFraction
+              />
+            </span>
+          </div>
+
+          <div className="overflow-hidden rounded-lg border border-white/10 bg-[#20202b]">
+            <BetAmount
+              value={bet === null ? "" : String(bet)}
+              onChange={(value) =>
+                setBet(
+                  value === ""
+                    ? null
+                    : Math.min(MAX_BET, Number(value))
+                )
+              }
+              onHalve={() =>
+                setBet(
+                  Math.max(
+                    1,
+                    Math.floor((bet || 0) / 2)
+                  )
+                )
+              }
+              onDouble={() =>
+                setBet(
+                  Math.min(
+                    MAX_BET,
+                    (bet || 1) * 2
+                  )
+                )
+              }
+              betValue={bet || 0}
+            />
+          </div>
+        </div>
+
+        {/* =========================
+            AUTO CASHOUT
+        ========================== */}
+        <div className="w-full">
+
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+              Auto Cash Out
+            </span>
+
+            <span
+              className={`
+                text-[10px] font-bold
+                ${hasTarget
+                  ? "text-[#f5b83d]"
+                  : "text-white/30"
+                }
+              `}
+            >
+              {hasTarget
+                ? `x${target.toFixed(2)}`
+                : "OFF"}
+            </span>
+          </div>
+
+          <div className="flex h-9 w-full">
+
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={cashoutAt}
+              placeholder="Off"
+              onChange={(e) =>
+                setCashoutAt(
+                  e.target.value.replace(
+                    /[^0-9.]/g,
+                    ""
+                  )
+                )
+              }
+              className="
+                h-9
+                min-w-0
+                flex-1
+                rounded-r-none
+                border-white/10
+                bg-[#20202b]
+                px-2.5
+                text-xs
+                text-white
+                placeholder:text-white/25
+                focus-visible:ring-1
+                focus-visible:ring-[#f5b83d]
+              "
+            />
+
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => stepTarget(-1)}
+              className="
+                h-9
+                w-9
+                rounded-none
+                border-y
+                border-white/10
+                bg-[#252530]
+                p-0
+                text-white/50
+                hover:bg-[#30303c]
+                hover:text-white
+              "
+            >
+              <AiFillCaretDown size={12} />
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => stepTarget(1)}
+              className="
+                h-9
+                w-9
+                rounded-l-none
+                border
+                border-white/10
+                bg-[#252530]
+                p-0
+                text-white/50
+                hover:bg-[#30303c]
+                hover:text-white
+              "
+            >
+              <AiFillCaretUp size={12} />
+            </Button>
+          </div>
+        </div>
+
+        {/* =========================
+            PROFIT
+        ========================== */}
+        <div
+          className="
+            flex
+            items-center
+            justify-between
+            rounded-lg
+            border
+            border-white/5
+            bg-[#20202b]
+            px-2.5
+            py-2
+          "
         >
-          <AiFillCaretDown />
-        </button>
-        <button
-          onClick={() => stepTarget(1)}
-          className="px-3 bg-surface-raised hover:bg-surface-hover border border-line rounded-r rounded-l-none"
-        >
-          <AiFillCaretUp />
-        </button>
-      </div>
+          <div className="flex flex-col">
+            <span className="text-[9px] uppercase tracking-wide text-white/35">
+              Profit on Win
+            </span>
 
-      <div className="flex items-center justify-between text-xs font-semibold text-ink-muted mt-2">
-        <span>{("crash.profitOnWin")}</span>
-        <span className="text-accent-gold">
-          <Monetary value={profit} showFraction />
-        </span>
-      </div>
+            <span className="text-[9px] text-white/25">
+              {hasTarget
+                ? `at ${target.toFixed(2)}x`
+                : "Auto cashout off"}
+            </span>
+          </div>
 
-      <div className="mt-2">
-        <GameButton
-          onClick={userGambled && gameStarted ? handleCashout : handleBet}
+          <span className="text-sm font-bold text-[#f5b83d]">
+            <Monetary
+              value={profit}
+              showFraction
+            />
+          </span>
+        </div>
+
+        {/* =========================
+            MAIN ACTION
+        ========================== */}
+        <Button
+          onClick={
+            userGambled && gameStarted
+              ? handleCashout
+              : handleBet
+          }
           disabled={disabled}
+          className={`
+            h-11
+            w-full
+            rounded-lg
+            border-0
+            text-xs
+            font-extrabold
+            uppercase
+            tracking-wide
+            shadow-none
+            transition-all
+            active:scale-[0.98]
+            ${userGambled && gameStarted
+              ? "bg-[#22c55e] text-white hover:bg-[#16a34a]"
+              : queued
+                ? "bg-[#eab308] text-black hover:bg-[#ca8a04]"
+                : "bg-[#f5b83d] text-black hover:bg-[#d99d25]"
+            }
+            disabled:cursor-not-allowed
+            disabled:opacity-40
+          `}
         >
           {renderMessage()}
-        </GameButton>
+        </Button>
+
+        {/* =========================
+            CURRENT MULTIPLIER
+        ========================== */}
+        {userCashedOut && (
+          <div
+            className="
+              flex
+              items-center
+              justify-center
+              rounded-md
+              bg-green-500/10
+              px-2
+              py-1.5
+              text-[10px]
+              font-semibold
+              text-green-400
+            "
+          >
+            ✓ Cashed out at{" "}
+            {userMultiplier.toFixed(2)}x
+          </div>
+        )}
+
       </div>
-    </div>
+    </Card>
   );
-}
+};
 
 export default SideMenu;

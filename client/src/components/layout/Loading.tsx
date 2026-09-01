@@ -75,37 +75,41 @@ export default function Loading() {
             <Card className="w-[320px] bg-background/70 backdrop-blur-xl border border-primary/15 shadow-[0_0_40px_hsl(var(--primary)/0.15)]">
                 <CardContent className="flex flex-col items-center justify-center py-10 gap-8">
 
-                    {/* 3D Core Sync Orb */}
-                    <div className="relative w-16 h-16 perspective-[800px]">
+                    {/* Logo with Pulsing Animation */}
+                    <motion.div
+                        className="relative w-24 h-24 flex items-center justify-center"
+                        animate={{
+                            scale: [1, 1.15, 1],
+                        }}
+                        transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "easeInOut",
+                        }}
+                    >
+                        {/* Outer glow effect */}
                         <motion.div
-                            className="w-full h-full rounded-full border border-primary/40 bg-primary/10 shadow-[0_0_25px_hsl(var(--primary)/0.25)]"
+                            className="absolute inset-0 rounded-full bg-primary/20 blur-xl"
                             animate={{
-                                rotateX: 360,
-                                rotateY: 360,
+                                scale: [1, 1.2, 1],
+                                opacity: [0.5, 0.2, 0.5],
                             }}
                             transition={{
-                                duration: 3,
+                                duration: 2,
                                 repeat: Infinity,
-                                ease: "linear",
-                            }}
-                            style={{
-                                transformStyle: "preserve-3d",
+                                ease: "easeInOut",
                             }}
                         />
 
-                        {/* inner pulse ring */}
-                        <motion.div
-                            className="absolute inset-2 rounded-full border border-primary/30"
-                            animate={{
-                                scale: [1, 1.3, 1],
-                                opacity: [0.6, 0.2, 0.6],
-                            }}
-                            transition={{
-                                duration: 1.5,
-                                repeat: Infinity,
-                            }}
-                        />
-                    </div>
+                        {/* Logo Container - Replace with your logo */}
+                        <div className="relative z-10 w-full h-full rounded-full border-2 border-primary/40 bg-primary/10 shadow-[0_0_30px_hsl(var(--primary)/0.3)] flex items-center justify-center">
+                            {/* You can replace this with an image: */}
+                            <img src="/logo.jpg" alt="Logo" className="w-16 h-16" />
+
+                            {/* Or use an icon/text as placeholder: */}
+                            {/* <span className="text-3xl font-bold text-primary">G</span> */}
+                        </div>
+                    </motion.div>
 
                     {/* Status text */}
                     <motion.div
@@ -119,12 +123,12 @@ export default function Loading() {
                             {steps[stepIndex]}
                         </p>
                         <p className="text-xs text-muted-foreground mt-2">
-                            Gebeta 1V1 Game
+                            ቤጉማ Games
                         </p>
                     </motion.div>
 
                     {/* Sync bar */}
-                    <div className="w-full h-1 rounded-full bg-primary/10 overflow-hidden">
+                    {/* <div className="w-full h-1 rounded-full bg-primary/10 overflow-hidden">
                         <motion.div
                             className="h-full bg-primary"
                             animate={{
@@ -136,12 +140,7 @@ export default function Loading() {
                                 ease: "linear",
                             }}
                         />
-                    </div>
-
-                    {/* small status hint */}
-                    <p className="text-[11px] text-muted-foreground">
-                        CONNECTING TO SERVER PLEASE WAIT...
-                    </p>
+                    </div> */}
                 </CardContent>
             </Card>
         </div>

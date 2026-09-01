@@ -1,254 +1,620 @@
+/* eslint-disable */
 import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
-import SocketConnection from "../../service/socket"
-import { setStakeAtRisk } from "../../service/stakeGuard";
+
 import falling from "/images/crash/falling.gif";
 import idle from "/images/crash/idle.gif";
 import up from "/images/crash/up.gif";
+
 import LiveBets from "./LiveBets";
 import GameContainer from "./GameContainer";
 import SideMenu from "./SideMenu";
-import { useAppSelector } from "@/store/hook";
 
-const socket = SocketConnection.getInstance();
+import { useAppDispatch, useAppSelector } from "@/store/hook";
+import { setUserWallet } from "@/store/slice/auth";
+import { getSocket } from "@/lib/socket";
 
 interface GameHistory {
   crashPoint: number;
 }
 
+interface CrashGameState {
+  gameBets: Record<string, number>;
+  gamePlayers: Record<
+    string,
+    {
+      payout?: number | null;
+      autoCashoutAt?: number | null;
+    }
+  >;
+  crashPoint: number;
+  gameStartTime: string | null;
+  phase?: "betting" | "running" | "crashed";
+}
+
+interface BetPayload {
+  amount: number;
+  autoCashoutAt: number | null;
+}
+
+const BETTING_COUNTDOWN = 10;
+
 const CrashGame = () => {
-  const [bet, setBet] = useState<number | null>(null);
-  // empty = no auto cashout; the field shows "Off" until the player opts in
-  const [cashoutAt, setCashoutAt] = useState<string>("");
-  const [queued, setQueued] = useState(false);
-  const [multiplier, setMultiplier] = useState(1.0);
-  const [crashPoint, setCrashPoint] = useState(null as number | null);
-  const [history, setHistory] = useState<GameHistory[]>([]);
-  const [gameStarted, setGameStarted] = useState(true);
-  const [gameEnded, setGameEnded] = useState(false);
-  const [countDown, setCountDown] = useState(0);
-  const [userGambled, setUserGambled] = useState(false);
-  const [userMultiplier, setUserMultiplier] = useState(0);
-  const [userCashedOut, setUserCashedOut] = useState(false);
-  const [disableButton, setDisableButton] = useState(false);
-  const [gameState, setGameState] = useState<any>({
-    gameBets: {},
-    gamePlayers: {},
-    crashPoint: 1.0,
-    gameStartTime: null,
-  });
+  const socket = getSocket();
+  const dispatch = useAppDispatch();
+
+  // =========================
+  // AUTH
+  // =========================
 
   const user = useAppSelector((state) => state.auth.user);
+  const isLogged = !!user;
 
-  const queuedRef = useRef<{ amount: number; autoCashoutAt: number | null } | null>(null);
+  // =========================
+  // LOCAL GAME STATE
+  // =========================
 
-  const buildPayload = () => {
+  const [bet, setBet] = useState<number | null>(null);
+
+  const [cashoutAt, setCashoutAt] = useState("");
+
+  const [queued, setQueued] = useState(false);
+
+  const [multiplier, setMultiplier] = useState(1);
+
+  const [crashPoint, setCrashPoint] =
+    useState<number | null>(null);
+
+  const [history, setHistory] =
+    useState<GameHistory[]>([]);
+
+  const [gameStarted, setGameStarted] =
+    useState(false);
+
+  const [gameEnded, setGameEnded] =
+    useState(false);
+
+  const [countDown, setCountDown] =
+    useState(0);
+
+  const [userGambled, setUserGambled] =
+    useState(false);
+
+  const [userMultiplier, setUserMultiplier] =
+    useState(0);
+
+  const [userCashedOut, setUserCashedOut] =
+    useState(false);
+
+  const [disableButton, setDisableButton] =
+    useState(false);
+
+  const [gameState, setGameState] =
+    useState<CrashGameState>({
+      gameBets: {},
+      gamePlayers: {},
+      crashPoint: 1,
+      gameStartTime: null,
+      phase: "betting",
+    });
+
+  // =========================
+  // QUEUED BET
+  // =========================
+
+  const queuedRef =
+    useRef<BetPayload | null>(null);
+
+  const userIdRef =
+    useRef<string | undefined>(user?.id);
+
+  useEffect(() => {
+    userIdRef.current = user?.id;
+  }, [user]);
+
+  // =========================
+  // BUILD BET
+  // =========================
+
+  const buildPayload = (): BetPayload | null => {
+    if (!bet || bet < 1) {
+      return null;
+    }
+
     const target = parseFloat(cashoutAt);
+
     return {
-      amount: bet as number,
-      autoCashoutAt: Number.isFinite(target) && target >= 1.01 ? Math.round(target * 100) / 100 : null,
+      amount: bet,
+
+      autoCashoutAt:
+        Number.isFinite(target) && target >= 1.01
+          ? Math.round(target * 100) / 100
+          : null,
     };
   };
 
-  const placeBet = (payload: { amount: number; autoCashoutAt: number | null }) => {
-    setUserGambled(true);
-    setUserCashedOut(false);
+  // =========================
+  // PLACE BET
+  // =========================
 
-    // the server has the final word: a refused bet used to leave the ui claiming
-    // the player was in the round
-    socket.emit("crash:bet", payload, (result: { ok?: boolean; error?: string }) => {
-      if (result?.error) {
-        setUserGambled(false);
-        toast.error(result.error);
-      }
-    });
-  };
-  // the queue flush lives in a socket listener registered once; the ref keeps it
-  // reading the current closure instead of the mount-time one
-  const placeBetRef = useRef(placeBet);
-  placeBetRef.current = placeBet;
-
-  const userIdRef = useRef<string | undefined>(user?.id);
-  userIdRef.current = user?.id;
-
-  useEffect(() => {
-    setStakeAtRisk(userGambled && gameStarted && !userCashedOut);
-  }, [userGambled, gameStarted, userCashedOut]);
-
-  // leaving the page is the player's own choice; the guard only holds while they are on it
-  useEffect(() => () => setStakeAtRisk(false), []);
-
-  const handleBet = () => {
-    if (!isLogged) {
-
+  const placeBet = (payload: BetPayload) => {
+    if (!user) {
+      toast.error("Please open the game through Telegram.");
       return;
     }
 
-    if (bet === null || bet < 1) return;
+    setUserGambled(true);
+    setUserCashedOut(false);
 
-    // a click while a round runs queues the bet for the next window; a second click cancels
+    socket.emit(
+      "crash:bet",
+      payload,
+      (result: {
+        ok?: boolean;
+        error?: string;
+
+        // server can return updated wallet
+        wallet?: {
+          balance: number;
+          locked_balance: number;
+        };
+      }) => {
+        if (result?.error) {
+          setUserGambled(false);
+          toast.error(result.error);
+          return;
+        }
+
+        // Update Redux wallet after server confirms bet
+        if (result?.wallet) {
+          dispatch(setUserWallet(result.wallet));
+        }
+      }
+    );
+  };
+
+  const placeBetRef =
+    useRef(placeBet);
+
+  placeBetRef.current = placeBet;
+
+  // =========================
+  // STAKE GUARD
+  // =========================
+
+  useEffect(() => {
+    // Keep your existing stake guard here if needed.
+  }, [
+    userGambled,
+    gameStarted,
+    userCashedOut,
+  ]);
+
+  // =========================
+  // BET BUTTON
+  // =========================
+
+  const handleBet = () => {
+    if (!isLogged) {
+      toast.error("Please login first.");
+      return;
+    }
+
+    if (!bet || bet < 1) {
+      toast.error("Enter a valid bet.");
+      return;
+    }
+
+    // Client-side check only for UX.
+    // Backend must check again.
+    if (user.wallets.balance < bet) {
+      toast.error("Insufficient balance.");
+      return;
+    }
+
+    /*
+     * If game is already running,
+     * queue bet for next round.
+     */
+
     if (gameStarted) {
       if (queuedRef.current) {
         queuedRef.current = null;
         setQueued(false);
+
+        toast.info("Queued bet cancelled.");
       } else {
-        queuedRef.current = buildPayload();
+        const payload = buildPayload();
+
+        if (!payload) return;
+
+        queuedRef.current = payload;
         setQueued(true);
+
+        toast.info("Bet queued for next round.");
       }
+
       return;
     }
-    placeBet(buildPayload());
+
+    const payload = buildPayload();
+
+    if (!payload) return;
+
+    placeBet(payload);
   };
+
+  // =========================
+  // CASHOUT
+  // =========================
 
   const handleCashout = () => {
-    setDisableButton(true); // Disable the button immediately
+    if (!userGambled || userCashedOut) {
+      return;
+    }
 
-    socket.emit("crash:cashout", () => {
-      setDisableButton(false); // Re-enable the button after the server responds
-    });
+    if (!gameStarted) {
+      return;
+    }
+
+    setDisableButton(true);
+
+    socket.emit(
+      "crash:cashout",
+      {},
+      (result: {
+        ok?: boolean;
+        error?: string;
+        multiplier?: number;
+
+        wallet?: {
+          balance: number;
+          locked_balance: number;
+        };
+
+        payout?: number;
+      }) => {
+        if (result?.error) {
+          toast.error(result.error);
+          setDisableButton(false);
+          return;
+        }
+
+        if (result?.multiplier) {
+          setUserMultiplier(result.multiplier);
+        }
+
+        setUserCashedOut(true);
+        setDisableButton(false);
+
+        // Update Redux wallet
+        if (result?.wallet) {
+          dispatch(setUserWallet(result.wallet));
+        }
+      }
+    );
   };
 
+  // =========================
+  // CASHOUT SUCCESS
+  // =========================
+
   useEffect(() => {
-    const cashoutSuccessListener = (data: any) => {
+    const listener = (data: {
+      multiplier: number;
+      wallet?: {
+        balance: number;
+        locked_balance: number;
+      };
+    }) => {
       setUserMultiplier(data.multiplier);
       setUserCashedOut(true);
-      setDisableButton(false); // Ensure the button is enabled after a successful cashout
-    };
+      setDisableButton(false);
 
-    socket.on("crash:cashoutSuccess", cashoutSuccessListener);
-
-    return () => {
-      socket.off("crash:cashoutSuccess", cashoutSuccessListener);
-    };
-  }, [user]);
-
-  useEffect(() => {
-    const gameStateListener = (gameState: any) => {
-      setGameState(gameState);
-      // a null start time means the betting window is open: flush a queued bet
-      if (gameState.gameStartTime == null && queuedRef.current) {
-        const payload = queuedRef.current;
-        queuedRef.current = null;
-        setQueued(false);
-        placeBetRef.current(payload);
+      if (data.wallet) {
+        dispatch(setUserWallet(data.wallet));
       }
     };
 
-    socket.on("crash:gameState", gameStateListener);
+    socket.on(
+      "crash:cashoutSuccess",
+      listener
+    );
 
     return () => {
-      socket.off("crash:gameState", gameStateListener);
+      socket.off(
+        "crash:cashoutSuccess",
+        listener
+      );
     };
-  }, []);
+  }, [socket, dispatch]);
 
-  // sync to a round already in progress on entry, so joining mid-round does not sit at
-  // 1x with the idle animation until the next game. asks the server, and also catches the
-  // server's own emit on (re)connect.
+  // =========================
+  // GAME STATE
+  // =========================
+
   useEffect(() => {
-    const syncListener = (sync: any) => {
+    const listener = (
+      state: CrashGameState
+    ) => {
+      setGameState(state);
+
+      /*
+       * Betting phase
+       */
+      if (state.phase === "betting") {
+        setGameStarted(false);
+        setGameEnded(false);
+
+        /*
+         * Flush queued bet
+         */
+        if (queuedRef.current) {
+          const payload = queuedRef.current;
+
+          queuedRef.current = null;
+          setQueued(false);
+
+          placeBetRef.current(payload);
+        }
+      }
+
+      /*
+       * Running phase
+       */
+      if (state.phase === "running") {
+        setGameStarted(true);
+        setGameEnded(false);
+      }
+
+      /*
+       * Recover user's bet when entering
+       * an already-running game.
+       */
+
+      const id = userIdRef.current;
+
+      if (!id) return;
+
+      const stake = state.gameBets?.[id];
+
+      if (stake == null) return;
+
+      const player =
+        state.gamePlayers?.[id];
+
+      setUserGambled(true);
+
+      if (player?.payout != null) {
+        setUserCashedOut(true);
+
+        setUserMultiplier(
+          player.payout / stake
+        );
+      }
+    };
+
+    socket.on(
+      "crash:gameState",
+      listener
+    );
+
+    return () => {
+      socket.off(
+        "crash:gameState",
+        listener
+      );
+    };
+  }, [socket]);
+
+  // =========================
+  // SYNC ON PAGE OPEN
+  // =========================
+
+  useEffect(() => {
+    const listener = (sync: any) => {
       setGameState({
         gameBets: sync.gameBets || {},
         gamePlayers: sync.gamePlayers || {},
-        crashPoint: 1.0,
-        gameStartTime: sync.gameStartTime || null,
+        crashPoint: 1,
+        gameStartTime:
+          sync.gameStartTime || null,
+        phase: sync.phase,
       });
+
       if (sync.phase === "running") {
         setGameStarted(true);
         setGameEnded(false);
-      } else if (sync.phase === "betting") {
+      }
+
+      if (sync.phase === "betting") {
         setGameStarted(false);
         setGameEnded(false);
       }
 
-      // leaving the page and coming back remounts this with a blank slate, so the
-      // player's own stake has to be read back or the cashout button never returns
       const id = userIdRef.current;
-      const stake = id ? sync.gameBets?.[id] : undefined;
+
+      if (!id) return;
+
+      const stake =
+        sync.gameBets?.[id];
+
       if (stake == null) return;
-      const payout = sync.gamePlayers?.[id as string]?.payout;
+
+      const player =
+        sync.gamePlayers?.[id];
+
       setUserGambled(true);
-      setUserCashedOut(payout != null);
-      if (payout != null) setUserMultiplier(payout / stake);
+
+      if (player?.payout != null) {
+        setUserCashedOut(true);
+
+        setUserMultiplier(
+          player.payout / stake
+        );
+      }
     };
 
-    socket.on("crash:sync", syncListener);
-    socket.emit("crash:requestState");
+    socket.on(
+      "crash:sync",
+      listener
+    );
+
+    socket.emit(
+      "crash:requestState"
+    );
 
     return () => {
-      socket.off("crash:sync", syncListener);
+      socket.off(
+        "crash:sync",
+        listener
+      );
     };
-  }, []);
+  }, [socket]);
+
+  // =========================
+  // GAME START / RESULT
+  // =========================
 
   useEffect(() => {
     const startListener = () => {
-      setMultiplier(1.0);
+      setMultiplier(1);
       setCrashPoint(null);
+
       setGameStarted(true);
       setGameEnded(false);
+
       setUserCashedOut(false);
       setUserMultiplier(0);
-      setCountDown(0); // Reset the countdown
+
+      setCountDown(0);
     };
 
-    const resultListener = (crashPoint: number) => {
-      setCrashPoint(crashPoint);
+    const resultListener = (
+      point: number
+    ) => {
+      setCrashPoint(point);
+
+      setMultiplier(point);
 
       setGameStarted(false);
+      setGameEnded(true);
+
       setGameState({
         gameBets: {},
         gamePlayers: {},
-        crashPoint: 1.0,
+        crashPoint: point,
         gameStartTime: null,
+        phase: "crashed",
       });
 
+      setHistory((prev) => [
+        ...prev,
+        {
+          crashPoint: point,
+        },
+      ]);
+
+      setCountDown(
+        BETTING_COUNTDOWN
+      );
+
+      /*
+       * The server should already
+       * settle losing bets.
+       */
       setUserGambled(false);
-
-      if (!userCashedOut && multiplier >= crashPoint) {
-        // The user did not cash out in time and lost their bet
-        setMultiplier(crashPoint);
-      }
-
-      setHistory((prevHistory) => [...prevHistory, { crashPoint }]);
-      setGameEnded(true);
-      setCountDown(10.7);
     };
 
-    socket.on("crash:start", startListener);
-    socket.on("crash:result", resultListener);
+    socket.on(
+      "crash:start",
+      startListener
+    );
+
+    socket.on(
+      "crash:result",
+      resultListener
+    );
 
     return () => {
-      // Clean up listeners when the component is unmounted
-      socket.off("crash:start", startListener);
-      socket.off("crash:result", resultListener);
+      socket.off(
+        "crash:start",
+        startListener
+      );
+
+      socket.off(
+        "crash:result",
+        resultListener
+      );
     };
-  }, [multiplier, userCashedOut]);
+  }, [socket]);
+
+  // =========================
+  // LIVE MULTIPLIER
+  // =========================
 
   useEffect(() => {
-    const multiplierListener = (multiplier: number) => {
-      setMultiplier(multiplier);
+    const listener = (
+      value: number
+    ) => {
+      setMultiplier(value);
     };
 
-    socket.on("crash:multiplier", multiplierListener);
+    socket.on(
+      "crash:multiplier",
+      listener
+    );
 
     return () => {
-      socket.off("crash:multiplier", multiplierListener);
+      socket.off(
+        "crash:multiplier",
+        listener
+      );
     };
-  }, []);
+  }, [socket]);
+
+  // =========================
+  // COUNTDOWN
+  // =========================
 
   useEffect(() => {
-    if (countDown > 0.1 && !gameStarted) {
-      setTimeout(() => {
-        setCountDown(countDown - 0.1);
-      }, 100);
+    if (
+      countDown <= 0 ||
+      gameStarted
+    ) {
+      return;
     }
-  }, [countDown]);
+
+    const timer = setInterval(() => {
+      setCountDown((value) =>
+        Math.max(0, value - 0.1)
+      );
+    }, 100);
+
+    return () => clearInterval(timer);
+  }, [countDown, gameStarted]);
+
+  // =========================
+  // UI
+  // =========================
 
   return (
-    <div className="w-full flex flex-col items-center justify-center gap-12">
-      <div className="flex w-full max-w-[800px] bg-[#212031] rounded flex-col xl:w-[1140px] xl:max-w-none xl:flex-row">
-        <SideMenu bet={bet} setBet={setBet} cashoutAt={cashoutAt} setCashoutAt={setCashoutAt} queued={queued}
-          multiplier={multiplier} gameStarted={gameStarted} handleBet={handleBet} handleCashout={handleCashout}
-          isLogged={true} userGambled={userGambled} userCashedOut={userCashedOut} userData={user} userMultiplier={userMultiplier} disableButton={disableButton} />
+    <div className="w-full min-h-screen bg-background px-2 py-2 sm:px-3">
+
+      <div className="
+        mx-auto
+        w-full
+        max-w-[520px]
+        overflow-hidden
+        rounded-xl
+        border
+        border-border
+        bg-card
+        shadow-sm
+      ">
+
+        {/* GAME GRAPH */}
+
         <GameContainer
           crashPoint={crashPoint}
           multiplier={multiplier}
@@ -258,10 +624,40 @@ const CrashGame = () => {
           up={up}
           idle={idle}
           falling={falling}
-          history={history} />
+          history={history}
+        />
+
+        {/* BETTING PANEL */}
+
+        <SideMenu
+          bet={bet}
+          setBet={setBet}
+          cashoutAt={cashoutAt}
+          setCashoutAt={setCashoutAt}
+          queued={queued}
+          multiplier={multiplier}
+          gameStarted={gameStarted}
+          handleBet={handleBet}
+          handleCashout={handleCashout}
+          isLogged={isLogged}
+          userGambled={userGambled}
+          userCashedOut={userCashedOut}
+          userData={user!}
+          userMultiplier={userMultiplier}
+          disableButton={disableButton}
+        />
+
       </div>
-      <LiveBets gameState={gameState} />
-    </div >
+
+      {/* LIVE BETS */}
+
+      <div className="mx-auto mt-2 w-full max-w-[520px]">
+        <LiveBets
+          gameState={gameState}
+        />
+      </div>
+
+    </div>
   );
 };
 

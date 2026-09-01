@@ -70,7 +70,7 @@ const faceFor = (key: string): Face | null =>
 
 // the flavour name for a collection comes from i18n where one exists, and falls back to
 // the category itself so a new category needs no translation to be readable
-const badgeName = (key: string, label?: string | null): string => {
+const badgeName = (key: string): string => {
   if (!isCollectionBadge(key)) return (`badge.${key}`);
   const flavour = `badge.collection.${key.slice("collection:".length)}`;
   if ((flavour)) return (flavour);
@@ -116,7 +116,7 @@ const Badge: React.FC<BadgeProps> = ({ badge, size = "inline", linked = true, ho
   const face = badge ? faceFor(badge.key) : null;
   if (!badge || !face) return null;
 
-  const name = badgeName(badge.key, badge.label);
+  const name = badgeName(badge.key);
   const fandom = badge.fandom;
   const label = fandom ? "fandom.badgeTitle" : name;
   const rivals = fandom ? Math.max(0, fandom.fans - 1) : 0;

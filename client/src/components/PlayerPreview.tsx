@@ -1,103 +1,248 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import Avatar from "./Avatar";
-import {type User } from "../components/Types";
-import Badge from "./Badge";
-import { rarityColor } from "../utils/rarity";
+
+import type { User } from "../components/Types";
 
 interface Player {
-    player: User
+    player: User;
 }
 
-const CARD_W = 470;
-const GAP = 12;
-// below this the card would run off the top of the window, so it flips under the row
-const FLIP_AT = 220;
+const CARD_W = 320;
+const GAP = 10;
+const FLIP_AT = 180;
 
 const PlayerPreview: React.FC<Player> = ({ player }) => {
     const anchor = useRef<HTMLSpanElement | null>(null);
-    const [at, setAt] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
 
-    // the card is portalled to the body because each podium column and each live-bet row
-    // is its own stacking context: a neighbour's avatar painted over the card whatever
-    // z-index it carried inside one
+    const [at, setAt] = useState<{
+        left: number;
+        top?: number;
+        bottom?: number;
+    } | null>(null);
+
     useLayoutEffect(() => {
-        // the span itself is 0x0, so the card is placed against the nearest ancestor that
-        // has a real box: the podium column, or the live-bet row
-        let host: HTMLElement | null = anchor.current?.parentElement || null;
-        while (host && host.getBoundingClientRect().width === 0) host = host.parentElement;
+        let host: HTMLElement | null =
+            anchor.current?.parentElement || null;
+
+        while (
+            host &&
+            host.getBoundingClientRect().width === 0
+        ) {
+            host = host.parentElement;
+        }
+
         const box = host?.getBoundingClientRect();
+
         if (!box) return;
-        // clamp against the width the card will actually get, not its ideal one: on a
-        // phone the max-width shrinks it, and clamping on CARD_W pinned it off-screen left
-        const wide = Math.min(CARD_W, window.innerWidth - 16);
-        const left = Math.min(
-            Math.max(8, box.left + box.width / 2 - wide / 2),
-            window.innerWidth - wide - 8
+
+        const wide = Math.min(
+            CARD_W,
+            window.innerWidth - 16
         );
+
+        const left = Math.min(
+            Math.max(
+                8,
+                box.left +
+                box.width / 2 -
+                wide / 2
+            ),
+            window.innerWidth -
+            wide -
+            8
+        );
+
         setAt(
             box.top < FLIP_AT
-                ? { left, top: box.bottom + GAP }
-                : { left, bottom: window.innerHeight - box.top + GAP }
+                ? {
+                    left,
+                    top: box.bottom + GAP,
+                }
+                : {
+                    left,
+                    bottom:
+                        window.innerHeight -
+                        box.top +
+                        GAP,
+                }
         );
     }, []);
 
-    const color = rarityColor(player.fixedItem?.rarity || "");
+    const fullName =
+        `${player.Fname || ""} ${player.Lname || ""}`.trim();
 
-    // clip-path cuts straight through a css border and leaves the four chamfer tips
-    // uncoloured, so the rarity colour is an outer layer with the card 2px inside it
+    const displayName =
+        fullName || player.username || "Player";
+
+    const username =
+        player.username
+            ? `@${player.username}`
+            : "Telegram player";
+
+    const avatarLetter =
+        (
+            player.Fname?.[0] ||
+            player.username?.[0] ||
+            "?"
+        ).toUpperCase();
+
+    const balance =
+        Number(player.wallets?.balance || 0);
+
+    const lockedBalance =
+        Number(
+            player.wallets?.locked_balance || 0
+        );
+
     const card = (
         <div
-            style={{ ...at, width: CARD_W, maxWidth: "calc(100vw - 16px)", backgroundColor: player.fixedItem ? color : "#3A365A" }}
-            className="notched pointer-events-none fixed z-[140] p-[2px]"
+            style={{
+                ...at,
+                width: CARD_W,
+                maxWidth: "calc(100vw - 16px)",
+            }}
+            className="
+        fixed
+        z-[140]
+        pointer-events-none
+        overflow-hidden
+        rounded-2xl
+        border
+        border-border
+        bg-card
+        shadow-2xl
+      "
         >
-            <div className="notched flex items-stretch justify-between overflow-hidden bg-[#281D3F]">
-                <div className="flex min-w-0 flex-1 items-center gap-2 p-4 sm:p-6">
-                    <div className="w-24 shrink-0">
-                        <Avatar image={player.profilePicture} id={player._id} size="large" level={player.level} noLink />
+            {/* Header */}
+
+            <div
+                className="
+          flex
+          items-center
+          gap-3
+          border-b
+          border-border
+          bg-muted/30
+          p-4
+        "
+            >
+                {/* Avatar */}
+
+                <div
+                    className="
+            flex
+            h-12
+            w-12
+            shrink-0
+            items-center
+            justify-center
+            rounded-full
+            bg-primary
+            text-lg
+            font-bold
+            text-primary-foreground
+          "
+                >
+                    {avatarLetter}
+                </div>
+
+                {/* User information */}
+
+                <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-foreground">
+                        {displayName}
                     </div>
-                    <div className="flex min-w-0 flex-col items-start">
-                        <span className="flex min-w-0 max-w-full items-center gap-1.5 font-bold text-lg">
-                            <Badge badge={player.badge} linked={false} hoverCard={false} />
-                            <span className="truncate text-white">{player.username}</span>
-                        </span>
-                        <span className="font-bold text-[#56528b] ">Level {player.level}</span>
-                        {player.fanRank && (
-                            <span className="max-w-full truncate text-xs text-[#84819A]">
-                                {`#${player.fanRank.rank} ${player.fanRank.name} (${player.fanRank.count})`}
-                            </span>
-                        )}
+
+                    <div className="truncate text-xs text-muted-foreground">
+                        {username}
                     </div>
                 </div>
-                {player.fixedItem && (
-                    <div className="relative flex w-[120px] shrink-0 flex-col items-center justify-center px-2 py-4 sm:w-[160px]">
-                        <div
-                            className="absolute left-1/2 top-1/2"
-                            style={{ width: 1, height: 1, boxShadow: `0 0 60px 34px ${color}` }}
-                        />
-                        <img
-                            src={player.fixedItem.image}
-                            alt={player.fixedItem.name}
-                            className="relative z-10 h-24 w-24 object-contain"
-                        />
-                        <span
-                            className="relative z-10 w-full break-words pt-2 text-center text-sm font-semibold leading-tight sm:text-base"
-                            style={{ textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000' }}
-                        >
-                            {player.fixedItem.name}
-                        </span>
+            </div>
+
+            {/* Account information */}
+
+            <div className="grid grid-cols-2 gap-2 p-3">
+                {/* Balance */}
+
+                <div
+                    className="
+            rounded-xl
+            border
+            border-border
+            bg-background
+            p-3
+          "
+                >
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Balance
                     </div>
-                )}
+
+                    <div className="mt-1 truncate text-sm font-bold text-foreground">
+                        {balance.toLocaleString()}
+                    </div>
+                </div>
+
+                {/* Locked balance */}
+
+                <div
+                    className="
+            rounded-xl
+            border
+            border-border
+            bg-background
+            p-3
+          "
+                >
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Locked
+                    </div>
+
+                    <div className="mt-1 truncate text-sm font-bold text-foreground">
+                        {lockedBalance.toLocaleString()}
+                    </div>
+                </div>
+            </div>
+
+            {/* Telegram ID */}
+
+            <div className="px-3 pb-3">
+                <div
+                    className="
+            flex
+            items-center
+            justify-between
+            rounded-xl
+            bg-muted/40
+            px-3
+            py-2
+          "
+                >
+                    <span className="text-[10px] text-muted-foreground">
+                        Telegram ID
+                    </span>
+
+                    <span className="text-xs font-semibold text-foreground">
+                        {player.telegram_id}
+                    </span>
+                </div>
             </div>
         </div>
     );
 
     return (
         <>
-            <span ref={anchor} className="block h-0 w-0" />
-            {at && createPortal(card, document.body)}
+            <span
+                ref={anchor}
+                className="block h-0 w-0"
+            />
+
+            {at &&
+                createPortal(
+                    card,
+                    document.body
+                )}
         </>
     );
-}
+};
 
 export default PlayerPreview;

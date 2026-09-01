@@ -1,4 +1,5 @@
-/*eslint-disable*/
+/* eslint-disable */
+
 import { motion } from "framer-motion";
 import CrashGraph from "./CrashGraph";
 import { type Key } from "react";
@@ -12,81 +13,280 @@ interface GameHistory {
     up: string;
     idle: string;
     falling: string;
-    history: any;
+    history: any[];
 }
 
-// matches the countdown reset in Crash.tsx, itself just under the server's 12s betting window
 const BETTING_COUNTDOWN_S = 10.7;
 
-const GameContainer: React.FC<GameHistory> = ({ crashPoint, multiplier, gameStarted, gameEnded, countDown, up, idle, falling, history }) => {
+const GameContainer: React.FC<GameHistory> = ({
+    crashPoint,
+    multiplier,
+    gameStarted,
+    gameEnded,
+    countDown,
+    up,
+    idle,
+    falling,
+    history,
+}) => {
     return (
-        <div className="flex w-full min-w-0 flex-col xl:w-[800px] xl:shrink-0">
-            <div className="flex flex-col gap-2 w-full border-b border-gray-700 p-4">
-                <div className="flex rounded items-center flex-col justify-center w-full h-[340px] relative overflow-hidden bg-surface-nav">
-                    <CrashGraph
-                        gameStarted={gameStarted}
-                        gameEnded={gameEnded}
-                        multiplier={multiplier}
-                        crashPoint={crashPoint}
-                        up={up}
-                        idle={idle}
-                        falling={falling}
-                    />
+        <div className="w-full min-w-0 overflow-hidden bg-[#12121a] text-white">
 
-                    {
-                        gameEnded && <div className="absolute top-0 left-0 p-2 z-10">
-                            <span>
-                                Next game in: {countDown.toFixed(1)}
-                            </span>
-                        </div>
-                    }
-                    <div className="z-10 -mt-10 pointer-events-none">
-                        {
-                            gameEnded ? (
-                                <div className="flex flex-col items-center">
-                                    <span className="text-5xl font-extrabold text-red-500 drop-shadow-lg">
-                                        {crashPoint && crashPoint.toFixed(2)}x
-                                    </span>
-                                    <span className="text-sm font-semibold uppercase tracking-widest text-ink-soft mt-1">
-                                        {("crash.crashed")}
+            {/* =========================
+          GAME AREA
+      ========================== */}
+            <div className="w-full px-2 pt-2">
+
+                <div
+                    className="
+            relative
+            w-full
+            overflow-hidden
+            rounded-xl
+            border border-white/5
+            bg-[#191923]
+          "
+                >
+                    {/* Graph */}
+                    <div
+                        className="
+              relative
+              w-full
+              aspect-[1.55/1]
+              min-h-[230px]
+              max-h-[360px]
+              overflow-hidden
+              bg-[#171720]
+            "
+                    >
+                        <CrashGraph
+                            gameStarted={gameStarted}
+                            gameEnded={gameEnded}
+                            multiplier={multiplier}
+                            crashPoint={crashPoint}
+                            up={up}
+                            idle={idle}
+                            falling={falling}
+                        />
+
+                        {/* subtle top gradient */}
+                        <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/20 to-transparent" />
+
+                        {/* =========================
+                COUNTDOWN
+            ========================== */}
+                        {gameEnded && (
+                            <div className="absolute left-2 top-2 z-20">
+                                <div
+                                    className="
+                    rounded-md
+                    bg-black/45
+                    px-2 py-1
+                    text-[10px]
+                    font-medium
+                    text-white/70
+                    backdrop-blur-sm
+                  "
+                                >
+                                    Next game in{" "}
+                                    <span className="font-bold text-white">
+                                        {countDown.toFixed(1)}s
                                     </span>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* =========================
+                MULTIPLIER
+            ========================== */}
+                        <div
+                            className="
+                pointer-events-none
+                absolute
+                inset-0
+                z-10
+                flex
+                items-center
+                justify-center
+              "
+                        >
+                            {gameEnded ? (
+                                <motion.div
+                                    initial={{ scale: 0.8, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    className="flex flex-col items-center"
+                                >
+                                    <span
+                                        className="
+                      text-4xl
+                      font-black
+                      tracking-tight
+                      text-red-500
+                      drop-shadow-[0_2px_10px_rgba(239,68,68,0.35)]
+                      sm:text-5xl
+                    "
+                                    >
+                                        {crashPoint?.toFixed(2)}x
+                                    </span>
+
+                                    <span
+                                        className="
+                      mt-0.5
+                      text-[9px]
+                      font-bold
+                      uppercase
+                      tracking-[0.2em]
+                      text-white/45
+                    "
+                                    >
+                                        Crashed
+                                    </span>
+                                </motion.div>
                             ) : (
-                                <span className={`text-5xl font-extrabold drop-shadow-lg ${gameStarted ? "text-white" : "text-ink-muted"}`}>
+                                <motion.span
+                                    key={multiplier}
+                                    className={`
+                    text-4xl
+                    font-black
+                    tracking-tight
+                    drop-shadow-[0_2px_12px_rgba(255,255,255,0.15)]
+                    sm:text-5xl
+                    ${gameStarted
+                                            ? "text-white"
+                                            : "text-white/35"
+                                        }
+                  `}
+                                >
                                     {multiplier.toFixed(2)}x
-                                </span>
+                                </motion.span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* =========================
+              BETTING PROGRESS
+          ========================== */}
+                    <div className="h-1 w-full bg-black/30">
+                        <motion.div
+                            className="h-full bg-[#f5b83d]"
+                            initial={{ width: "100%" }}
+                            animate={{
+                                width: gameEnded
+                                    ? `${Math.min(
+                                        (countDown / BETTING_COUNTDOWN_S) * 100,
+                                        100
+                                    )}%`
+                                    : "0%",
+                            }}
+                            transition={{
+                                duration: 0.1,
+                                ease: "linear",
+                            }}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* =========================
+          GAME HISTORY
+      ========================== */}
+            <div className="w-full px-2 pt-2 pb-1">
+
+                <div
+                    className="
+            flex
+            w-full
+            items-center
+            justify-between
+            rounded-lg
+            bg-[#191923]
+            px-2.5
+            py-2
+          "
+                >
+                    <span
+                        className="
+              shrink-0
+              text-[10px]
+              font-semibold
+              uppercase
+              tracking-wider
+              text-white/45
+            "
+                    >
+                        History
+                    </span>
+
+                    <div
+                        className="
+              ml-2
+              flex
+              min-w-0
+              flex-1
+              items-center
+              justify-end
+              gap-1.5
+              overflow-hidden
+            "
+                    >
+                        {history
+                            .slice(-8)
+                            .map(
+                                (
+                                    e: { crashPoint: number | null },
+                                    i: Key
+                                ) => {
+                                    const value = e.crashPoint ?? 0;
+
+                                    return (
+                                        <motion.div
+                                            key={i}
+                                            initial={
+                                                i === history.slice(-8).length - 1
+                                                    ? {
+                                                        opacity: 0,
+                                                        scale: 0.7,
+                                                        x: 10,
+                                                    }
+                                                    : {}
+                                            }
+                                            animate={{
+                                                opacity: 1,
+                                                scale: 1,
+                                                x: 0,
+                                            }}
+                                            transition={{
+                                                duration: 0.25,
+                                                ease: "easeOut",
+                                            }}
+                                            className={`
+                        flex
+                        h-[22px]
+                        min-w-[38px]
+                        items-center
+                        justify-center
+                        rounded-md
+                        px-1.5
+                        text-[9px]
+                        font-bold
+                        ${value < 2
+                                                    ? "bg-red-500/15 text-red-400"
+                                                    : value < 10
+                                                        ? "bg-green-500/15 text-green-400"
+                                                        : "bg-yellow-500/15 text-yellow-400"
+                                                }
+                      `}
+                                        >
+                                            {value.toFixed(2)}x
+                                        </motion.div>
+                                    );
+                                }
                             )}
                     </div>
                 </div>
-                {/* drains through the betting window; the empty track stays so the layout never shifts */}
-                <div className="w-full h-1.5 bg-surface-raised overflow-hidden">
-                    <div
-                        className="h-full bg-accent-gold"
-                        style={{
-                            width: gameEnded ? `${Math.min((countDown / BETTING_COUNTDOWN_S) * 100, 100)}%` : "0%",
-                            transition: "width 100ms linear",
-                        }}
-                    />
-                </div>
-            </div>
-            <div className="flex w-full p-4 flex-col">
-                <h3 className="mb-2 text-lg font-semibold">{("coin.gameHistory")}</h3>
-                <div className="flex items-center gap-2 justify-end w-full overflow-hidden h-[24px]">
-                    {history.map((e: { crashPoint: number | null }, i: Key) => (
-                        <motion.div
-                            key={i}
-                            className={`min-h-[24px] rounded-lg p-2 ${e.crashPoint && e.crashPoint < 2 ? "bg-red-500" : "bg-green-500"}`}
-                            initial={i === history.length - 1 ? { opacity: 0, x: 30 } : {}}
-                            animate={i === history.length - 1 ? { opacity: 1, x: 0 } : {}}
-                            transition={{ ease: "easeOut", duration: 1 }}
-                        >
-                            <span className="font-bold">{e.crashPoint}x</span>
-                        </motion.div>
-                    ))}
-                </div>
             </div>
         </div>
-    )
-}
+    );
+};
 
-export default GameContainer
+export default GameContainer;

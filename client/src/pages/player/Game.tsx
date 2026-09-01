@@ -5,13 +5,13 @@ import Banner from "@/components/Banner";
 import { Star } from "lucide-react";
 
 const games = [
-  // {
-  //   name: "Card Draw",
-  //   path: "/carddraw",
-  //   image: "/carddrawduel.jpg",
-  //   isNew: true,
-  //   underdevelopment: false,
-  // },
+  {
+    name: "Card Draw",
+    path: "/carddraw",
+    image: "/carddrawduel.jpg",
+    isNew: true,
+    underdevelopment: false,
+  },
   {
     name: "Chicken Coin",
     path: "/slot",
@@ -29,21 +29,21 @@ const games = [
   {
     name: "Fast Keno",
     path: "/keno",
-    image: "/images/slot/chicken/keno.png",
+    image: "https://vfair.games/games/keno.webp",
     isNew: false,
     underdevelopment: false,
   },
   {
-    name: "Wheel of Fortune",
+    name: "Mines",
     path: "/wheel",
-    image: "/wheel.jpg",
+    image: "https://vfair.games/games/mines.webp",
     isNew: false,
     underdevelopment: false,
   },
   {
-    name: "Rocket Star",
+    name: "Plinko",
     path: "/rocket",
-    image: "/rocket-star.jpg",
+    image: "https://vfair.games/games/plinko.webp",
     isNew: true,
     underdevelopment: false,
   },
@@ -55,9 +55,9 @@ const games = [
     underdevelopment: false,
   },
   {
-    name: "Joker X",
+    name: "Dice",
     path: "/joker-x",
-    image: "/joker-x.jpg",
+    image: "https://vfair.games/games/dice.webp",
     isNew: false,
     underdevelopment: true,
   },

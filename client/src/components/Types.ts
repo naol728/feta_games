@@ -1,34 +1,18 @@
-import { type FanRank } from "./../service/fandom/FandomService";
-import type { Badge, BadgeKey } from "./../service/badges/BadgeService";
-
+interface Wallet {
+  balance: number;
+  locked_balance: number;
+}
 export interface User {
   id: string;
-  _id: string;
-  level: number;
-  profilePicture: string;
+  telegram_id: number;
   username: string;
-  weeklyWinnings: number;
-  xp: number;
-  nextBonus: string;
-  walletBalance: number;
-  hasUnreadNotifications: boolean;
-  fixedItem: {
-    image: string;
-    name: string;
-    description: string;
-    rarity: string;
-  };
-  fanRank?: FanRank;
-  badge?: Badge | null;
-  badges?: Badge[];
-  selectedBadge?: BadgeKey | null;
-  collectionRank?: {
-    distinct: number;
-    total: number;
-    rank: number;
-  };
+  created_at: string;
+  updated_at: string;
+  Fname: string;
+  Lname: string;
+  referral_id: string;
+  wallets: Wallet;
 }
-
 export interface IMarketItem {
   _id: string;
   sellerId: {

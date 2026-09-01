@@ -88,7 +88,7 @@ const SideMenu: React.FC<SideMenuProps> = ({
     !bet ||
     bet < 1 ||
     bet > MAX_BET ||
-    (userData && userData.walletBalance < bet);
+    (userData && userData.wallets.balance < bet);
 
   const renderMessage = () => {
     if (!isLogged) {
@@ -113,7 +113,7 @@ const SideMenu: React.FC<SideMenuProps> = ({
       return "Max bet is 1M";
     }
 
-    if (userData.walletBalance < bet) {
+    if (userData.wallets.balance < bet) {
       return "Not enough balance";
     }
 
@@ -166,7 +166,7 @@ const SideMenu: React.FC<SideMenuProps> = ({
             <span className="text-[10px] text-white/30">
               Balance:{" "}
               <Monetary
-                value={userData?.walletBalance ?? 0}
+                value={userData?.wallets.balance ?? 0}
                 showFraction
               />
             </span>

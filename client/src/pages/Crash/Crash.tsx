@@ -644,7 +644,7 @@ const CrashGame = () => {
 
       {/* LIVE BETS */}
 
-      <div className="mx-auto mt-2 w-full max-w-[520px]" >
+      <div className="mx-auto  w-full max-w-[520px]" >
         <LiveBets
           gameState={gameState}
         />

@@ -18,18 +18,21 @@ interface GameHistory {
   crashPoint: number;
 }
 
+interface CrashPlayer {
+  payout?: number | null;
+  autoCashoutAt?: number | null;
+}
+
 interface CrashGameState {
   gameBets: Record<string, number>;
-  gamePlayers: Record<
-    string,
-    {
-      payout?: number | null;
-      autoCashoutAt?: number | null;
-    }
-  >;
+  gamePlayers: Record<string, CrashPlayer>;
+  gameStartTime: number | null;
+
+  // Never trust/use this while betting/running.
+  // Backend should hide the real crash point.
   crashPoint: number;
-  gameStartTime: string | null;
-  phase?: "betting" | "running" | "crashed";
+
+  phase: "betting" | "running" | "crashed";
 }
 
 interface BetPayload {
@@ -93,8 +96,8 @@ const CrashGame = () => {
     useState<CrashGameState>({
       gameBets: {},
       gamePlayers: {},
-      crashPoint: 1,
       gameStartTime: null,
+      crashPoint: 1,
       phase: "betting",
     });
 
@@ -164,7 +167,6 @@ const CrashGame = () => {
           toast.error(result.error);
           return;
         }
-
         // Update Redux wallet after server confirms bet
         if (result?.wallet) {
           dispatch(setUserWallet(result.wallet));
@@ -200,8 +202,8 @@ const CrashGame = () => {
       return;
     }
 
-    if (!bet || bet < 1) {
-      toast.error("Enter a valid bet.");
+    if (!bet || bet < 10) {
+      toast.error("Minimum Bet 10 ETB.");
       return;
     }
 
@@ -288,6 +290,7 @@ const CrashGame = () => {
         setDisableButton(false);
 
         // Update Redux wallet
+
         if (result?.wallet) {
           dispatch(setUserWallet(result.wallet));
         }
@@ -310,7 +313,6 @@ const CrashGame = () => {
       setUserMultiplier(data.multiplier);
       setUserCashedOut(true);
       setDisableButton(false);
-
       if (data.wallet) {
         dispatch(setUserWallet(data.wallet));
       }
@@ -334,21 +336,27 @@ const CrashGame = () => {
   // =========================
 
   useEffect(() => {
-    const listener = (
-      state: CrashGameState
-    ) => {
+    const listener = (state: CrashGameState) => {
       setGameState(state);
 
-      /*
-       * Betting phase
-       */
+      const id = userIdRef.current;
+
+      // -------------------------
+      // BETTING
+      // -------------------------
       if (state.phase === "betting") {
         setGameStarted(false);
         setGameEnded(false);
+        setMultiplier(1);
+        setCrashPoint(null);
 
-        /*
-         * Flush queued bet
-         */
+        // New round.
+        setUserGambled(false);
+        setUserCashedOut(false);
+        setUserMultiplier(0);
+        setDisableButton(false);
+
+        // Submit queued bet once.
         if (queuedRef.current) {
           const payload = queuedRef.current;
 
@@ -357,92 +365,94 @@ const CrashGame = () => {
 
           placeBetRef.current(payload);
         }
+
+        return;
       }
 
-      /*
-       * Running phase
-       */
+      // -------------------------
+      // RUNNING
+      // -------------------------
       if (state.phase === "running") {
         setGameStarted(true);
         setGameEnded(false);
+
+        if (!id) return;
+
+        const stake = state.gameBets?.[id];
+
+        if (stake == null) {
+          return;
+        }
+
+        const player = state.gamePlayers?.[id];
+
+        setUserGambled(true);
+
+        if (player?.payout != null) {
+          setUserCashedOut(true);
+
+          setUserMultiplier(
+            player.payout / stake
+          );
+        }
+
+        return;
       }
 
-      /*
-       * Recover user's bet when entering
-       * an already-running game.
-       */
-
-      const id = userIdRef.current;
-
-      if (!id) return;
-
-      const stake = state.gameBets?.[id];
-
-      if (stake == null) return;
-
-      const player =
-        state.gamePlayers?.[id];
-
-      setUserGambled(true);
-
-      if (player?.payout != null) {
-        setUserCashedOut(true);
-
-        setUserMultiplier(
-          player.payout / stake
-        );
+      // -------------------------
+      // CRASHED
+      // -------------------------
+      if (state.phase === "crashed") {
+        setGameStarted(false);
+        setGameEnded(true);
       }
     };
 
-    socket.on(
-      "crash:gameState",
-      listener
-    );
+    socket.on("crash:gameState", listener);
 
     return () => {
-      socket.off(
-        "crash:gameState",
-        listener
-      );
+      socket.off("crash:gameState", listener);
     };
   }, [socket]);
 
-  // =========================
-  // SYNC ON PAGE OPEN
-  // =========================
+
 
   useEffect(() => {
-    const listener = (sync: any) => {
+    const listener = (sync: Partial<CrashGameState>) => {
+      const phase = sync.phase ?? "betting";
+
       setGameState({
-        gameBets: sync.gameBets || {},
-        gamePlayers: sync.gamePlayers || {},
+        gameBets: sync.gameBets ?? {},
+        gamePlayers: sync.gamePlayers ?? {},
         crashPoint: 1,
-        gameStartTime:
-          sync.gameStartTime || null,
-        phase: sync.phase,
+        gameStartTime: sync.gameStartTime ?? null,
+        phase,
       });
 
-      if (sync.phase === "running") {
+      if (phase === "running") {
         setGameStarted(true);
         setGameEnded(false);
       }
 
-      if (sync.phase === "betting") {
+      if (phase === "betting") {
         setGameStarted(false);
         setGameEnded(false);
       }
 
+      if (phase === "crashed") {
+        setGameStarted(false);
+        setGameEnded(true);
+      }
+
       const id = userIdRef.current;
 
       if (!id) return;
 
-      const stake =
-        sync.gameBets?.[id];
+      const stake = sync.gameBets?.[id];
 
       if (stake == null) return;
 
-      const player =
-        sync.gamePlayers?.[id];
+      const player = sync.gamePlayers?.[id];
 
       setUserGambled(true);
 
@@ -455,26 +465,16 @@ const CrashGame = () => {
       }
     };
 
-    socket.on(
-      "crash:sync",
-      listener
-    );
+    socket.on("crash:sync", listener);
 
-    socket.emit(
-      "crash:requestState"
-    );
+    socket.emit("crash:requestState");
 
     return () => {
-      socket.off(
-        "crash:sync",
-        listener
-      );
+      socket.off("crash:sync", listener);
     };
   }, [socket]);
 
-  // =========================
-  // GAME START / RESULT
-  // =========================
+
 
   useEffect(() => {
     const startListener = () => {
@@ -518,11 +518,6 @@ const CrashGame = () => {
       setCountDown(
         BETTING_COUNTDOWN
       );
-
-      /*
-       * The server should already
-       * settle losing bets.
-       */
       setUserGambled(false);
     };
 
@@ -549,9 +544,7 @@ const CrashGame = () => {
     };
   }, [socket]);
 
-  // =========================
-  // LIVE MULTIPLIER
-  // =========================
+
 
   useEffect(() => {
     const listener = (
@@ -647,17 +640,17 @@ const CrashGame = () => {
           disableButton={disableButton}
         />
 
-      </div>
+      </div >
 
       {/* LIVE BETS */}
 
-      <div className="mx-auto mt-2 w-full max-w-[520px]">
+      <div className="mx-auto mt-2 w-full max-w-[520px]" >
         <LiveBets
           gameState={gameState}
         />
       </div>
 
-    </div>
+    </div >
   );
 };
 

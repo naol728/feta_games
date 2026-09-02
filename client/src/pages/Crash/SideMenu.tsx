@@ -1,5 +1,6 @@
 /* eslint-disable */
 
+import React from "react";
 import {
   AiFillCaretDown,
   AiFillCaretUp,
@@ -12,6 +13,7 @@ import { type User } from "../../components/Types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface SideMenuProps {
   bet: number | null;
@@ -55,10 +57,6 @@ const SideMenu: React.FC<SideMenuProps> = ({
   const hasTarget =
     Number.isFinite(target) && target >= 1.01;
 
-  /*
-   * Live profit while the player's bet is riding.
-   * Otherwise show the planned profit.
-   */
   const inRound =
     userGambled &&
     gameStarted &&
@@ -88,24 +86,25 @@ const SideMenu: React.FC<SideMenuProps> = ({
     !bet ||
     bet < 1 ||
     bet > MAX_BET ||
-    (userData && userData.wallets.balance < bet);
+    (userData &&
+      userData.wallets.balance < bet);
 
-  const renderMessage = () => {
+  const renderMessage = (profit: number) => {
     if (!isLogged) {
       return "Sign in to play";
     }
 
     if (userCashedOut && gameStarted) {
-      return `Cashed out at ${userMultiplier.toFixed(2)}x`;
+      return `Cashed out at ${userMultiplier.toFixed(2)} x`;
     }
 
     if (userGambled) {
       return gameStarted
-        ? "Cash Out"
+        ? `Cash Out ${profit.toFixed(2) + bet}`
         : "You're in!";
     }
 
-    if (!bet || bet < 1) {
+    if (!bet || bet < 10) {
       return "Enter bet amount";
     }
 
@@ -128,7 +127,11 @@ const SideMenu: React.FC<SideMenuProps> = ({
     return "Place Bet";
   };
 
-  const disabled =
+  const inputsDisabled =
+    disableButton ||
+    (userGambled && (!gameStarted || userCashedOut));
+
+  const actionDisabled =
     disableButton ||
     (isLogged &&
       (userGambled
@@ -141,47 +144,63 @@ const SideMenu: React.FC<SideMenuProps> = ({
         w-full
         rounded-none
         border-x-0
-        border-b
-        border-t-0
-        bg-[#171720]
+        border-b-0
+        border-t
+        border-border/60
+        bg-card
         p-0
         shadow-none
-        xl:w-[340px]
-        xl:shrink-0
-        xl:rounded-xl
-        xl:border
+
+        sm:rounded-xl
+        sm:border
       "
     >
-      <div className="flex w-full flex-col gap-2 p-2.5 sm:p-3">
+      <div className="flex w-full flex-col gap-2 p-2">
 
         {/* =========================
             BET AMOUNT
         ========================== */}
-        <div className="w-full">
-          <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+        <section className="space-y-1">
+
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Bet Amount
             </span>
 
-            <span className="text-[10px] text-white/30">
+            <span className="text-[10px] text-muted-foreground">
               Balance:{" "}
-              <Monetary
-                value={userData?.wallets.balance ?? 0}
-                showFraction
-              />
+              <span className="font-medium text-foreground/80">
+                <Monetary
+                  value={userData?.wallets?.balance ?? 0}
+                  showFraction
+                />
+              </span>
             </span>
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-white/10 bg-[#20202b]">
+          <div
+            className="
+              overflow-hidden
+              rounded-md
+              border
+              border-border/70
+              bg-muted/30
+            "
+          >
             <BetAmount
               value={bet === null ? "" : String(bet)}
+
               onChange={(value) =>
                 setBet(
                   value === ""
                     ? null
-                    : Math.min(MAX_BET, Number(value))
+                    : Math.min(
+                      MAX_BET,
+                      Number(value)
+                    )
                 )
               }
+
               onHalve={() =>
                 setBet(
                   Math.max(
@@ -190,6 +209,7 @@ const SideMenu: React.FC<SideMenuProps> = ({
                   )
                 )
               }
+
               onDouble={() =>
                 setBet(
                   Math.min(
@@ -198,43 +218,54 @@ const SideMenu: React.FC<SideMenuProps> = ({
                   )
                 )
               }
+
+              onMax={() =>
+                setBet(
+                  Math.min(
+                    MAX_BET,
+                    userData?.wallets?.balance ?? MAX_BET
+                  )
+                )
+              }
+
               betValue={bet || 0}
+              disabled={inputsDisabled}
             />
           </div>
-        </div>
+        </section>
 
         {/* =========================
             AUTO CASHOUT
         ========================== */}
-        <div className="w-full">
+        <section className="space-y-1">
 
-          <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Auto Cash Out
             </span>
 
             <span
-              className={`
-                text-[10px] font-bold
-                ${hasTarget
-                  ? "text-[#f5b83d]"
-                  : "text-white/30"
-                }
-              `}
+              className={cn(
+                "text-[10px] font-semibold",
+                hasTarget
+                  ? "text-amber-400"
+                  : "text-muted-foreground/50"
+              )}
             >
               {hasTarget
-                ? `x${target.toFixed(2)}`
+                ? `x${target.toFixed(2)} `
                 : "OFF"}
             </span>
           </div>
 
-          <div className="flex h-9 w-full">
+          <div className="flex h-8 w-full">
 
             <Input
               type="text"
               inputMode="decimal"
               value={cashoutAt}
               placeholder="Off"
+
               onChange={(e) =>
                 setCashoutAt(
                   e.target.value.replace(
@@ -243,137 +274,137 @@ const SideMenu: React.FC<SideMenuProps> = ({
                   )
                 )
               }
+
               className="
-                h-9
+                h-8
                 min-w-0
                 flex-1
                 rounded-r-none
-                border-white/10
-                bg-[#20202b]
-                px-2.5
+                border-border/70
+                bg-muted/30
+                px-2
                 text-xs
-                text-white
-                placeholder:text-white/25
+                font-medium
+                focus-visible:z-10
                 focus-visible:ring-1
-                focus-visible:ring-[#f5b83d]
+                focus-visible:ring-amber-400/70
               "
             />
 
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               onClick={() => stepTarget(-1)}
+              disabled={inputsDisabled}
               className="
-                h-9
-                w-9
+                h-8
+                w-8
+                shrink-0
                 rounded-none
-                border-y
-                border-white/10
-                bg-[#252530]
+                border-l-0
+                border-border/70
+                bg-muted/30
                 p-0
-                text-white/50
-                hover:bg-[#30303c]
-                hover:text-white
+                text-muted-foreground
+                hover:bg-muted
+                hover:text-foreground
               "
             >
-              <AiFillCaretDown size={12} />
+              <AiFillCaretDown size={10} />
             </Button>
 
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               onClick={() => stepTarget(1)}
+              disabled={inputsDisabled}
               className="
-                h-9
-                w-9
+                h-8
+                w-8
+                shrink-0
                 rounded-l-none
-                border
-                border-white/10
-                bg-[#252530]
+                border-l-0
+                border-border/70
+                bg-muted/30
                 p-0
-                text-white/50
-                hover:bg-[#30303c]
-                hover:text-white
+                text-muted-foreground
+                hover:bg-muted
+                hover:text-foreground
               "
             >
-              <AiFillCaretUp size={12} />
+              <AiFillCaretUp size={10} />
             </Button>
+
           </div>
-        </div>
+        </section>
 
         {/* =========================
             PROFIT
         ========================== */}
-        <div
+        {/* <div
           className="
             flex
+            min-h-11
             items-center
             justify-between
-            rounded-lg
+            rounded-md
             border
-            border-white/5
-            bg-[#20202b]
+            border-border/50
+            bg-muted/25
             px-2.5
-            py-2
           "
         >
-          <div className="flex flex-col">
-            <span className="text-[9px] uppercase tracking-wide text-white/35">
+          <div className="min-w-0">
+            <div className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
               Profit on Win
-            </span>
+            </div>
 
-            <span className="text-[9px] text-white/25">
+            <div className="truncate text-[9px] text-muted-foreground/60">
               {hasTarget
-                ? `at ${target.toFixed(2)}x`
+                ? `at ${target.toFixed(2)} x`
                 : "Auto cashout off"}
-            </span>
+            </div>
           </div>
 
-          <span className="text-sm font-bold text-[#f5b83d]">
+          <span className="text-sm font-bold text-amber-400">
             <Monetary
               value={profit}
               showFraction
             />
           </span>
-        </div>
+        </div> */}
 
         {/* =========================
             MAIN ACTION
         ========================== */}
         <Button
+          type="button"
           onClick={
             userGambled && gameStarted
               ? handleCashout
               : handleBet
           }
-          disabled={disabled}
-          className={`
-            h-11
-            w-full
-            rounded-lg
-            border-0
-            text-xs
-            font-extrabold
-            uppercase
-            tracking-wide
-            shadow-none
-            transition-all
-            active:scale-[0.98]
-            ${userGambled && gameStarted
-              ? "bg-[#22c55e] text-white hover:bg-[#16a34a]"
+          disabled={inputsDisabled}
+          className={cn(
+            "h-10 w-full rounded-md",
+            "border-0 shadow-none",
+            "text-[11px] font-bold uppercase tracking-wide",
+            "transition-transform active:scale-[0.98]",
+
+            userGambled && gameStarted
+              ? "bg-green-500 text-white hover:bg-green-600"
               : queued
-                ? "bg-[#eab308] text-black hover:bg-[#ca8a04]"
-                : "bg-[#f5b83d] text-black hover:bg-[#d99d25]"
-            }
-            disabled:cursor-not-allowed
-            disabled:opacity-40
-          `}
+                ? "bg-yellow-500 text-black hover:bg-yellow-600"
+                : "bg-amber-400 text-black hover:bg-amber-500",
+
+            "disabled:cursor-not-allowed disabled:opacity-40"
+          )}
         >
-          {renderMessage()}
+          {renderMessage(profit)}
         </Button>
 
         {/* =========================
-            CURRENT MULTIPLIER
+            CASHOUT RESULT
         ========================== */}
         {userCashedOut && (
           <div
@@ -382,15 +413,18 @@ const SideMenu: React.FC<SideMenuProps> = ({
               items-center
               justify-center
               rounded-md
+              border
+              border-green-500/10
               bg-green-500/10
               px-2
               py-1.5
               text-[10px]
-              font-semibold
+              font-medium
               text-green-400
             "
           >
-            ✓ Cashed out at{" "}
+            <span className="mr-1">✓</span>
+            Cashed out at{" "}
             {userMultiplier.toFixed(2)}x
           </div>
         )}
@@ -401,3 +435,4 @@ const SideMenu: React.FC<SideMenuProps> = ({
 };
 
 export default SideMenu;
+

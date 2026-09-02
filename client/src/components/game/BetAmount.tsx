@@ -1,4 +1,8 @@
+import React from "react";
 import Monetary from "../Monetary";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface BetAmountProps {
   value: string;
@@ -6,7 +10,6 @@ interface BetAmountProps {
   onBlur?: () => void;
   onHalve: () => void;
   onDouble: () => void;
-  // pass onMax to show the Max button; games that do not cap the bet leave it out
   onMax?: () => void;
   betValue: number;
   disabled?: boolean;
@@ -14,7 +17,6 @@ interface BetAmountProps {
   hint?: React.ReactNode;
 }
 
-// the bet field every game shares: one input plus the ½ / 2× steppers, and Max when offered
 const BetAmount: React.FC<BetAmountProps> = ({
   value,
   onChange,
@@ -28,47 +30,95 @@ const BetAmount: React.FC<BetAmountProps> = ({
   hint,
 }) => {
   const steps = [
-    { key: "half", text: "½", run: onHalve },
-    { key: "double", text: "2×", run: onDouble },
-    ...(onMax ? [{ key: "max", text: ("common.max"), run: onMax }] : []),
+    {
+      key: "half",
+      text: "½",
+      run: onHalve,
+    },
+    {
+      key: "double",
+      text: "2×",
+      run: onDouble,
+    },
+    ...(onMax
+      ? [
+        {
+          key: "max",
+          text: "Max",
+          run: onMax,
+        },
+      ]
+      : []),
   ];
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between text-xs font-semibold text-ink-muted">
-        <span>{label || ("common.betAmount")}</span>
-        <span><Monetary value={betValue} /></span>
+    <div className="flex w-full flex-col gap-1.5">
+      {/* Label + current value */}
+      <div className="flex items-center justify-between px-0.5">
+        <span className="text-xs font-medium text-muted-foreground">
+          {label || "Bet Amount"}
+        </span>
+
+        <span className="text-xs font-semibold text-foreground">
+          <Monetary value={betValue} />
+        </span>
       </div>
-      <div className="flex">
-        <input
+
+      {/* Input + controls */}
+      <div className="flex w-full">
+        <Input
           type="text"
           inputMode="numeric"
           value={value}
-          onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, ""))}
+          onChange={(e) =>
+            onChange(e.target.value.replace(/[^0-9]/g, ""))
+          }
           onBlur={onBlur}
           disabled={disabled}
-          // size 1 drops the input's default 20-character intrinsic width, which flex cannot
-          // shrink past and which pushed the whole page wider than a phone
           size={1}
-          className="p-2 bg-surface-nav border border-line rounded-l rounded-r-none w-full min-w-0 text-sm disabled:opacity-50"
+          className={cn(
+            "h-9 min-w-0 flex-1 rounded-r-none",
+            "border-r-0 bg-muted/40",
+            "text-sm font-medium",
+            "focus-visible:z-10",
+            "disabled:cursor-not-allowed disabled:opacity-50"
+          )}
         />
-        {steps.map((step, i) => (
-          <button
-            key={step.key}
-            onClick={step.run}
-            disabled={disabled}
-            className={`px-3 bg-surface-raised hover:bg-surface-hover text-sm font-semibold disabled:opacity-50 ${i === steps.length - 1
-              ? "border border-line rounded-r rounded-l-none"
-              : "border-y border-line rounded-none"
-              }`}
-          >
-            {step.text}
-          </button>
-        ))}
+
+        {steps.map((step, index) => {
+          const isLast = index === steps.length - 1;
+
+          return (
+            <Button
+              key={step.key}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={step.run}
+              disabled={disabled}
+              className={cn(
+                "h-9 rounded-none px-2.5 text-xs font-semibold",
+                "bg-muted/40 hover:bg-accent",
+                "focus-visible:z-10",
+                index > 0 && "border-l-0",
+                isLast && "rounded-r-md"
+              )}
+            >
+              {step.text}
+            </Button>
+          );
+        })}
       </div>
-      {hint && <span className="text-xs text-ink-muted">{hint}</span>}
+
+      {/* Optional hint */}
+      {hint && (
+        <span className="px-0.5 text-[11px] leading-tight text-muted-foreground">
+          {hint}
+        </span>
+      )}
     </div>
   );
 };
 
 export default BetAmount;
+

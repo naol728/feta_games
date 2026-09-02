@@ -35,6 +35,56 @@ export const walletService = {
     await emitBalance(userId);
     return data;
   },
+  async settleCrashWin(
+    userId: string,
+    payout: number,
+    betAmount: number,
+  ): Promise<{
+    balance: number;
+    locked_balance: number;
+  }> {
+    const { data: wallet, error: fetchError } = await supabase
+      .from("wallets")
+      .select("balance, locked_balance")
+      .eq("user_id", userId)
+      .single();
+
+    if (fetchError) {
+      throw fetchError;
+    }
+
+    if (!wallet) {
+      throw new Error("Wallet not found");
+    }
+
+    if (betAmount <= 0 || payout <= 0) {
+      throw new Error("Invalid amount");
+    }
+
+    if (wallet.locked_balance < betAmount) {
+      throw new Error("Insufficient locked balance");
+    }
+
+    const newBalance = wallet.balance + payout;
+
+    const newLockedBalance = wallet.locked_balance - betAmount;
+
+    const { data, error } = await supabase
+      .from("wallets")
+      .update({
+        balance: newBalance,
+        locked_balance: newLockedBalance,
+      })
+      .eq("user_id", userId)
+      .select("balance, locked_balance")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  },
 
   async lockBalance(userId: string, amount: number) {
     await supabase.rpc("lock_wallet_balance", {
@@ -56,7 +106,67 @@ export const walletService = {
 
     await emitBalance(userId);
   },
+  async getWallet(
+    userId: string,
+  ): Promise<{ balance: number; locked_balance: number }> {
+    const { error, data } = await supabase
+      .from("wallets")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+    if (error) {
+      console.log(error);
+      throw error;
+    }
+    return (data.balance, data.locked_balance);
+  },
+  async consumeLockedBalance(
+    userId: string,
+    amount: number,
+  ): Promise<Array<{ balance: number; locked_balance: number }>> {
+    const { data: wallet, error: fetchError } = await supabase
+      .from("wallets")
+      .select("balance, locked_balance")
+      .eq("user_id", userId)
+      .single();
 
+    if (fetchError) {
+      console.log(fetchError);
+      throw fetchError;
+    }
+
+    if (!wallet) {
+      throw new Error("Wallet not found");
+    }
+
+    if (amount <= 0) {
+      throw new Error("Amount must be greater than 0");
+    }
+
+    if (wallet.locked_balance < amount) {
+      throw new Error("Insufficient locked balance");
+    }
+
+    const newLockedBalance = wallet.locked_balance - amount;
+
+    const { data, error } = await supabase
+      .from("wallets")
+      .update({
+        locked_balance: newLockedBalance,
+      })
+      .eq("user_id", userId)
+      .select("balance, locked_balance");
+
+    if (error) {
+      console.log(error);
+      throw error;
+    }
+
+    return (data ?? []) as Array<{
+      balance: number;
+      locked_balance: number;
+    }>;
+  },
   async resolveMatch(
     winnerId: string,
     loserId: string,

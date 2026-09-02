@@ -1,12 +1,16 @@
-/*eslint-disable*/
-import React from "react";
 
+/* eslint-disable */
+
+import React from "react";
 import {
     Card,
     CardContent,
     CardHeader,
 } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+    Avatar,
+    AvatarFallback,
+} from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
@@ -20,8 +24,8 @@ interface CrashGameState {
     gamePlayers: Record<string, CrashPlayer>;
     gameStartTime: number | null;
 
-    // Never trust/use this while betting/running.
-    // Backend should hide the real crash point.
+    // Backend should hide the real crash point
+    // while betting/running.
     crashPoint: number;
 
     phase: "betting" | "running" | "crashed";
@@ -31,20 +35,20 @@ interface LiveBetsProps {
     gameState: CrashGameState;
 }
 
-const formatETB = (amount: number) =>
-    new Intl.NumberFormat("en-ET", {
+const formatETB = (amount: number): string => {
+    return new Intl.NumberFormat("en-ET", {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
     }).format(amount);
-
-const getPlayerName = (playerId: string) => {
-    // Until you have public player information,
-    // use a short anonymous identifier.
-    return `Player ${playerId.slice(0, 5)} `;
 };
 
-const getInitials = (playerId: string) =>
-    playerId.slice(0, 2).toUpperCase();
+const getPlayerName = (playerId: string): string => {
+    return `Player ${playerId.slice(0, 5)}`;
+};
+
+const getInitials = (playerId: string): string => {
+    return playerId.slice(0, 2).toUpperCase();
+};
 
 const LiveBets: React.FC<LiveBetsProps> = ({
     gameState,
@@ -55,7 +59,8 @@ const LiveBets: React.FC<LiveBetsProps> = ({
     const players = Object.entries(gamePlayers);
 
     const totalBets = Object.values(gameBets).reduce(
-        (sum, bet) => sum + Number(bet || 0),
+        (sum: number, bet: number) =>
+            sum + Number(bet || 0),
         0
     );
 
@@ -76,19 +81,18 @@ const LiveBets: React.FC<LiveBetsProps> = ({
             <CardHeader className="p-2.5">
                 <div className="flex items-center justify-between">
                     <div className="flex min-w-0 items-center gap-1.5">
-
                         {/* LIVE INDICATOR */}
                         <span
                             className={`
-h - 1.5
-w - 1.5
-shrink - 0
-rounded - full
+                h-1.5
+                w-1.5
+                shrink-0
+                rounded-full
                 ${gameState.phase === "running"
                                     ? "animate-pulse bg-green-500"
                                     : "bg-muted-foreground/50"
                                 }
-`}
+              `}
                         />
 
                         <span className="text-xs font-semibold">
@@ -168,27 +172,44 @@ rounded - full
                     </div>
                 ) : (
                     <div className="divide-y divide-border/30">
-
                         {players.map(([playerId, player]) => {
                             const bet = Number(
-                                gameBets[playerId] || 0
+                                gameBets[playerId] ?? 0
                             );
 
-                            const payout =
+                            /*
+                             * Convert undefined -> null.
+                             * This gives us a clean type:
+                             * number | null
+                             */
+                            const payout: number | null =
                                 player?.payout ?? null;
 
                             const hasCashedOut =
-                                payout !== null;
+                                payout !== null &&
+                                Number.isFinite(payout);
 
-                            const totalPayout =
+                            /*
+                             * Only calculate these when payout exists.
+                             * Otherwise they stay null.
+                             */
+                            const totalPayout: number | null =
                                 hasCashedOut
                                     ? payout * bet
                                     : null;
 
-                            const profit =
+                            const profit: number | null =
                                 hasCashedOut
                                     ? (payout - 1) * bet
                                     : null;
+
+                            const autoCashoutAt =
+                                player?.autoCashoutAt ?? null;
+
+                            const hasAutoCashout =
+                                autoCashoutAt !== null &&
+                                Number.isFinite(autoCashoutAt) &&
+                                autoCashoutAt >= 1.01;
 
                             const playerName =
                                 getPlayerName(playerId);
@@ -206,10 +227,8 @@ rounded - full
                       MOBILE
                   ========================== */}
                                     <div className="flex items-center justify-between sm:hidden">
-
                                         {/* PLAYER */}
                                         <div className="flex min-w-0 items-center gap-2">
-
                                             <Avatar className="h-7 w-7 shrink-0">
                                                 <AvatarFallback
                                                     className="
@@ -236,15 +255,15 @@ rounded - full
 
                                         {/* STATUS */}
                                         <div className="shrink-0 text-right">
-
-                                            {hasCashedOut ? (
+                                            {hasCashedOut && payout !== null ? (
                                                 <>
                                                     <p className="text-xs font-bold text-green-500">
                                                         {payout.toFixed(2)}x
                                                     </p>
 
                                                     <p className="text-[9px] font-medium text-green-500">
-                                                        +ETB {formatETB(profit)}
+                                                        +ETB{" "}
+                                                        {formatETB(profit ?? 0)}
                                                     </p>
                                                 </>
                                             ) : (
@@ -261,10 +280,12 @@ rounded - full
                                                         Playing
                                                     </Badge>
 
-                                                    {player.autoCashoutAt &&
-                                                        player.autoCashoutAt >= 1.01 && (
+                                                    {hasAutoCashout &&
+                                                        autoCashoutAt !== null && (
                                                             <span className="text-[8px] text-muted-foreground">
-                                                                Auto {player.autoCashoutAt.toFixed(2)}x
+                                                                Auto{" "}
+                                                                {autoCashoutAt.toFixed(2)}
+                                                                x
                                                             </span>
                                                         )}
                                                 </div>
@@ -312,7 +333,6 @@ rounded - full
                                     >
                                         {/* PLAYER */}
                                         <div className="flex min-w-0 items-center gap-2">
-
                                             <Avatar className="h-7 w-7 shrink-0">
                                                 <AvatarFallback
                                                     className="
@@ -331,10 +351,12 @@ rounded - full
                                                     {playerName}
                                                 </p>
 
-                                                {player.autoCashoutAt &&
-                                                    player.autoCashoutAt >= 1.01 && (
+                                                {hasAutoCashout &&
+                                                    autoCashoutAt !== null && (
                                                         <p className="text-[8px] text-muted-foreground">
-                                                            Auto {player.autoCashoutAt.toFixed(2)}x
+                                                            Auto{" "}
+                                                            {autoCashoutAt.toFixed(2)}
+                                                            x
                                                         </p>
                                                     )}
                                             </div>
@@ -348,34 +370,37 @@ rounded - full
                                         {/* PAYOUT */}
                                         <span
                                             className={`
-text - right
-text - [10px]
-font - bold
+                        text-right
+                        text-[10px]
+                        font-bold
                         ${hasCashedOut
                                                     ? "text-green-500"
                                                     : "text-muted-foreground"
                                                 }
-`}
+                      `}
                                         >
-                                            {hasCashedOut
-                                                ? `${payout.toFixed(2)} x`
+                                            {hasCashedOut &&
+                                                payout !== null
+                                                ? `${payout.toFixed(2)}x`
                                                 : "-"}
                                         </span>
 
                                         {/* PROFIT */}
                                         <span
                                             className={`
-text - right
-text - [10px]
-font - bold
+                        text-right
+                        text-[10px]
+                        font-bold
                         ${hasCashedOut
                                                     ? "text-green-500"
                                                     : "text-muted-foreground"
                                                 }
-`}
+                      `}
                                         >
                                             {hasCashedOut
-                                                ? `+ ETB ${formatETB(profit)} `
+                                                ? `+ ETB ${formatETB(
+                                                    profit ?? 0
+                                                )}`
                                                 : "-"}
                                         </span>
                                     </div>

@@ -50,7 +50,7 @@ export default function App() {
     }
 
     init();
-  });
+  }, [dispatch]);
 
 
   if (!ready) {

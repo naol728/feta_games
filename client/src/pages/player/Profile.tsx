@@ -73,11 +73,13 @@ export default function Profile() {
     const [accountNumber, setAccountNumber] = useState("");
     const [bankName, setBankName] = useState("CBE");
     const [accountName, setAccountName] = useState("");
+    const [page, setPage] = useState(1);
+    const limit = 5;
 
-    // ================= TRANSACTIONS =================
-    const { data, isLoading } = useQuery({
-        queryFn: gettransactionhistory,
-        queryKey: ["gettransactionhistory"],
+    const { data, isLoading, isFetching } = useQuery({
+        queryKey: ["gettransactionhistory", page, limit],
+        queryFn: () => gettransactionhistory(page, limit),
+        placeholderData: (previousData) => previousData,
     });
     const mappedTransactions: Transaction[] = useMemo(() => {
         if (!data?.data) return [];
@@ -419,40 +421,107 @@ export default function Profile() {
                             <div className="flex justify-center py-6">
                                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                             </div>
+                        ) : mappedTransactions.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-10 text-center">
+                                <p className="text-sm font-medium">
+                                    No transactions yet
+                                </p>
+
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Your transaction history will appear here.
+                                </p>
+                            </div>
                         ) : (
-                            mappedTransactions.map((t) => (
-                                <Card
-                                    key={t.id}
-                                    onClick={() => handlenavigatetodeposit(t.id, t.status)}
-                                    className="rounded-xl border border-border/60 hover:bg-muted/30 transition cursor-pointer"
-                                >
-                                    <CardContent className="flex justify-between items-center p-3">
+                            <>
+                                <div className="space-y-2">
+                                    {mappedTransactions.map((t) => (
+                                        <Card
+                                            key={t.id}
+                                            onClick={() =>
+                                                handlenavigatetodeposit(
+                                                    t.id,
+                                                    t.status
+                                                )
+                                            }
+                                            className="rounded-xl border border-border/60 hover:bg-muted/30 transition cursor-pointer"
+                                        >
+                                            <CardContent className="flex justify-between items-center p-3">
+                                                <div className="flex items-center gap-3">
+                                                    {getTransactionIcon(t.type)}
 
-                                        <div className="flex items-center gap-3">
-                                            {getTransactionIcon(t.type)}
+                                                    <div>
+                                                        <p className="text-sm font-medium capitalize">
+                                                            {t.type}
+                                                        </p>
 
-                                            <div>
-                                                <p className="text-sm font-medium capitalize">
-                                                    {t.type}
-                                                </p>
-                                                <p className="text-[11px] text-muted-foreground">
-                                                    {t.description}
-                                                </p>
-                                            </div>
-                                        </div>
+                                                        <p className="text-[11px] text-muted-foreground">
+                                                            {t.description}
+                                                        </p>
+                                                    </div>
+                                                </div>
 
-                                        <div className="text-right">
-                                            <p className="text-sm font-semibold">
-                                                {t.amount} ETB
-                                            </p>
-                                            <Badge variant="outline" className="text-[10px]">
-                                                {t.status}
-                                            </Badge>
-                                        </div>
+                                                <div className="text-right">
+                                                    <p className="text-sm font-semibold">
+                                                        {t.amount} ETB
+                                                    </p>
 
-                                    </CardContent>
-                                </Card>
-                            ))
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="text-[10px]"
+                                                    >
+                                                        {t.status}
+                                                    </Badge>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+
+                                {/* Pagination */}
+                                {data?.pagination && data.pagination.totalPages > 1 && (
+                                    <div className="flex items-center justify-between pt-3">
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                !data.pagination.hasPreviousPage ||
+                                                isFetching
+                                            }
+                                            onClick={() =>
+                                                setPage((prev) => Math.max(prev - 1, 1))
+                                            }
+                                            className="rounded-lg border px-3 py-1.5 text-xs font-medium transition hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+                                        >
+                                            Previous
+                                        </button>
+
+                                        <span className="text-xs text-muted-foreground">
+                                            Page {data.pagination.page} of{" "}
+                                            {data.pagination.totalPages}
+                                        </span>
+
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                !data.pagination.hasNextPage ||
+                                                isFetching
+                                            }
+                                            onClick={() =>
+                                                setPage((prev) => prev + 1)
+                                            }
+                                            className="rounded-lg border px-3 py-1.5 text-xs font-medium transition hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Small loading indicator when changing pages */}
+                                {isFetching && !isLoading && (
+                                    <div className="flex justify-center pt-2">
+                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                                    </div>
+                                )}
+                            </>
                         )}
                     </TabsContent>
 

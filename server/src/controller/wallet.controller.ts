@@ -260,37 +260,74 @@ export const withDraw = catchAsync(
 export const wallet = catchAsync(
   async (req: WalletRequest, res: Response, next: NextFunction) => {},
 );
+
 export const transactions = catchAsync(
   async (req: WalletRequest, res: Response, next: NextFunction) => {
     const userId = req.user.userId;
+
     if (!userId) {
-      return next(new AppError("Anautorized ", 401));
+      return next(new AppError("Unauthorized", 401));
     }
 
-    const { data: transactions, error } = await supabase
+    // =========================
+    // PAGINATION
+    // =========================
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    // =========================
+    // GET TRANSACTIONS
+    // =========================
+    const {
+      data: transactionData,
+      error,
+      count,
+    } = await supabase
       .from("transactions")
       .select(
-        `*,  
-        payment_method:payment_methods (
-     id,
-    type,
-    account_name,
-    account_number
-   )`,
+        `
+          *,
+          payment_method:payment_methods (
+            id,
+            type,
+            account_name,
+            account_number
+          )
+        `,
+        { count: "exact" },
       )
       .eq("user_id", userId)
       .in("type", ["deposit", "win", "lose"])
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(from, to);
 
     if (error) {
       return next(new AppError(error.message, 500));
     }
 
-    res.status(200).json({
-      data: transactions,
+    // =========================
+    // PAGINATION INFO
+    // =========================
+    const total = count ?? 0;
+    const totalPages = Math.ceil(total / limit);
+
+    return res.status(200).json({
+      data: transactionData,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
     });
   },
 );
+
 export const getWithdraws = catchAsync(
   async (req: WalletRequest, res: Response, next: NextFunction) => {
     const userId = req.user?.userId;

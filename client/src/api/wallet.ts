@@ -50,7 +50,10 @@ export const varifytransaction = async (data: {
   });
   return res.data;
 };
-export const gettransactionhistory = async () => {
-  const res = await apiClient.get(`/${BASE}/transactions`);
-  return res.data;
+export const gettransactionhistory = async (page = 1, limit = 10) => {
+  const response = await apiClient.get(
+    `/wallet/transactions?page=${page}&limit=${limit}`,
+  );
+
+  return response.data;
 };

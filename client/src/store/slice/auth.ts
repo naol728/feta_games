@@ -1,6 +1,10 @@
 /*eslint-disable*/
 import apiClient from "@/api/apiClient";
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import {
+  createSlice,
+  createAsyncThunk,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 
 export const initAuth = createAsyncThunk("auth/init", async () => {
   const res = await apiClient.post(`/auth/telegram`, {
@@ -26,6 +30,7 @@ interface User {
   Lname: string;
   referral_id: string;
   wallets: Wallet;
+  phone: string | null;
 }
 
 type InitalState = {
@@ -47,6 +52,11 @@ const authSlice = createSlice({
         state.user.wallets.locked_balance = action.payload.locked_balance;
       }
     },
+    setUser: (state, action: PayloadAction<User>) => {
+      state.user = action.payload;
+
+      localStorage.setItem("user", JSON.stringify(action.payload));
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -62,5 +72,5 @@ const authSlice = createSlice({
       });
   },
 });
-export const { setUserWallet } = authSlice.actions;
+export const { setUserWallet, setUser } = authSlice.actions;
 export default authSlice.reducer;

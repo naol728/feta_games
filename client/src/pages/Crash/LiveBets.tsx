@@ -23,11 +23,7 @@ interface CrashGameState {
     gameBets: Record<string, number>;
     gamePlayers: Record<string, CrashPlayer>;
     gameStartTime: number | null;
-
-    // Backend should hide the real crash point
-    // while betting/running.
     crashPoint: number;
-
     phase: "betting" | "running" | "crashed";
 }
 

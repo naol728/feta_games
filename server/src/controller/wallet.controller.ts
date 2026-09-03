@@ -2,11 +2,11 @@ import { NextFunction, Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/AppError";
 import { supabase } from "../config/supabase";
-import {
-  checkTransactionCBE,
-  getCBEReceipt,
-} from "../services/payment/cbe.service";
 import { walletService } from "../services/wallet.service";
+import {
+  paymentVerify,
+  veritas,
+} from "../services/payment/paymentvarify.service";
 
 interface WalletRequest extends Request {
   user: {
@@ -17,15 +17,32 @@ interface WalletRequest extends Request {
 
 export const deposit = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const { transactionUrl, trxno } = req.body;
+    const { transactioID, trxno } = req.body;
 
-    if (!transactionUrl) {
-      return next(new AppError("Missing Transaction Url", 400));
-    }
-    const transactionId = transactionUrl.split("/").pop();
-
-    if (!transactionId || !trxno) {
-      return next(new AppError("Missing Transaction ID", 400));
+    const result = await veritas<{
+      success: boolean;
+      data?: {
+        payerName?: string;
+        payerTelebirrNo?: string;
+        creditedPartyName?: string;
+        creditedPartyAccountNo?: string;
+        transactionStatus?: string;
+        receiptNo?: string;
+        paymentDate?: string;
+        settledAmount?: string;
+        serviceFee?: string;
+        serviceFeeVAT?: string;
+        totalPaidAmount?: string;
+        bankName?: string;
+        customerNote?: string;
+      };
+    }>("/verify-telebirr", {
+      method: "POST",
+      body: JSON.stringify({ reference: transactioID }),
+    });
+    console.log(result);
+    if (!result) {
+      return next(new AppError("INVALID Transactio Id", 400));
     }
 
     const { data: trx, error: trxerr } = await supabase
@@ -55,34 +72,26 @@ export const deposit = catchAsync(
     const { data: existingRef } = await supabase
       .from("transactions")
       .select("id")
-      .eq("reference_id", transactionId)
+      .eq("reference_id", transactioID)
       .maybeSingle();
 
     if (existingRef) {
       return next(new AppError("Transaction already used", 400));
     }
+    const verification = paymentVerify(
+      result,
+      Number(trx.amount),
+      trx.payment_methods.account_name,
+    );
 
-    const receipt = await getCBEReceipt(transactionId);
-    if (!receipt.success) {
-      return next(new AppError(receipt.error, 400));
+    if (!verification.valid) {
+      return next(new AppError(verification.message, 400));
     }
 
-    const result = await checkTransactionCBE({
-      recepit: receipt.data,
-      trx,
-    });
-
-    if (!result.success) {
-      return next(new AppError(result.error || "Validation failed", 400));
-    }
-
-    // =========================
-    // SAVE DEPOSIT RECORD
-    // =========================
     const { error: depositError } = await supabase.from("deposits").upsert({
       transaction_id: trx.id,
       payment_method_id: trx.payment_method_id,
-      bank_reference: transactionId,
+      bank_reference: transactioID,
       verified: true,
     });
 
@@ -90,14 +99,11 @@ export const deposit = catchAsync(
       return next(new AppError(depositError.message, 500));
     }
 
-    // =========================
-    // UPDATE TRANSACTION
-    // =========================
     const { error: updateError } = await supabase
       .from("transactions")
       .update({
         status: "completed",
-        reference_id: transactionId,
+        reference_id: transactioID,
       })
       .eq("id", trx.id);
 
@@ -105,9 +111,6 @@ export const deposit = catchAsync(
       return next(new AppError(updateError.message, 500));
     }
 
-    // =========================
-    // WALLET UPDATE (IMPORTANT)
-    // =========================
     await walletService.addBalance(trx.user_id, trx.amount);
 
     return res.status(200).json({

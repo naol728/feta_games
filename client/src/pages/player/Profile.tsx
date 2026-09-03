@@ -235,92 +235,161 @@ export default function Profile() {
     return (
         <div className="min-h-screen bg-background pb-20 px-3">
             <div className="max-w-xl mx-auto space-y-5">
-
                 {/* ================= PROFILE CARD ================= */}
-                <Card className="rounded-2xl shadow-sm border border-border/60">
-                    <CardContent className="p-5 space-y-4">
+                <Card className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+                    <CardContent className="p-4 sm:p-5 space-y-4">
 
-                        {/* USER */}
-                        <div className="flex items-center gap-4">
-                            <Avatar className="h-14 w-14">
-                                <AvatarFallback className="text-lg font-bold">
-                                    {user.Fname?.charAt(0)}
-                                    {user.Lname?.charAt(0)}
+                        {/* USER PROFILE */}
+                        <div className="flex items-center gap-3">
+                            <Avatar className="h-12 w-12 border border-primary/20 shadow-sm">
+                                <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">
+                                    {user?.Fname?.charAt(0)?.toUpperCase()}
+                                    {user?.Lname?.charAt(0)?.toUpperCase()}
                                 </AvatarFallback>
                             </Avatar>
 
-                            <div className="flex-1">
-                                <h2 className="font-semibold text-base leading-tight">
-                                    {user.Fname} {user.Lname}
-                                </h2>
-                                <p className="text-xs text-muted-foreground">
-                                    @{user.username}
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                    <h2 className="truncate text-sm font-semibold">
+                                        {user?.Fname} {user?.Lname}
+                                    </h2>
+
+                                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-medium text-primary">
+                                        Account
+                                    </span>
+                                </div>
+
+                                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                    @{user?.username || "user"}
                                 </p>
                             </div>
                         </div>
 
-                        {/* BALANCE CARD */}
-                        <div className="rounded-xl bg-linear-to-br from-primary/10 to-primary/5 p-4 border border-primary/20">
+                        {/* BALANCE */}
+                        <div className="rounded-xl border border-primary/15 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4">
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                                    <Wallet className="h-4 w-4" />
-                                    Balance
+                                <div className="flex items-center gap-2">
+                                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                                        <Wallet className="h-3.5 w-3.5 text-primary" />
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs font-medium">Total Balance</p>
+                                        <p className="text-[9px] text-muted-foreground">
+                                            Available account funds
+                                        </p>
+                                    </div>
                                 </div>
 
-                                <span className="text-[11px] text-muted-foreground">
-                                    Locked: {user.wallets.locked_balance} ETB
+                                <span className="rounded-md bg-background/70 px-2 py-1 text-[9px] font-medium text-muted-foreground">
+                                    ETB
                                 </span>
                             </div>
 
-                            <p className="text-xl font-bold mt-1">
-                                {user.wallets.balance} ETB
-                            </p>
+                            <div className="mt-3">
+                                <p className="text-2xl font-bold tracking-tight">
+                                    {user?.wallets?.balance?.toFixed(2) ?? "0.00"}
+                                    <span className="ml-1.5 text-xs font-medium text-muted-foreground">
+                                        ETB
+                                    </span>
+                                </p>
+                            </div>
+
+                            {/* BALANCE BREAKDOWN */}
+                            <div className="mt-3 grid grid-cols-2 gap-2">
+                                {/* Withdrawable */}
+                                <div className="rounded-lg border border-emerald-500/10 bg-background/60 px-3 py-2.5">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+
+                                        <span className="text-[10px] font-medium text-muted-foreground">
+                                            Withdrawable
+                                        </span>
+                                    </div>
+
+                                    <p className="mt-1 text-sm font-semibold">
+                                        {user?.wallets?.withdrawable_balance?.toFixed(2) ?? "0.00"}
+                                        <span className="ml-1 text-[9px] font-normal text-muted-foreground">
+                                            ETB
+                                        </span>
+                                    </p>
+                                </div>
+
+                                {/* Locked */}
+                                <div className="rounded-lg border border-amber-500/10 bg-background/60 px-3 py-2.5">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+
+                                        <span className="text-[10px] font-medium text-muted-foreground">
+                                            Locked
+                                        </span>
+                                    </div>
+
+                                    <p className="mt-1 text-sm font-semibold">
+                                        {user?.wallets?.locked_balance?.toFixed(2) ?? "0.00"}
+                                        <span className="ml-1 text-[9px] font-normal text-muted-foreground">
+                                            ETB
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
                         </div>
 
                         {/* ACTIONS */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-2.5">
 
-                            {/* DEPOSIT (UNCHANGED LOGIC) */}
+                            {/* DEPOSIT */}
                             <Drawer>
                                 <DrawerTrigger asChild>
-                                    <Button className="w-full h-10 text-sm">
+                                    <Button className="h-11 w-full rounded-xl text-xs font-semibold shadow-sm">
                                         <ArrowDownCircle className="mr-2 h-4 w-4" />
                                         Deposit
                                     </Button>
                                 </DrawerTrigger>
 
-                                {/* KEEP YOUR ORIGINAL DRAWER CONTENT */}
-                                <DrawerContent className="pb-6">
+                                <DrawerContent className="rounded-t-2xl pb-6">
                                     <DrawerHeader className="text-left">
-                                        <DrawerTitle>Add Funds</DrawerTitle>
-                                        <DrawerDescription>
-                                            Enter amount (10 - 5000 ETB)
+                                        <DrawerTitle className="text-lg">
+                                            Add Funds
+                                        </DrawerTitle>
+
+                                        <DrawerDescription className="text-xs">
+                                            Enter an amount between 10 and 5,000 ETB.
                                         </DrawerDescription>
                                     </DrawerHeader>
 
-                                    <div className="px-4 space-y-3">
-                                        <Input
-                                            type="number"
-                                            placeholder="Amount (ETB)"
-                                            value={amount}
-                                            onChange={(e) => setAmount(e.target.value)}
-                                            className="h-12 text-base"
-                                        />
+                                    <div className="space-y-3 px-4">
+                                        <div className="relative">
+                                            <Input
+                                                type="number"
+                                                placeholder="Amount"
+                                                value={amount}
+                                                onChange={(e) => setAmount(e.target.value)}
+                                                className="h-12 rounded-xl pr-14 text-base"
+                                            />
+
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+                                                ETB
+                                            </span>
+                                        </div>
 
                                         <Button
                                             disabled={!isValid || isPending}
-                                            className="w-full h-12"
+                                            className="h-12 w-full rounded-xl"
                                             onClick={() => mutate({ amount })}
                                         >
                                             {isPending
                                                 ? "Processing..."
-                                                : `Start Deposit ${isValid ? `${numericAmount} ETB` : ""}`}
+                                                : `Start Deposit ${isValid ? `${numericAmount} ETB` : ""
+                                                }`}
                                         </Button>
                                     </div>
 
                                     <DrawerFooter>
                                         <DrawerClose asChild>
-                                            <Button variant="ghost">Cancel</Button>
+                                            <Button variant="ghost" className="rounded-xl">
+                                                Cancel
+                                            </Button>
                                         </DrawerClose>
                                     </DrawerFooter>
                                 </DrawerContent>
@@ -329,56 +398,80 @@ export default function Profile() {
                             {/* WITHDRAW */}
                             <Dialog>
                                 <DialogTrigger asChild>
-                                    <Button variant="destructive" className="w-full h-10 text-sm">
+                                    <Button
+                                        variant="outline"
+                                        className="h-11 w-full rounded-xl border-destructive/30 text-xs font-semibold text-destructive hover:bg-destructive/5 hover:text-destructive"
+                                    >
                                         <ArrowUpCircle className="mr-2 h-4 w-4" />
                                         Withdraw
                                     </Button>
                                 </DialogTrigger>
 
-                                <DialogContent className="rounded-2xl">
+                                <DialogContent className="rounded-2xl sm:max-w-md">
                                     <DialogHeader>
-                                        <DialogTitle>Withdraw Funds</DialogTitle>
-                                        <DialogDescription>
-                                            Enter correct details. Wrong info may delay payout.
-                                        </DialogDescription>
-                                        <DialogDescription>
-                                            min: 500ETB
+                                        <DialogTitle className="text-lg">
+                                            Withdraw Funds
+                                        </DialogTitle>
+
+                                        <DialogDescription className="text-xs leading-relaxed">
+                                            Enter your bank details carefully. Incorrect information may
+                                            delay your payout.
                                         </DialogDescription>
                                     </DialogHeader>
 
                                     <div className="space-y-3">
-                                        <Input
-                                            placeholder="Amount"
-                                            type="number"
-                                            min={500}
-                                            value={withdrawamount}
-                                            onChange={(e) => setWithdrawAmount(e.target.value)}
-                                        />
+                                        {/* Amount */}
+                                        <div className="relative">
+                                            <Input
+                                                placeholder="Withdrawal amount"
+                                                type="number"
+                                                min={500}
+                                                value={withdrawamount}
+                                                onChange={(e) => setWithdrawAmount(e.target.value)}
+                                                className="h-11 rounded-xl pr-14"
+                                            />
 
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+                                                ETB
+                                            </span>
+                                        </div>
+
+                                        <p className="-mt-1 px-1 text-[10px] text-muted-foreground">
+                                            Minimum withdrawal: 500 ETB
+                                        </p>
+
+                                        {/* Account Number */}
                                         <Input
-                                            placeholder="Account Number (13 digits)"
+                                            placeholder="Account number"
+                                            type="text"
+                                            inputMode="numeric"
                                             maxLength={13}
                                             value={accountNumber}
                                             onChange={(e) =>
                                                 setAccountNumber(e.target.value.replace(/\D/g, ""))
                                             }
+                                            className="h-11 rounded-xl"
                                         />
 
+                                        {/* Bank */}
                                         <Input
-                                            placeholder="Bank Name"
+                                            placeholder="Bank name"
                                             value={bankName}
                                             onChange={(e) => setBankName(e.target.value)}
+                                            className="h-11 rounded-xl"
                                         />
 
+                                        {/* Account Name */}
                                         <Input
-                                            placeholder="Account Holder Name"
+                                            placeholder="Account holder name"
                                             value={accountName}
                                             onChange={(e) => setAccountName(e.target.value)}
+                                            className="h-11 rounded-xl"
                                         />
                                     </div>
 
                                     <Button
-                                        className="w-full mt-4 h-10"
+                                        className="mt-2 h-11 w-full rounded-xl"
                                         disabled={
                                             withdrawalreqpending ||
                                             !withdrawamount ||
@@ -388,16 +481,18 @@ export default function Profile() {
                                         }
                                         onClick={handleWithdraw}
                                     >
-                                        {withdrawalreqpending ? "Processing..." : "Confirm Withdraw"}
+                                        {withdrawalreqpending
+                                            ? "Processing..."
+                                            : "Confirm Withdrawal"}
                                     </Button>
 
-                                    <p className="text-xs text-center text-muted-foreground">
-                                        Transfers are processed within 1 hour
+                                    <p className="text-center text-[10px] text-muted-foreground">
+                                        Withdrawals are normally processed within 1 hour.
                                     </p>
                                 </DialogContent>
                             </Dialog>
-
                         </div>
+
                     </CardContent>
                 </Card>
                 <DailyStreak mappedTransactions={mappedTransactions} />

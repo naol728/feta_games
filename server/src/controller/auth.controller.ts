@@ -24,7 +24,8 @@ export const telegramAuth = catchAsync(
           .select(
             `*,wallets (
         balance,
-        locked_balance
+        locked_balance,
+        withdrawable_balance
          )
           `,
           )

@@ -1,4 +1,4 @@
-
+/*eslint-disable*/
 import {
   ArrowDownCircle,
   ArrowLeft,
@@ -6,8 +6,9 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
+  Wallet,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Drawer,
   DrawerClose,
@@ -17,104 +18,141 @@ import {
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
-} from "@/components/ui/drawer"
-import { Input } from "@/components/ui/input"
-import { useEffect, useMemo, useState } from "react"
-import { useMutation } from "@tanstack/react-query"
-import { paymentMethod } from "@/api/wallet"
-import { toast } from "react-toastify"
-import { useNavigate } from "react-router-dom"
-import { useAppSelector } from "@/store/hook"
+} from "@/components/ui/drawer";
+import { Input } from "@/components/ui/input";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { paymentMethod } from "@/api/wallet";
+import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
+import { useAppDispatch, useAppSelector } from "@/store/hook";
+import { initAuth } from "@/store/slice/auth";
 
 type Props = {
-  showBack?: boolean
-  showDeposit?: boolean
-}
+  showBack?: boolean;
+  showDeposit?: boolean;
+};
 
-const QUICK_AMOUNTS = [50, 100, 500, 1000]
+const QUICK_AMOUNTS = [50, 100, 500, 1000];
 
 export default function TopBar({
   showBack = false,
   showDeposit = true,
 }: Props) {
-  const user = useAppSelector((state) => state.auth.user)
+  const user = useAppSelector((state) => state.auth.user);
+  const authLoading = useAppSelector((state) => state.auth.loading);
 
-  const [amount, setAmount] = useState("")
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+
+  const [amount, setAmount] = useState("");
+
   const [showBalance, setShowBalance] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true
+    if (typeof window === "undefined") return true;
 
-    const saved = window.localStorage.getItem("showBalance")
-    return saved === null ? true : saved === "true"
-  })
+    const saved = window.localStorage.getItem("showBalance");
 
-  const navigate = useNavigate()
+    return saved === null ? true : saved === "true";
+  });
 
   useEffect(() => {
-    window.localStorage.setItem("showBalance", String(showBalance))
-  }, [showBalance])
+    window.localStorage.setItem(
+      "showBalance",
+      String(showBalance)
+    );
+  }, [showBalance]);
 
   const numericAmount = useMemo(() => {
-    const value = Number(amount)
-
-    return Number.isFinite(value) ? value : 0
-  }, [amount])
+    const value = Number(amount);
+    return Number.isFinite(value) ? value : 0;
+  }, [amount]);
 
   const isValid =
     numericAmount >= 10 &&
-    numericAmount <= 50000
+    numericAmount <= 5000;
 
   const { mutate, isPending } = useMutation({
     mutationFn: paymentMethod,
     mutationKey: ["paymentMethod"],
 
     onError: (error: Error) => {
-      toast.error(error.message)
+      toast.error(error.message);
     },
 
     onSuccess: (data) => {
-      navigate(`/deposit/${data.transaction_id}`)
+      navigate(`/deposit/${data.transaction_id}`);
     },
-  })
-  const handleshow = () => {
-    setShowBalance((prev) => !prev)
-  }
+  });
 
-  const handleReload = () => {
-    // Add your balance refetch here
-  }
+  /* ================= REFRESH AUTH ================= */
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleReload = async () => {
+    if (isRefreshing || authLoading) return;
+
+    try {
+      setIsRefreshing(true);
+
+      await dispatch(initAuth()).unwrap();
+
+
+    } catch (error: any) {
+      toast.error(
+        error?.message || "Failed to refresh balance"
+      );
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  /* ================= BALANCE ================= */
+
+  const balance = Number(user?.wallets?.balance ?? 0);
+
+  const formattedBalance = balance.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  /* ================= DEPOSIT ================= */
 
   const handleAmountChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const value = e.target.value
+    const value = e.target.value;
 
     if (value === "") {
-      setAmount("")
-      return
+      setAmount("");
+      return;
     }
 
-    const number = Number(value)
+    const number = Number(value);
 
-    if (number >= 0 && number <= 5000) {
-      setAmount(value)
+    if (
+      Number.isFinite(number) &&
+      number >= 0 &&
+      number <= 5000
+    ) {
+      setAmount(value);
     }
-  }
+  };
 
   const handleDeposit = () => {
-    if (!isValid || isPending) return
+    if (!isValid || isPending) return;
 
     mutate({
       amount,
-    })
-  }
+    });
+  };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/90 backdrop-blur-xl">
-
-      <div className="h-14 px-2.5 sm:px-4 flex items-center justify-between gap-2">
+    <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur-xl">
+      <div className="flex h-14 items-center justify-between gap-2 px-2.5 sm:px-4">
 
         {/* ================= LEFT ================= */}
-        <div className="flex items-center gap-1.5 min-w-0">
+
+        <div className="flex min-w-0 items-center gap-1.5">
 
           {showBack && (
             <button
@@ -124,10 +162,10 @@ export default function TopBar({
                 flex h-8 w-8 shrink-0 items-center justify-center
                 rounded-xl
                 text-muted-foreground
+                transition-all
                 hover:bg-muted
                 hover:text-foreground
                 active:scale-95
-                transition-all
               "
               aria-label="Go back"
             >
@@ -137,75 +175,99 @@ export default function TopBar({
 
           <img
             src="/logo.jpg"
-            alt="Feta logo"
-            className="h-8 w-auto max-w-[120px] object-contain"
+            alt="Feta"
+            className="
+              h-8
+              w-auto
+              max-w-[110px]
+              rounded-md
+              object-contain
+            "
           />
         </div>
 
         {/* ================= RIGHT ================= */}
-        <div className="flex items-center gap-1.5 shrink-0">
 
-          {/* Balance */}
+        <div className="flex shrink-0 items-center gap-1.5">
+
+          {/* BALANCE */}
+
           <div
             className="
-              flex items-center
-              h-8
+              flex h-9 items-center
               rounded-xl
-              border border-border/50
-              bg-muted/90
+              border border-border/60
+              bg-muted/50
               px-1
-              shadow-lg
+              shadow-sm
             "
           >
 
             {/* Refresh */}
+
             <button
               type="button"
               onClick={handleReload}
+              disabled={isRefreshing || authLoading}
               className="
-                flex h-6 w-6 items-center justify-center
+                flex h-7 w-7 items-center justify-center
                 rounded-lg
                 text-muted-foreground
+                transition-all
                 hover:bg-background
                 hover:text-foreground
                 active:scale-90
-                transition-all
+                disabled:pointer-events-none
+                disabled:opacity-50
               "
               aria-label="Refresh balance"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${isRefreshing
+                  ? "animate-spin"
+                  : ""
+                  }`}
+              />
             </button>
 
-            {/* Amount */}
-            <span
+            {/* Balance */}
+
+            <div
               className="
+                flex min-w-[72px]
+                items-center justify-center 
                 px-1
-                text-[11px]
-                sm:text-xs
-                font-bold
-                tabular-nums
-                whitespace-nowrap
               "
             >
-              {showBalance
-                ? `${user?.wallets?.balance ?? 0} ETB`
-                : "••••••"}
-            </span>
+              <span
+                className="
+                  text-[10px]
+                  font-bold
+                  tabular-nums
+                  whitespace-nowrap
+                "
+              >
+                {showBalance
+                  ? `${formattedBalance} ETB`
+                  : "••••••"}
+              </span>
+            </div>
 
             {/* Visibility */}
+
             <button
               type="button"
-              onClick={handleshow
-
+              onClick={() =>
+                setShowBalance((prev) => !prev)
               }
               className="
-                flex h-6 w-6 items-center justify-center
+                flex h-7 w-7 items-center justify-center
                 rounded-lg
                 text-muted-foreground
+                transition-all
                 hover:bg-background
                 hover:text-foreground
                 active:scale-90
-                transition-all
               "
               aria-label={
                 showBalance
@@ -222,17 +284,17 @@ export default function TopBar({
           </div>
 
           {/* ================= DEPOSIT ================= */}
+
           {showDeposit && (
             <Drawer>
-
               <DrawerTrigger asChild>
                 <Button
                   size="sm"
                   className="
-                    h-8
+                    h-9
+                    rounded-xl
                     px-2.5
                     sm:px-3
-                    rounded-xl
                     gap-1.5
                     text-[11px]
                     sm:text-xs
@@ -243,6 +305,7 @@ export default function TopBar({
                   "
                 >
                   <ArrowDownCircle className="h-3.5 w-3.5" />
+
                   <span>Deposit</span>
                 </Button>
               </DrawerTrigger>
@@ -254,17 +317,16 @@ export default function TopBar({
                   pb-3
                 "
               >
-
                 {/* Handle */}
+
                 <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/20" />
 
-                <DrawerHeader className="px-5 pt-4 pb-3">
-
+                <DrawerHeader className="px-5 pb-3 pt-4">
                   <div className="flex items-center gap-3">
 
                     <div
                       className="
-                        flex h-10 w-10
+                        flex h-10 w-10 shrink-0
                         items-center justify-center
                         rounded-2xl
                         bg-primary/10
@@ -285,14 +347,13 @@ export default function TopBar({
                     </div>
 
                   </div>
-
                 </DrawerHeader>
 
-                <div className="px-5 space-y-4">
+                <div className="space-y-4 px-5">
 
-                  {/* Amount Input */}
+                  {/* Amount */}
+
                   <div className="relative">
-
                     <Input
                       type="number"
                       inputMode="decimal"
@@ -311,7 +372,6 @@ export default function TopBar({
                         text-lg
                         font-bold
                         tabular-nums
-                        outline-none
                         focus-visible:ring-2
                       "
                     />
@@ -319,9 +379,7 @@ export default function TopBar({
                     <span
                       className="
                         pointer-events-none
-                        absolute
-                        right-4
-                        top-1/2
+                        absolute right-4 top-1/2
                         -translate-y-1/2
                         text-xs
                         font-semibold
@@ -330,15 +388,14 @@ export default function TopBar({
                     >
                       ETB
                     </span>
-
                   </div>
 
                   {/* Quick Amounts */}
-                  <div className="grid grid-cols-4 gap-2">
 
+                  <div className="grid grid-cols-4 gap-2">
                     {QUICK_AMOUNTS.map((value) => {
                       const selected =
-                        numericAmount === value
+                        numericAmount === value;
 
                       return (
                         <button
@@ -348,40 +405,46 @@ export default function TopBar({
                             setAmount(String(value))
                           }
                           className={`
-relative
-h - 9
-rounded - xl
-border
-text - [11px]
-font - semibold
-transition - all
-active: scale - 95
-
+                            relative h-9 rounded-xl
+                            border
+                            text-[11px]
+                            font-semibold
+                            transition-all
+                            active:scale-95
                             ${selected
                               ? "border-primary bg-primary/10 text-primary"
                               : "border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted"
                             }
-`}
+                          `}
                         >
                           {selected && (
-                            <Check className="absolute right-1 top-1 h-2.5 w-2.5" />
+                            <Check
+                              className="
+                                absolute
+                                right-1
+                                top-1
+                                h-2.5
+                                w-2.5
+                              "
+                            />
                           )}
 
-                          {value}
+                          {value.toLocaleString()}
                         </button>
-                      )
+                      );
                     })}
-
                   </div>
 
                   {/* Validation */}
+
                   {amount && !isValid && (
                     <p className="text-center text-[11px] font-medium text-destructive">
                       Amount must be between 10 and 5,000 ETB
                     </p>
                   )}
 
-                  {/* Deposit Button */}
+                  {/* Continue */}
+
                   <Button
                     disabled={!isValid || isPending}
                     onClick={handleDeposit}
@@ -399,18 +462,16 @@ active: scale - 95
                     {isPending
                       ? "Processing..."
                       : isValid
-                        ? `Continue with ${numericAmount} ETB`
+                        ? `Continue with ${numericAmount.toLocaleString()} ETB`
                         : "Enter Amount"}
                   </Button>
 
                   <p className="text-center text-[10px] text-muted-foreground">
                     You will be redirected to complete your payment.
                   </p>
-
                 </div>
 
                 <DrawerFooter className="px-5 pt-2">
-
                   <DrawerClose asChild>
                     <Button
                       variant="ghost"
@@ -425,16 +486,12 @@ active: scale - 95
                       Cancel
                     </Button>
                   </DrawerClose>
-
                 </DrawerFooter>
-
               </DrawerContent>
             </Drawer>
           )}
-
         </div>
       </div>
     </header>
-  )
+  );
 }
-

@@ -12,11 +12,10 @@ import MinesDuel from "./pages/game/minesduel/MinesDuel";
 import CardDraw from "./pages/game/carddraw/CardDraw";
 import CardDrawMatchmaking from "./pages/game/carddraw/CardDrawMatchmaking";
 import { ToastContainer } from "react-toastify"
-import { initAuth } from "./store/slice/auth";
-import { useAppDispatch } from "./store/hook";
+import { initAuth, setUser } from "./store/slice/auth";
+import { useAppDispatch, useAppSelector } from "./store/hook";
 import { connectSocket } from "./lib/socket";
 import { toast } from 'react-toastify';
-import Deposit from "./pages/player/Deposit";
 import MatchMakingLayout from "./layout/MatchMakingLayout";
 import { registerSocketListeners } from "./lib/socketListeners";
 import MinimalLayout from "./layout/MinimalLayout";
@@ -25,10 +24,13 @@ import { SessionStatsProvider } from "./stats/SessionStatsContext";
 import Slots from "./pages/game/Slot/Slot";
 import LeaderBoard from "./pages/player/LeaderBoard";
 import CrashGame from "./pages/Crash/Crash";
+import PhoneNumberSetup from "./components/PhoneNumberSetup";
+import Deposit from "./pages/player/Deposit";
 
 
 export default function App() {
   const dispatch = useAppDispatch();
+  const user = useAppSelector((state) => state.auth.user)
   const [ready, setReady] = useState(false);
   useEffect(() => {
     async function init() {
@@ -55,6 +57,18 @@ export default function App() {
     return (
       <Loading />
     );
+  }
+  if (!user?.phone) {
+    return <PhoneNumberSetup onComplete={(phone) => {
+      if (user) {
+        dispatch(
+          setUser({
+            ...user,
+            phone,
+          }),
+        );
+      }
+    }} />
   }
 
   return (

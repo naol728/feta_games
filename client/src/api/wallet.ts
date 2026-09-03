@@ -46,7 +46,7 @@ export const varifytransaction = async (data: {
   const { trxno, transactionUrl } = data;
   const res = await apiClient.post(`/${BASE}/deposit`, {
     trxno,
-    transactionUrl,
+    transactioID: transactionUrl,
   });
   return res.data;
 };

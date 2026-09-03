@@ -13,6 +13,8 @@ export const env = {
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   JWT_SECRET: process.env.JWT_SECRET as string,
+  VERITASAPIKEY: process.env.VERITAS_API_KEY as string,
+  VERITASAPIURL: process.env.VERITAS_API_URL as string,
 };
 
 if (!env.BOT_TOKEN || !env.ADMIN_CHAT_ID) {

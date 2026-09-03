@@ -53,9 +53,10 @@ import {
 } from "@/components/ui/dialog";
 
 import { setUserWallet } from "@/store/slice/auth";
+import DailyStreak from "./DailyStreak";
 
 interface Transaction {
-    id: number;
+    id: string;
     type: "deposit" | "withdrawal" | "bet" | "win";
     amount: number;
     status: "completed" | "pending" | "failed";
@@ -221,7 +222,7 @@ export default function Profile() {
 
     const isValid = numericAmount > 9
 
-    const handlenavigatetodeposit = (id: number, status: string) => { if (status === "completed") return; navigate(`/deposit/${id}`) }
+    const handlenavigatetodeposit = (id: string | number, status: string) => { if (status === "completed") return; navigate(`/deposit/${id}`) }
     if (!user) {
         return (
             <div className="flex items-center justify-center min-h-screen">
@@ -259,7 +260,7 @@ export default function Profile() {
                         </div>
 
                         {/* BALANCE CARD */}
-                        <div className="rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 p-4 border border-primary/20">
+                        <div className="rounded-xl bg-linear-to-br from-primary/10 to-primary/5 p-4 border border-primary/20">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2 text-muted-foreground text-xs">
                                     <Wallet className="h-4 w-4" />
@@ -399,7 +400,7 @@ export default function Profile() {
                         </div>
                     </CardContent>
                 </Card>
-
+                <DailyStreak mappedTransactions={mappedTransactions} />
                 {/* ================= TABS ================= */}
                 <Tabs defaultValue="transactions" className="space-y-3">
 

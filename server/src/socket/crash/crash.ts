@@ -1,3 +1,4 @@
+/*eslint-disable*/
 import { Server, Socket } from "socket.io";
 import { randomInt } from "crypto";
 
@@ -93,6 +94,37 @@ const publicState = (state: GameState) => ({
   phase: state.phase,
 });
 
+const recordCrashTransaction = async ({
+  userId,
+  type,
+  amount,
+  roundId,
+  multiplier,
+}: {
+  userId: string;
+  type: "win" | "lose";
+  amount: number;
+  roundId: string | null;
+  multiplier?: number;
+}) => {
+  const { error } = await supabase.from("transactions").insert({
+    user_id: userId,
+    type,
+    amount,
+    status: "completed",
+    reference_id: `crash_${roundId ?? "unknown"}_${userId}_${type}`,
+    metadata: {
+      game: "crash",
+      round_id: roundId,
+      ...(multiplier !== undefined ? { multiplier } : {}),
+    },
+  });
+
+  if (error) {
+    console.error("Failed to record crash transaction:", error);
+  }
+};
+
 /**
  * Generate a crash point.
  *
@@ -173,6 +205,14 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
         payout,
         betAmount,
       );
+
+      await recordCrashTransaction({
+        userId,
+        type: "win",
+        amount: payout,
+        roundId: gameState.roundId,
+        multiplier,
+      });
 
       player.payout = multiplier;
 
@@ -360,6 +400,13 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
 
             try {
               await walletService.consumeLockedBalance(userId, betAmount);
+
+              await recordCrashTransaction({
+                userId,
+                type: "lose",
+                amount: betAmount,
+                roundId: gameState.roundId,
+              });
 
               console.log(`Player ${userId} lost ${betAmount} ETB.`);
             } catch (err) {

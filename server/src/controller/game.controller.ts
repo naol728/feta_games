@@ -1,11 +1,41 @@
 import { NextFunction, Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync";
+import { randomUUID } from "crypto";
 interface GameRequest extends Request {
   user: {
     userId: string;
   };
 }
 import { supabase } from "../config/supabase";
+
+const recordSlotTransaction = async ({
+  userId,
+  type,
+  amount,
+  betAmount,
+}: {
+  userId: string;
+  type: "win" | "lose";
+  amount: number;
+  betAmount: number;
+}) => {
+  const { error } = await supabase.from("transactions").insert({
+    user_id: userId,
+    type,
+    amount,
+    status: "completed",
+    reference_id: `slots_${userId}_${randomUUID()}`,
+    metadata: {
+      game: "slots",
+      bet_amount: betAmount,
+      payout: type === "win" ? amount : 0,
+    },
+  });
+
+  if (error) {
+    console.error("Failed to record slot transaction:", error);
+  }
+};
 
 const SYMBOLS = [
   "red",
@@ -217,6 +247,13 @@ export const spinSlote = catchAsync(
     if (gameError) {
       console.error("Game history error:", gameError);
     }
+
+    await recordSlotTransaction({
+      userId,
+      type: totalPayout > 0 ? "win" : "lose",
+      amount: totalPayout > 0 ? totalPayout : betAmount,
+      betAmount,
+    });
 
     // -------------------------
     // FRONTEND RESPONSE

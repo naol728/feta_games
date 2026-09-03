@@ -1309,7 +1309,7 @@ interface CountdownBoxProps {
     label: string;
 }
 
-const CountdownBox = ({
+export const CountdownBox = ({
     value,
     label,
 }: CountdownBoxProps) => {
@@ -1332,7 +1332,7 @@ const CountdownBox = ({
 // COUNTDOWN SEPARATOR
 // =====================================================
 
-const CountdownSeparator = () => {
+export const CountdownSeparator = () => {
     return (
         <div className="flex h-[52px] items-center text-lg font-bold text-primary-foreground/70">
             :

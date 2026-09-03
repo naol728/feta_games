@@ -19,6 +19,7 @@ export const initAuth = createAsyncThunk("auth/init", async () => {
 interface Wallet {
   balance: number;
   locked_balance: number;
+  withdrawable_balance: number;
 }
 interface User {
   id: string;
@@ -50,6 +51,8 @@ const authSlice = createSlice({
       if (state.user) {
         state.user.wallets.balance = action.payload.balance;
         state.user.wallets.locked_balance = action.payload.locked_balance;
+        state.user.wallets.withdrawable_balance =
+          action.payload.withdrawable_balance;
       }
     },
     setUser: (state, action: PayloadAction<User>) => {

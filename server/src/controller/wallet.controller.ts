@@ -7,6 +7,7 @@ import {
   paymentVerify,
   veritas,
 } from "../services/payment/paymentvarify.service";
+import { wageringService } from "../services/waggering.service";
 
 interface WalletRequest extends Request {
   user: {
@@ -18,32 +19,6 @@ interface WalletRequest extends Request {
 export const deposit = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const { transactioID, trxno } = req.body;
-
-    const result = await veritas<{
-      success: boolean;
-      data?: {
-        payerName?: string;
-        payerTelebirrNo?: string;
-        creditedPartyName?: string;
-        creditedPartyAccountNo?: string;
-        transactionStatus?: string;
-        receiptNo?: string;
-        paymentDate?: string;
-        settledAmount?: string;
-        serviceFee?: string;
-        serviceFeeVAT?: string;
-        totalPaidAmount?: string;
-        bankName?: string;
-        customerNote?: string;
-      };
-    }>("/verify-telebirr", {
-      method: "POST",
-      body: JSON.stringify({ reference: transactioID }),
-    });
-    console.log(result);
-    if (!result) {
-      return next(new AppError("INVALID Transactio Id", 400));
-    }
 
     const { data: trx, error: trxerr } = await supabase
       .from("transactions")
@@ -78,6 +53,32 @@ export const deposit = catchAsync(
     if (existingRef) {
       return next(new AppError("Transaction already used", 400));
     }
+    const result = await veritas<{
+      success: boolean;
+      data?: {
+        payerName?: string;
+        payerTelebirrNo?: string;
+        creditedPartyName?: string;
+        creditedPartyAccountNo?: string;
+        transactionStatus?: string;
+        receiptNo?: string;
+        paymentDate?: string;
+        settledAmount?: string;
+        serviceFee?: string;
+        serviceFeeVAT?: string;
+        totalPaidAmount?: string;
+        bankName?: string;
+        customerNote?: string;
+      };
+    }>("/verify-telebirr", {
+      method: "POST",
+      body: JSON.stringify({ reference: transactioID }),
+    });
+
+    if (!result) {
+      return next(new AppError("INVALID Transactio Id", 400));
+    }
+
     const verification = paymentVerify(
       result,
       Number(trx.amount),
@@ -112,7 +113,12 @@ export const deposit = catchAsync(
     }
 
     await walletService.addBalance(trx.user_id, trx.amount);
-
+    await wageringService.addDepositRequirement(
+      trx.user_id,
+      trx.amount,
+      3,
+      trx.id,
+    );
     return res.status(200).json({
       message: "Deposit successful",
     });
@@ -228,18 +234,76 @@ export const withDraw = catchAsync(
     const { amount, destination_account, bank_name, account_holder_name } =
       req.body;
 
+    // =========================
+    // VALIDATE INPUT
+    // =========================
     if (
       !amount ||
-      amount <= 100 ||
+      Number(amount) < 50 ||
       !destination_account ||
       !account_holder_name
     ) {
       return next(new AppError("Invalid withdrawal data", 400));
     }
 
+    const withdrawalAmount = Number(amount);
+
+    // =========================
+    // GET WALLET
+    // =========================
+    const { data: wallet, error: walletError } = await supabase
+      .from("wallets")
+      .select("balance, withdrawable_balance")
+      .eq("user_id", userId)
+      .single();
+
+    if (walletError || !wallet) {
+      return next(new AppError("Wallet not found", 404));
+    }
+
+    const withdrawableBalance = Number(wallet.withdrawable_balance ?? 0);
+
+    // =========================
+    // CHECK WITHDRAWABLE BALANCE
+    // =========================
+    if (withdrawalAmount > withdrawableBalance) {
+      // Get active wagering requirements
+      const { data: wagering, error: wageringError } = await supabase
+        .from("wagering_requirements")
+        .select(
+          "id, type, required_amount, wagered_amount, remaining_amount, status",
+        )
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("created_at", { ascending: true });
+
+      if (wageringError) {
+        return next(new AppError("Unable to check wagering requirement", 500));
+      }
+
+      // Total remaining wagering
+      const totalWageringRequired = (wagering ?? []).reduce(
+        (total, requirement) =>
+          total + Number(requirement.remaining_amount ?? 0),
+        0,
+      );
+      return res.status(400).json({
+        status: "wagering_required",
+        message: "You have not completed the required wagering.",
+        requestedAmount: withdrawalAmount,
+        withdrawableBalance,
+        shortfall: Math.max(withdrawalAmount - withdrawableBalance, 0),
+        wageringRequired: totalWageringRequired,
+        wageringRequirements: wagering ?? [],
+      });
+    }
+
+    // =========================
+    // PROCESS WITHDRAWAL
+    // =========================
     const { data, error } = await supabase.rpc("process_withdrawal", {
       p_user_id: userId,
-      p_amount: amount,
+      p_amount: withdrawalAmount,
       p_destination: destination_account,
       p_bank: bank_name || null,
       p_account_holder_name: account_holder_name,
@@ -253,6 +317,7 @@ export const withDraw = catchAsync(
       status: "success",
       message: "Withdrawal request submitted",
       withdrawalId: data,
+      withdrawableBalance: withdrawableBalance - withdrawalAmount,
     });
   },
 );

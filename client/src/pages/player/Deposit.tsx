@@ -16,9 +16,12 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
+import { useAppDispatch } from "@/store/hook"
+import { initAuth } from "@/store/slice/auth"
 
 export default function Deposit() {
     const { trxno } = useParams()
+    const dispatch = useAppDispatch()
     const [transactionUrl, setTransactionUrl] = useState("")
     const [copied, setCopied] = useState(false)
     const { data, isLoading, error } = useQuery({
@@ -31,6 +34,7 @@ export default function Deposit() {
         mutationKey: ["varifytransaction"],
         onSuccess: (data) => {
             toast.success(data.message)
+            dispatch(initAuth())
             queryclient.invalidateQueries({ queryKey: ["gettransaction"] })
         },
         onError: (error) => toast.error(error.message),

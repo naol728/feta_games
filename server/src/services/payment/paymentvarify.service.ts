@@ -19,8 +19,7 @@ export async function veritas<T>(
     ...init,
     headers,
   });
-  const result = (await response.json()) as T & VeritasResponse;
-
+  const result = await response.json();
   if (!response.ok || result.success === false) {
     throw new Error(
       result.error ?? `Veritas request failed (${response.status})`,
@@ -32,23 +31,21 @@ export async function veritas<T>(
 
 interface VeritasPaymentResult {
   success: boolean;
-  data?:
-    | {
-        payerName?: string;
-        payerTelebirrNo?: string;
-        creditedPartyName?: string;
-        creditedPartyAccountNo?: string;
-        transactionStatus?: string;
-        receiptNo?: string;
-        paymentDate?: string;
-        settledAmount?: string;
-        serviceFee?: string;
-        serviceFeeVAT?: string;
-        totalPaidAmount?: string;
-        bankName?: string;
-        customerNote?: string;
-      }
-    ;
+  data?: {
+    payerName?: string;
+    payerTelebirrNo?: string;
+    creditedPartyName?: string;
+    creditedPartyAccountNo?: string;
+    transactionStatus?: string;
+    receiptNo?: string;
+    paymentDate?: string;
+    settledAmount?: string;
+    serviceFee?: string;
+    serviceFeeVAT?: string;
+    totalPaidAmount?: string;
+    bankName?: string;
+    customerNote?: string;
+  };
 }
 
 interface PaymentVerifyResult {

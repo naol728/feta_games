@@ -12,7 +12,7 @@ import MinesDuel from "./pages/game/minesduel/MinesDuel";
 import CardDraw from "./pages/game/carddraw/CardDraw";
 import CardDrawMatchmaking from "./pages/game/carddraw/CardDrawMatchmaking";
 import { ToastContainer } from "react-toastify"
-import { initAuth, setUser } from "./store/slice/auth";
+import { initAuth } from "./store/slice/auth";
 import { useAppDispatch, useAppSelector } from "./store/hook";
 import { connectSocket } from "./lib/socket";
 import { toast } from 'react-toastify';
@@ -59,16 +59,17 @@ export default function App() {
     );
   }
   if (!user?.phone) {
-    return <PhoneNumberSetup onComplete={(phone) => {
-      if (user) {
-        dispatch(
-          setUser({
-            ...user,
-            phone,
-          }),
-        );
-      }
-    }} />
+    return (
+      <PhoneNumberSetup
+        onComplete={async () => {
+          try {
+            await dispatch(initAuth()).unwrap();
+          } catch (error) {
+            console.error("Failed to refresh user:", error);
+          }
+        }}
+      />
+    );
   }
 
   return (

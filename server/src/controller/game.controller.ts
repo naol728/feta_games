@@ -7,6 +7,7 @@ interface GameRequest extends Request {
   };
 }
 import { supabase } from "../config/supabase";
+import { wageringService } from "../services/waggering.service";
 
 const recordSlotTransaction = async ({
   userId,
@@ -207,6 +208,7 @@ export const spinSlote = catchAsync(
     // -------------------------
     // SETTLE WALLET THROUGH RPC
     // -------------------------
+
     const { data: settledWallet, error: settleError } = await supabase.rpc(
       "settle_slot_spin",
       {
@@ -268,6 +270,7 @@ export const spinSlote = catchAsync(
       amount: totalPayout > 0 ? totalPayout : betAmount,
       betAmount,
     });
+    await wageringService.recordWager(userId, betAmount, "Slot");
 
     // -------------------------
     // FRONTEND RESPONSE

@@ -4,6 +4,8 @@ import { randomInt } from "crypto";
 
 import { walletService } from "../../services/wallet.service";
 import { supabase } from "../../config/supabase";
+import { wageringService } from "../../services/waggering.service";
+import BetAmount from "./../../../../client/src/components/game/BetAmount";
 
 interface JwtPayload {
   userId: string;
@@ -572,6 +574,12 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
                 error: "Insufficient funds",
               });
             }
+            await wageringService.recordWager(
+              userId,
+              amount,
+              "Crash",
+              gameState?.roundId,
+            );
 
             /**
              * Get ONLY data required by LiveBets.

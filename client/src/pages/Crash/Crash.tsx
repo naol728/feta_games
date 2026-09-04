@@ -161,8 +161,8 @@ const CrashGame = () => {
           toast.error(result.error);
           return;
         }
-        if (result?.ok) {
-          dispatch(initAuth()).unwrap()
+        if (result) {
+          dispatch(initAuth())
         }
       }
     );
@@ -290,7 +290,7 @@ const CrashGame = () => {
         // Update Redux wallet
 
         if (result?.wallet) {
-          dispatch(initAuth()).unwrap();
+          dispatch(initAuth())
         }
       }
     );
@@ -314,7 +314,7 @@ const CrashGame = () => {
       setUserCashedOut(true);
       setDisableButton(false);
       if (data.wallet) {
-        dispatch(initAuth()).unwrap()
+        dispatch(initAuth())
       }
     };
 

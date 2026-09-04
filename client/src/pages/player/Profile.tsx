@@ -178,11 +178,11 @@ export default function Profile() {
         const amount = Number(withdrawamount);
 
         if (!amount || amount < 50) {
-            toast.error("Minimum withdrawal is 500 ETB");
+            toast.error("Minimum withdrawal is 50 ETB");
             return;
         }
 
-        if (!user?.wallets?.withdrawable_balance || user.wallets.withdrawable_balance < amount) {
+        if (user?.wallets?.available_balance < amount) {
             toast.error("Insufficient balance");
             return;
         }

@@ -32,6 +32,43 @@ export default function PhoneNumberSetup({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const waitForPhone = async (): Promise<string> => {
+        const maxAttempts = 15;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                console.log(`Checking phone... attempt ${attempt} `);
+
+                const response = await me();
+                const data = response as MeResponse;
+
+                const phone = data.user?.phone ?? null;
+
+                if (phone) {
+                    console.log("✅ Phone found:", phone);
+                    return phone;
+                }
+
+                // Wait 1 second before trying again
+                await new Promise<void>((resolve) =>
+                    setTimeout(resolve, 1000)
+                );
+            } catch (err) {
+                console.error("Phone check failed:", err);
+
+                // Don't immediately fail.
+                // The backend may still be processing the Telegram update.
+                await new Promise<void>((resolve) =>
+                    setTimeout(resolve, 1000)
+                );
+            }
+        }
+
+        throw new Error(
+            "We are still processing your phone number. Please close and reopen the app."
+        );
+    };
+
     const requestPhone = (): void => {
         setError(null);
 
@@ -62,35 +99,25 @@ export default function PhoneNumberSetup({
                 }
 
                 try {
-                    await new Promise<void>((resolve) => {
-                        setTimeout(resolve, 1500);
-                    });
+                    console.log(
+                        "📱 Phone shared by Telegram. Waiting for backend..."
+                    );
 
-                    const response = await me();
+                    const phone = await waitForPhone();
 
-                    const data = response as MeResponse;
-
-                    const phone = data.user?.phone ?? null;
-
-                    if (!phone) {
-                        throw new Error(
-                            "Phone number is still being processed. Please try again."
-                        );
-                    }
-
-                    console.log("✅ Phone saved:", phone);
+                    console.log("✅ Phone successfully processed:", phone);
 
                     onComplete(phone);
                 } catch (error: unknown) {
                     console.error(
-                        "❌ Phone error:",
+                        "❌ Phone processing error:",
                         error
                     );
 
                     setError(
                         error instanceof Error
                             ? error.message
-                            : "Failed to save phone number."
+                            : "Failed to process phone number."
                     );
                 } finally {
                     setLoading(false);
@@ -102,14 +129,12 @@ export default function PhoneNumberSetup({
     return (
         <div className="flex min-h-screen items-center justify-center p-6">
             <div className="w-full max-w-md">
-
                 <h1 className="text-2xl font-bold">
                     Phone Number Required
                 </h1>
 
                 <p className="mt-2 text-muted-foreground">
-                    Share your Telegram phone number to
-                    continue.
+                    Share your Telegram phone number to continue.
                 </p>
 
                 {error && (
@@ -124,11 +149,11 @@ export default function PhoneNumberSetup({
                     disabled={loading}
                 >
                     {loading
-                        ? "Saving..."
+                        ? "Processing phone number..."
                         : "Share Phone Number"}
                 </Button>
-
             </div>
         </div>
     );
 }
+

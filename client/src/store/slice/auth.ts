@@ -22,7 +22,7 @@ interface Wallet {
   withdrawable_balance: number;
   available_balance: number;
 }
-interface User {
+export interface User {
   id: string;
   telegram_id: number;
   username: string;

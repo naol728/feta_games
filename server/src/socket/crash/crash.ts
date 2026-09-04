@@ -526,7 +526,7 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
           /**
            * Integer ETB bet.
            */
-          if (!Number.isInteger(amount) || amount < 10 || amount > 1_000_000) {
+          if (amount || amount < 10 || amount > 1_000_000) {
             return reply({
               error: "minimum bet 10 ETB",
             });

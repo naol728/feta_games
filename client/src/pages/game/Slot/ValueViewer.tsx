@@ -35,7 +35,7 @@ const ValueViewer: React.FC<ValueViewerProps> = ({
 
     const value =
         type === "balance"
-            ? user?.wallets?.balance ?? 0
+            ? user?.wallets?.available_balance ?? 0
             : type === "bet"
                 ? betAmount
                 : totalWins

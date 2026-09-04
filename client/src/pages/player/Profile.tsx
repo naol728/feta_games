@@ -65,7 +65,7 @@ interface Transaction {
 }
 
 export default function Profile() {
-    const user = useAppSelector((state) => state.auth.user);
+    const user = useAppSelector((state) => state.auth?.user);
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
 
@@ -126,6 +126,7 @@ export default function Profile() {
             dispatch(
                 setUserWallet({
                     balance: data.withdrawalId.balance,
+                    withdrawable_balance: data.withdrawalId.withdrawable_balance,
                     locked_balance: data.withdrawalId.locked_balance,
                 })
             );
@@ -176,12 +177,12 @@ export default function Profile() {
     const handleWithdraw = () => {
         const amount = Number(withdrawamount);
 
-        if (!amount || amount < 500) {
+        if (!amount || amount < 50) {
             toast.error("Minimum withdrawal is 500 ETB");
             return;
         }
 
-        if (!user?.wallets?.balance || user.wallets.balance < amount) {
+        if (!user?.wallets?.withdrawable_balance || user.wallets.withdrawable_balance < amount) {
             toast.error("Insufficient balance");
             return;
         }
@@ -425,7 +426,7 @@ export default function Profile() {
                                             <Input
                                                 placeholder="Withdrawal amount"
                                                 type="number"
-                                                min={500}
+                                                min={50}
                                                 value={withdrawamount}
                                                 onChange={(e) => setWithdrawAmount(e.target.value)}
                                                 className="h-11 rounded-xl pr-14"
@@ -437,7 +438,7 @@ export default function Profile() {
                                         </div>
 
                                         <p className="-mt-1 px-1 text-[10px] text-muted-foreground">
-                                            Minimum withdrawal: 500 ETB
+                                            Minimum withdrawal: 50 ETB
                                         </p>
 
                                         {/* Account Number */}
@@ -475,7 +476,7 @@ export default function Profile() {
                                         disabled={
                                             withdrawalreqpending ||
                                             !withdrawamount ||
-                                            Number(withdrawamount) < 500 ||
+                                            Number(withdrawamount) < 50 ||
                                             accountNumber.length !== 13 ||
                                             !accountName
                                         }

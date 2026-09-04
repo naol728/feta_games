@@ -289,7 +289,7 @@ const CrashGraph: React.FC<CrashGraphProps> = ({ gameStarted, gameEnded, multipl
             <img
                 ref={spriteRef}
                 src={idle}
-                alt={("crash.marisa")}
+                alt={("marisa")}
                 width={SPRITE_W}
                 className="absolute top-0 left-0 w-20 select-none"
             />

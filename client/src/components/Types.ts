@@ -1,6 +1,8 @@
 interface Wallet {
   balance: number;
   locked_balance: number;
+  withdrawable_balance: number;
+  avalable_balance?: number;
 }
 export interface User {
   id: string;

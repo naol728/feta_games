@@ -42,48 +42,23 @@ export const walletService = {
   ): Promise<{
     balance: number;
     locked_balance: number;
+    withdrawable_balance: number;
   }> {
-    const { data: wallet, error: fetchError } = await supabase
-      .from("wallets")
-      .select("balance, locked_balance")
-      .eq("user_id", userId)
-      .single();
-
-    if (fetchError) {
-      throw fetchError;
-    }
-
-    if (!wallet) {
-      throw new Error("Wallet not found");
-    }
-
-    if (betAmount <= 0 || payout <= 0) {
-      throw new Error("Invalid amount");
-    }
-
-    if (wallet.locked_balance < betAmount) {
-      throw new Error("Insufficient locked balance");
-    }
-
-    const newBalance = wallet.balance + payout;
-
-    const newLockedBalance = wallet.locked_balance - betAmount;
-
-    const { data, error } = await supabase
-      .from("wallets")
-      .update({
-        balance: newBalance,
-        locked_balance: newLockedBalance,
-      })
-      .eq("user_id", userId)
-      .select("balance, locked_balance")
-      .single();
+    const { data, error } = await supabase.rpc("settle_crash_win", {
+      user_id_input: userId,
+      payout_input: payout,
+      bet_amount_input: betAmount,
+    });
 
     if (error) {
       throw error;
     }
 
-    return data;
+    if (!data || data.length === 0) {
+      throw new Error("Failed to settle crash win");
+    }
+
+    return data[0];
   },
 
   async lockBalance(userId: string, amount: number) {
@@ -126,7 +101,7 @@ export const walletService = {
   ): Promise<Array<{ balance: number; locked_balance: number }>> {
     const { data: wallet, error: fetchError } = await supabase
       .from("wallets")
-      .select("balance, locked_balance")
+      .select("balance, locked_balance,withdrawable_balance")
       .eq("user_id", userId)
       .single();
 

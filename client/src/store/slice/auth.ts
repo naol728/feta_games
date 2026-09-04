@@ -20,6 +20,7 @@ interface Wallet {
   balance: number;
   locked_balance: number;
   withdrawable_balance: number;
+  available_balance: number;
 }
 interface User {
   id: string;
@@ -53,6 +54,7 @@ const authSlice = createSlice({
         state.user.wallets.locked_balance = action.payload.locked_balance;
         state.user.wallets.withdrawable_balance =
           action.payload.withdrawable_balance;
+        state.user.wallets.available_balance = action.payload.available_balance;
       }
     },
     setUser: (state, action: PayloadAction<User>) => {

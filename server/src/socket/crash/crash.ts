@@ -339,10 +339,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
             delete gameState.autoCashouts[userId];
 
             await settleCashout(userId, target, (data) => {
-              /**
-               * The socket joins a room named
-               * after the userId.
-               */
               io.to(userId).emit("crash:cashoutSuccess", data);
             });
           }),

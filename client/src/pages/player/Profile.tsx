@@ -182,7 +182,7 @@ export default function Profile() {
             return;
         }
 
-        if (user?.wallets?.available_balance < amount) {
+        if ((user?.wallets?.available_balance ?? 0) < amount) {
             toast.error("Insufficient balance");
             return;
         }

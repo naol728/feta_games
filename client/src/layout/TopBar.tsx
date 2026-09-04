@@ -41,11 +41,11 @@ export default function TopBar({
 }: Props) {
   const user = useAppSelector((state) => state.auth.user);
   const authLoading = useAppSelector((state) => state.auth.loading);
-
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
   const [amount, setAmount] = useState("");
+
 
   const [showBalance, setShowBalance] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -108,8 +108,7 @@ export default function TopBar({
 
   /* ================= BALANCE ================= */
 
-  const balance = Number(user?.wallets?.balance ?? 0);
-
+  const balance = Number(user?.wallets?.available_balance ?? 0);
   const formattedBalance = balance.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

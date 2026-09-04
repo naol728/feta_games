@@ -1,5 +1,4 @@
 /* eslint-disable */
-
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
@@ -14,7 +13,7 @@ import ValueViewer from "./ValueViewer";
 import GameBar from "./../../../components/game/GameBar";
 import LiveStatsButton from "./../../../components/LiveStats/LiveStatsButton";
 import { useAppDispatch, useAppSelector } from "@/store/hook";
-import { setUserWallet } from "@/store/slice/auth";
+import { initAuth } from "@/store/slice/auth";
 
 const renderPlaceholder = () => {
     const options = [
@@ -80,12 +79,7 @@ const Slots = () => {
                 const nextBalance =
                     data.balance ?? data.walletBalance ?? user?.wallets?.balance ?? 0;
 
-                dispatch(
-                    setUserWallet({
-                        balance: Number(nextBalance),
-                        locked_balance: user?.wallets?.locked_balance ?? 0,
-                    })
-                );
+                dispatch(initAuth());
 
                 /*
                  * Optional:
@@ -199,13 +193,7 @@ const Slots = () => {
             return;
         }
 
-        /*
-         * Frontend check for better UX.
-         *
-         * Backend MUST perform the real balance
-         * validation again.
-         */
-        if (Number(user.wallets.balance) < betAmount) {
+        if (Number(user.wallets.available_balance) < betAmount) {
             toast.error("Insufficient funds");
             return;
         }

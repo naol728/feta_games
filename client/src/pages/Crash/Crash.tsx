@@ -11,7 +11,7 @@ import GameContainer from "./GameContainer";
 import SideMenu from "./SideMenu";
 
 import { useAppDispatch, useAppSelector } from "@/store/hook";
-import { setUserWallet } from "@/store/slice/auth";
+import { initAuth, setUserWallet } from "@/store/slice/auth";
 import { getSocket } from "@/lib/socket";
 
 interface GameHistory {
@@ -155,21 +155,14 @@ const CrashGame = () => {
       (result: {
         ok?: boolean;
         error?: string;
-
-        // server can return updated wallet
-        wallet?: {
-          balance: number;
-          locked_balance: number;
-        };
       }) => {
         if (result?.error) {
           setUserGambled(false);
           toast.error(result.error);
           return;
         }
-        // Update Redux wallet after server confirms bet
-        if (result?.wallet) {
-          dispatch(setUserWallet(result.wallet));
+        if (result?.ok) {
+          dispatch(initAuth()).unwrap()
         }
       }
     );
@@ -202,14 +195,18 @@ const CrashGame = () => {
       return;
     }
 
+    if (userGambled) {
+      return;
+    }
+
     if (!bet || bet < 10) {
       toast.error("Minimum Bet 10 ETB.");
       return;
     }
-
-    // Client-side check only for UX.
-    // Backend must check again.
-    if (user.wallets.balance < bet) {
+    const availableBalance =
+      (user?.wallets?.balance ?? 0) +
+      (user?.wallets?.withdrawable_balance ?? 0);
+    if (availableBalance < bet) {
       toast.error("Insufficient balance.");
       return;
     }
@@ -272,6 +269,7 @@ const CrashGame = () => {
         wallet?: {
           balance: number;
           locked_balance: number;
+          withdrawable_balance: number;
         };
 
         payout?: number;
@@ -292,7 +290,7 @@ const CrashGame = () => {
         // Update Redux wallet
 
         if (result?.wallet) {
-          dispatch(setUserWallet(result.wallet));
+          dispatch(initAuth()).unwrap();
         }
       }
     );
@@ -308,13 +306,15 @@ const CrashGame = () => {
       wallet?: {
         balance: number;
         locked_balance: number;
+        withdrawable_balance: number,
+        avalable_balance: number;
       };
     }) => {
       setUserMultiplier(data.multiplier);
       setUserCashedOut(true);
       setDisableButton(false);
       if (data.wallet) {
-        dispatch(setUserWallet(data.wallet));
+        dispatch(initAuth()).unwrap()
       }
     };
 

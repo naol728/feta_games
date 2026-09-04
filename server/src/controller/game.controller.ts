@@ -150,7 +150,6 @@ export const spinSlote = catchAsync(
     // -------------------------
     // VALIDATE BET
     // -------------------------
-
     if (
       !Number.isFinite(betAmount) ||
       betAmount <= 0 ||
@@ -172,10 +171,9 @@ export const spinSlote = catchAsync(
     // -------------------------
     // GET USER WALLET
     // -------------------------
-
     const { data: wallet, error: walletError } = await supabase
       .from("wallets")
-      .select("id, balance")
+      .select("id, balance, withdrawable_balance")
       .eq("user_id", userId)
       .single();
 
@@ -186,9 +184,13 @@ export const spinSlote = catchAsync(
       });
     }
 
-    const balance = Number(wallet.balance);
+    const balance = Number(wallet.balance ?? 0);
+    const withdrawableBalance = Number(wallet.withdrawable_balance ?? 0);
 
-    if (balance < betAmount) {
+    // Check combined available balance
+    const availableBalance = balance + withdrawableBalance;
+
+    if (availableBalance < betAmount) {
       return res.status(400).json({
         success: false,
         message: "Insufficient funds",
@@ -198,43 +200,52 @@ export const spinSlote = catchAsync(
     // -------------------------
     // GENERATE RESULT
     // -------------------------
-
     const gridState = generateGrid();
 
     const { wins, totalPayout } = calculateWins(gridState, betAmount);
 
     // -------------------------
-    // UPDATE BALANCE
-    //
-    // First remove bet:
-    // balance - bet
-    //
-    // Then add winnings:
-    // balance + payout
+    // SETTLE WALLET THROUGH RPC
     // -------------------------
+    const { data: settledWallet, error: settleError } = await supabase.rpc(
+      "settle_slot_spin",
+      {
+        user_id_input: userId,
+        bet_amount_input: betAmount,
+        payout_input: totalPayout,
+      },
+    );
 
-    const newBalance = balance - betAmount + totalPayout;
+    if (settleError) {
+      console.error("Slot wallet settlement error:", settleError);
 
-    const { error: updateError } = await supabase
-      .from("wallets")
-      .update({
-        balance: newBalance,
-      })
-      .eq("id", wallet.id);
+      const message = settleError.message?.includes("Insufficient funds")
+        ? "Insufficient funds"
+        : "Failed to process spin";
 
-    if (updateError) {
-      console.error("Wallet update error:", updateError);
+      return res
+        .status(settleError.message?.includes("Insufficient funds") ? 400 : 500)
+        .json({
+          success: false,
+          message,
+        });
+    }
 
+    if (!settledWallet || settledWallet.length === 0) {
       return res.status(500).json({
         success: false,
-        message: "Failed to process spin",
+        message: "Failed to settle wallet",
       });
     }
+
+    const finalWallet = settledWallet[0];
+
+    const newBalance = Number(finalWallet.balance);
+    const newWithdrawableBalance = Number(finalWallet.withdrawable_balance);
 
     // -------------------------
     // SAVE GAME HISTORY
     // -------------------------
-
     const { error: gameError } = await supabase.from("game_history").insert({
       user_id: userId,
       game: "slots",
@@ -248,6 +259,9 @@ export const spinSlote = catchAsync(
       console.error("Game history error:", gameError);
     }
 
+    // -------------------------
+    // RECORD TRANSACTION
+    // -------------------------
     await recordSlotTransaction({
       userId,
       type: totalPayout > 0 ? "win" : "lose",
@@ -258,20 +272,18 @@ export const spinSlote = catchAsync(
     // -------------------------
     // FRONTEND RESPONSE
     // -------------------------
-
     return res.status(200).json({
       success: true,
-
       userId,
+
       balance: newBalance,
       walletBalance: newBalance,
 
+      withdrawable_balance: newWithdrawableBalance,
+
       betAmount,
-
       gridState,
-
       lastSpinResult: wins,
-
       totalPayout,
 
       newBalance,

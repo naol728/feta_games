@@ -8,12 +8,12 @@ import {
 
 import Monetary from "../../components/Monetary";
 import BetAmount from "../../components/game/BetAmount";
-import { type User } from "../../components/Types";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import type { User } from "@/store/slice/auth";
 
 interface SideMenuProps {
   bet: number | null;
@@ -87,20 +87,25 @@ const SideMenu: React.FC<SideMenuProps> = ({
     bet < 1 ||
     bet > MAX_BET ||
     (userData &&
-      userData.wallets.balance < bet);
+      userData.wallets?.available_balance < bet);
 
   const renderMessage = (profit: number) => {
     if (!isLogged) {
       return "Sign in to play";
     }
 
+    // QUEUED MUST COME BEFORE PLACE BET
+    if (queued) {
+      return "Queued • Cancel";
+    }
+
     if (userCashedOut && gameStarted) {
-      return `Cashed out at ${userMultiplier.toFixed(2)} x`;
+      return `Cashed out at ${userMultiplier.toFixed(2)}x`;
     }
 
     if (userGambled) {
       return gameStarted
-        ? `Cash Out ${profit.toFixed(2) + bet}`
+        ? `Cash Out ${(profit + (bet ?? 0)).toFixed(2)}`
         : "You're in!";
     }
 
@@ -112,12 +117,8 @@ const SideMenu: React.FC<SideMenuProps> = ({
       return "Max bet is 1M";
     }
 
-    if (userData.wallets.balance < bet) {
+    if (userData.wallets.available_balance < bet) {
       return "Not enough balance";
-    }
-
-    if (queued) {
-      return "Queued • Cancel";
     }
 
     if (gameStarted) {
@@ -134,9 +135,12 @@ const SideMenu: React.FC<SideMenuProps> = ({
   const actionDisabled =
     disableButton ||
     (isLogged &&
-      (userGambled
-        ? !gameStarted || userCashedOut
-        : invalidBet));
+      !queued &&
+      (
+        userGambled
+          ? !gameStarted || userCashedOut
+          : invalidBet
+      ));
 
   return (
     <Card
@@ -171,7 +175,7 @@ const SideMenu: React.FC<SideMenuProps> = ({
               Balance:{" "}
               <span className="font-medium text-foreground/80">
                 <Monetary
-                  value={userData?.wallets?.balance ?? 0}
+                  value={userData?.wallets?.available_balance ?? 0}
                   showFraction
                 />
               </span>
@@ -295,7 +299,7 @@ const SideMenu: React.FC<SideMenuProps> = ({
               type="button"
               variant="outline"
               onClick={() => stepTarget(-1)}
-              disabled={inputsDisabled}
+              disabled={inputsDisabled || actionDisabled}
               className="
                 h-8
                 w-8
@@ -379,12 +383,20 @@ const SideMenu: React.FC<SideMenuProps> = ({
         ========================== */}
         <Button
           type="button"
-          onClick={
-            userGambled && gameStarted
-              ? handleCashout
-              : handleBet
-          }
-          disabled={inputsDisabled}
+          onClick={() => {
+            if (queued) {
+              handleBet();
+              return;
+            }
+
+            if (userGambled && gameStarted) {
+              handleCashout();
+              return;
+            }
+
+            handleBet();
+          }}
+          disabled={actionDisabled}
           className={cn(
             "h-10 w-full rounded-md",
             "border-0 shadow-none",

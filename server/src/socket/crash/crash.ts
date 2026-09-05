@@ -44,12 +44,14 @@ interface CrashBetPayload {
 interface CrashBetResult {
   ok?: boolean;
   roundId?: string | null;
+  wallet?: any;
   error?: string;
 }
 
 interface CrashCashoutResult {
   ok?: boolean;
   multiplier?: number;
+  wallet?: any;
   error?: string;
 }
 
@@ -169,11 +171,8 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
     pendingCashouts.add(userId);
 
     try {
-      const wallet = await walletService.settleCrashWin(
-        userId,
-        payout,
-        betAmount,
-      );
+      await walletService.settleCrashWin(userId, payout, betAmount);
+      const wallet = await walletService.getWallet(userId);
       await Promise.all([
         supabase.rpc("record_daily_activity", {
           p_user_id: userId,
@@ -305,6 +304,10 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
                       roundId: gameState.roundId,
                     }),
                   ]);
+
+                  // --- Send updated wallet to the losing user ---
+                  const wallet = await walletService.getWallet(userId);
+                  io.to(userId).emit("crash:wallet", wallet);
                 } catch (err) {
                   console.error("Failed to settle losing bet:", userId, err);
                 }
@@ -433,8 +436,9 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
               payout: null,
             });
 
+            const wallet = await walletService.getWallet(userId);
             io.emit("crash:gameState", publicState(gameState));
-            return reply({ ok: true, roundId: gameState.roundId });
+            return reply({ ok: true, roundId: gameState.roundId, wallet });
           } finally {
             pendingBets.delete(userId);
           }
@@ -486,10 +490,12 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
 
           gameState.autoCashouts.delete(userId);
 
+          let cashoutWallet: any = null;
           const success = await settleCashout(
             userId,
             currentMultiplier,
             (data) => {
+              cashoutWallet = data.wallet;
               socket.emit("crash:cashoutSuccess", data);
             },
           );
@@ -498,7 +504,16 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
             return done({ error: "Cashout failed" });
           }
 
-          return done({ ok: true, multiplier: currentMultiplier });
+          // If for some reason wallet wasn't attached, fetch it
+          if (!cashoutWallet) {
+            cashoutWallet = await walletService.getWallet(userId);
+          }
+
+          return done({
+            ok: true,
+            multiplier: currentMultiplier,
+            wallet: cashoutWallet,
+          });
         } catch (err) {
           console.error("Crash cashout error:", err);
           return done({ error: "Cashout failed" });

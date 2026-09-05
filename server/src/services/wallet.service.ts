@@ -81,19 +81,17 @@ export const walletService = {
 
     await emitBalance(userId);
   },
-  async getWallet(
-    userId: string,
-  ): Promise<{ balance: number; locked_balance: number }> {
+  async getWallet(userId: string) {
     const { error, data } = await supabase
       .from("wallets")
-      .select("*")
+      .select("balance,locked_balance,available_balance,withdrawable_balance")
       .eq("user_id", userId)
       .single();
     if (error) {
       console.log(error);
       throw error;
     }
-    return (data.balance, data.locked_balance);
+    return data;
   },
   async consumeLockedBalance(
     userId: string,

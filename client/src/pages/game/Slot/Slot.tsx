@@ -14,7 +14,7 @@ import ValueViewer from "./ValueViewer";
 import GameBar from "./../../../components/game/GameBar";
 import LiveStatsButton from "./../../../components/LiveStats/LiveStatsButton";
 import { useAppDispatch, useAppSelector } from "@/store/hook";
-import { initAuth } from "@/store/slice/auth";
+import { fetchWallet, setUserWallet } from "@/store/slice/auth";
 
 // Import sound files
 import slotBackground from "/sounds/slotbackground.mp3";
@@ -159,11 +159,8 @@ const Slots = () => {
                 ) || []
             );
             console.log(data)
-
-            if (data) {
-
-                dispatch(initAuth());
-
+            if (data.wallet) {
+                dispatch(setUserWallet(data.wallet))
 
             }
 

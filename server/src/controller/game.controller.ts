@@ -1,13 +1,10 @@
 import { NextFunction, Request, Response } from "express";
 import { catchAsync } from "../utils/catchAsync";
 import { randomUUID } from "crypto";
-interface GameRequest extends Request {
-  user: {
-    userId: string;
-  };
-}
+
 import { supabase } from "../config/supabase";
 import { wageringService } from "../services/waggering.service";
+import { AppError } from "../utils/AppError";
 
 const recordSlotTransaction = async ({
   userId,
@@ -144,9 +141,12 @@ function calculateWins(grid: SymbolName[], betAmount: number) {
 }
 
 export const spinSlote = catchAsync(
-  async (req: GameRequest, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     const betAmount = Number(req.body.betAmount);
-    const userId = req.user.userId;
+    const userId = req.user?.userId;
+    if (!userId) {
+      return next(new AppError("Unautorized", 401));
+    }
 
     // -------------------------
     // VALIDATE BET
@@ -271,7 +271,10 @@ export const spinSlote = catchAsync(
       betAmount,
     });
     await wageringService.recordWager(userId, betAmount, "Slot");
-
+    await supabase.rpc("record_daily_activity", {
+      p_user_id: userId,
+      p_activity_type: "played",
+    });
     // -------------------------
     // FRONTEND RESPONSE
     // -------------------------

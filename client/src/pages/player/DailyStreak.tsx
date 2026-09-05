@@ -1,5 +1,9 @@
-
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useState,
+} from "react";
 
 import { useNavigate } from "react-router-dom";
 
@@ -43,18 +47,18 @@ import { useAppSelector } from "@/store/hook";
 import { useQuery } from "@tanstack/react-query";
 
 import { getInviteData } from "@/api/invite";
+import { weeklyActivity } from "@/api/stat";
 
-interface Transaction {
-    id: string;
-    type: string;
-    amount: number | string;
-    status: string;
-    date: string;
+
+
+interface DailyActivity {
+    activity_date: string;
+    played: boolean;
+    deposited: boolean;
+    invited: boolean;
 }
 
-interface DailyStreakProps {
-    mappedTransactions?: Transaction[];
-}
+
 
 type StreakType = "gameplay" | "deposit";
 
@@ -76,19 +80,31 @@ interface InvitedUser {
     created_at?: string;
 }
 
+
+// =====================================================
+// DATE KEY
+// =====================================================
+
 const getDateKey = (date: Date) => {
     const year = date.getFullYear();
 
-    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const month = String(
+        date.getMonth() + 1,
+    ).padStart(2, "0");
 
-    const day = String(date.getDate()).padStart(2, "0");
+    const day = String(
+        date.getDate(),
+    ).padStart(2, "0");
 
     return `${year}-${month}-${day}`;
 };
 
-const DailyStreak = ({
-    mappedTransactions = [],
-}: DailyStreakProps) => {
+
+// =====================================================
+// DAILY STREAK
+// =====================================================
+
+const DailyStreak = () => {
     const navigate = useNavigate();
 
     const user = useAppSelector(
@@ -110,6 +126,7 @@ const DailyStreak = ({
         seconds: 0,
     });
 
+
     // =====================================================
     // INVITE DATA
     // =====================================================
@@ -123,7 +140,104 @@ const DailyStreak = ({
         queryKey: ["getInviteData"],
     });
 
-    const inviteStats = invitedata?.data;
+
+    // =====================================================
+    // WEEKLY DAILY ACTIVITY
+    //
+    // Expected backend:
+    //
+    // {
+    //   status: true,
+    //   message: "...",
+    //   data: [
+    //     {
+    //       activity_date: "2026-09-05",
+    //       played: true,
+    //       deposited: true,
+    //       invited: false
+    //     }
+    //   ]
+    // }
+    // =====================================================
+
+    const {
+        data: activityResponse,
+        isLoading: activityLoading,
+        error: activityError,
+    } = useQuery({
+        queryKey: ["weeklyActivity"],
+        queryFn: weeklyActivity,
+    });
+
+
+    // =====================================================
+    // NORMALIZE ACTIVITY DATA
+    // =====================================================
+
+    const activities = useMemo<DailyActivity[]>(() => {
+        if (!activityResponse) {
+            return [];
+        }
+
+        // If API returns:
+        // { status: true, data: [...] }
+        if (
+            Array.isArray(
+                activityResponse?.data,
+            )
+        ) {
+            return activityResponse.data;
+        }
+
+        // If API directly returns [...]
+        if (Array.isArray(activityResponse)) {
+            return activityResponse;
+        }
+
+        return [];
+    }, [activityResponse]);
+
+
+    // =====================================================
+    // ACTIVITY MAP
+    //
+    // Example:
+    //
+    // {
+    //   "2026-09-05": {
+    //      played: true,
+    //      deposited: true
+    //   }
+    // }
+    // =====================================================
+
+    const activityMap = useMemo<
+        Record<string, DailyActivity>
+    >(() => {
+        const map: Record<
+            string,
+            DailyActivity
+        > = {};
+
+        activities.forEach((activity) => {
+            if (!activity?.activity_date) {
+                return;
+            }
+
+            map[activity.activity_date] =
+                activity;
+        });
+
+        return map;
+    }, [activities]);
+
+
+    // =====================================================
+    // INVITE STATS
+    // =====================================================
+
+    const inviteStats =
+        invitedata?.data;
 
     const invitedUsers: InvitedUser[] =
         inviteStats?.invited_users || [];
@@ -134,6 +248,7 @@ const DailyStreak = ({
     const totalEarnings =
         inviteStats?.total_earnings || 0;
 
+
     // =====================================================
     // REFERRAL LINK
     // =====================================================
@@ -142,8 +257,19 @@ const DailyStreak = ({
         ? `https://t.me/fetasgamebot?start=ref_${user.referral_id}`
         : "Referral link unavailable";
 
+
     // =====================================================
     // CHECK WHETHER USER HAS ACTIVITY
+    //
+    // IMPORTANT:
+    //
+    // No row for a past date = missed.
+    //
+    // Gameplay:
+    // played === true
+    //
+    // Deposit:
+    // deposited === true
     // =====================================================
 
     const hasActivityOnDate = useCallback(
@@ -151,82 +277,69 @@ const DailyStreak = ({
             dateKey: string,
             type: StreakType,
         ) => {
-            return mappedTransactions.some(
-                (transaction) => {
-                    if (!transaction.date) {
-                        return false;
-                    }
+            const activity =
+                activityMap[dateKey];
 
-                    const transactionDate =
-                        new Date(transaction.date);
+            // No activity record
+            // means no activity.
+            if (!activity) {
+                return false;
+            }
 
-                    if (
-                        Number.isNaN(
-                            transactionDate.getTime(),
-                        )
-                    ) {
-                        return false;
-                    }
+            if (type === "gameplay") {
+                return activity.played === true;
+            }
 
-                    const transactionDateKey =
-                        getDateKey(transactionDate);
+            if (type === "deposit") {
+                return activity.deposited === true;
+            }
 
-                    if (
-                        transactionDateKey !== dateKey
-                    ) {
-                        return false;
-                    }
-
-                    // -----------------------------
-                    // GAMEPLAY
-                    // -----------------------------
-
-                    if (type === "gameplay") {
-                        return (
-                            transaction.type === "win" ||
-                            transaction.type === "lose"
-                        );
-                    }
-
-                    // -----------------------------
-                    // DEPOSIT
-                    // -----------------------------
-
-                    if (type === "deposit") {
-                        return (
-                            transaction.type === "deposit" &&
-                            transaction.status?.toLowerCase() !==
-                            "failed"
-                        );
-                    }
-
-                    return false;
-                },
-            );
+            return false;
         },
-        [mappedTransactions],
+        [activityMap],
     );
+
 
     // =====================================================
     // STREAK DAYS
-    // 3 PREVIOUS + TODAY + 3 FUTURE
+    //
+    // 3 PREVIOUS
+    // TODAY
+    // 3 FUTURE
     // =====================================================
+
+
 
     const streakDays = useMemo<StreakDay[]>(
         () => {
             const today = new Date();
 
+            today.setHours(
+                0,
+                0,
+                0,
+                0,
+            );
+
             return Array.from(
                 { length: 7 },
                 (_, index) => {
-                    const offset = index - 3;
+                    const offset =
+                        index - 3;
 
-                    const date = new Date(today);
-
-                    date.setHours(0, 0, 0, 0);
+                    const date =
+                        new Date(today);
 
                     date.setDate(
-                        today.getDate() + offset,
+                        today.getDate() +
+                        offset,
+                    );
+
+                    date.setHours(
+                        0,
+                        0,
+                        0,
+                        0,
                     );
 
                     const dateKey =
@@ -235,9 +348,11 @@ const DailyStreak = ({
                     return {
                         date,
                         dateKey,
+
                         day: date
                             .getDate()
                             .toString(),
+
                         month:
                             date.toLocaleDateString(
                                 "en-US",
@@ -245,80 +360,123 @@ const DailyStreak = ({
                                     month: "short",
                                 },
                             ),
+
                         hasActivity:
                             hasActivityOnDate(
                                 dateKey,
                                 streakType,
                             ),
-                        isToday: offset === 0,
-                        isFuture: offset > 0,
+
+                        isToday:
+                            offset === 0,
+
+                        isFuture:
+                            offset > 0,
                     };
                 },
             );
         },
-        [hasActivityOnDate, streakType],
+        [
+            hasActivityOnDate,
+            streakType,
+        ],
     );
+
 
     // =====================================================
     // COMPLETED DAYS
     // =====================================================
 
-    const completedDays = useMemo(() => {
-        return streakDays.filter(
-            (day) => day.hasActivity,
-        ).length;
-    }, [streakDays]);
+    const completedDays =
+        useMemo(() => {
+            return streakDays.filter(
+                (day) =>
+                    day.hasActivity,
+            ).length;
+        }, [streakDays]);
+
 
     // =====================================================
     // CURRENT STREAK
-    // Counts backwards from today
+    //
+    // Counts backwards from today.
+    //
+    // Example:
+    //
+    // Sep 5 = played
+    // Sep 4 = played
+    // Sep 3 = played
+    // Sep 2 = missed
+    //
+    // Result = 3
     // =====================================================
 
-    const currentStreak = useMemo(() => {
-        let streak = 0;
+    const currentStreak =
+        useMemo(() => {
+            let streak = 0;
 
-        const today = new Date();
+            const today = new Date();
 
-        today.setHours(0, 0, 0, 0);
-
-        for (let i = 0; i < 365; i++) {
-            const date = new Date(today);
-
-            date.setDate(
-                today.getDate() - i,
+            today.setHours(
+                0,
+                0,
+                0,
+                0,
             );
 
-            const dateKey =
-                getDateKey(date);
-
-            if (
-                hasActivityOnDate(
-                    dateKey,
-                    streakType,
-                )
+            // The weekly endpoint gives us
+            // the recent activity period.
+            //
+            // We check up to 365 days, but
+            // dates outside the returned
+            // activity data will naturally
+            // be considered inactive.
+            for (
+                let i = 0;
+                i < 365;
+                i++
             ) {
-                streak++;
-            } else {
-                break;
-            }
-        }
+                const date =
+                    new Date(today);
 
-        return streak;
-    }, [
-        hasActivityOnDate,
-        streakType,
-    ]);
+                date.setDate(
+                    today.getDate() - i,
+                );
+
+                const dateKey =
+                    getDateKey(date);
+
+                if (
+                    hasActivityOnDate(
+                        dateKey,
+                        streakType,
+                    )
+                ) {
+                    streak++;
+                } else {
+                    break;
+                }
+            }
+
+            return streak;
+        }, [
+            hasActivityOnDate,
+            streakType,
+        ]);
+
 
     // =====================================================
     // CASHBACK COUNTDOWN
-    // Counts down to next midnight
+    //
+    // Counts down to next midnight.
     // =====================================================
 
     useEffect(() => {
         const updateCountdown = () => {
             const now = new Date();
 
-            const tomorrow = new Date(now);
+            const tomorrow =
+                new Date(now);
 
             tomorrow.setHours(
                 24,
@@ -331,20 +489,27 @@ const DailyStreak = ({
                 tomorrow.getTime() -
                 now.getTime();
 
-            const totalSeconds = Math.max(
+            const totalSeconds =
+                Math.max(
+                    Math.floor(
+                        difference /
+                        1000,
+                    ),
+                    0,
+                );
+
+            const hours =
                 Math.floor(
-                    difference / 1000,
-                ),
-                0,
-            );
+                    totalSeconds /
+                    3600,
+                );
 
-            const hours = Math.floor(
-                totalSeconds / 3600,
-            );
-
-            const minutes = Math.floor(
-                (totalSeconds % 3600) / 60,
-            );
+            const minutes =
+                Math.floor(
+                    (totalSeconds %
+                        3600) /
+                    60,
+                );
 
             const seconds =
                 totalSeconds % 60;
@@ -358,14 +523,16 @@ const DailyStreak = ({
 
         updateCountdown();
 
-        const interval = setInterval(
-            updateCountdown,
-            1000,
-        );
+        const interval =
+            setInterval(
+                updateCountdown,
+                1000,
+            );
 
         return () =>
             clearInterval(interval);
     }, []);
+
 
     // =====================================================
     // FORMAT COUNTDOWN
@@ -379,45 +546,53 @@ const DailyStreak = ({
             "0",
         );
 
+
     // =====================================================
     // COPY REFERRAL
     // =====================================================
 
-    const copyReferral = async () => {
-        if (!user?.referral_id) {
-            return;
-        }
+    const copyReferral =
+        async () => {
+            if (
+                !user?.referral_id
+            ) {
+                return;
+            }
 
-        try {
-            await navigator.clipboard.writeText(
-                referralLink,
-            );
+            try {
+                await navigator.clipboard.writeText(
+                    referralLink,
+                );
 
-            setCopied(true);
+                setCopied(true);
 
-            setTimeout(() => {
-                setCopied(false);
-            }, 2000);
-        } catch (error) {
-            console.error(
-                "Failed to copy referral link:",
-                error,
-            );
-        }
-    };
+                setTimeout(() => {
+                    setCopied(false);
+                }, 2000);
+            } catch (error) {
+                console.error(
+                    "Failed to copy referral link:",
+                    error,
+                );
+            }
+        };
+
 
     // =====================================================
     // SHARE REFERRAL
     // =====================================================
 
     const shareReferral = () => {
-        if (!user?.referral_id) {
+        if (
+            !user?.referral_id
+        ) {
             return;
         }
 
-        const text = encodeURIComponent(
-            "Get 50 ETB by inviting friends to Gebeta Games!",
-        );
+        const text =
+            encodeURIComponent(
+                "Get 50 ETB by inviting friends to Gebeta Games!",
+            );
 
         const url =
             encodeURIComponent(
@@ -432,6 +607,7 @@ const DailyStreak = ({
             "_blank",
         );
     };
+
 
     // =====================================================
     // RENDER
@@ -454,13 +630,16 @@ const DailyStreak = ({
                         <div className="flex min-w-0 items-center gap-2">
 
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+
                                 <Flame
                                     className="h-5 w-5 fill-primary text-primary"
                                     strokeWidth={2.5}
                                 />
+
                             </div>
 
                             <div className="min-w-0">
+
                                 <h2 className="text-[17px] font-bold leading-tight">
                                     Daily Streak
                                 </h2>
@@ -468,9 +647,11 @@ const DailyStreak = ({
                                 <p className="text-[10px] text-muted-foreground">
                                     Keep your streak alive
                                 </p>
+
                             </div>
 
                         </div>
+
 
                         {/* STREAK STATS */}
 
@@ -494,6 +675,7 @@ const DailyStreak = ({
 
                     </div>
 
+
                     {/* GAMEPLAY / DEPOSIT TABS */}
 
                     <Tabs
@@ -505,6 +687,7 @@ const DailyStreak = ({
                         }
                         className="mb-3"
                     >
+
                         <TabsList className="grid h-9 w-full grid-cols-2 rounded-xl bg-muted/80 p-1">
 
                             <TabsTrigger
@@ -521,9 +704,13 @@ const DailyStreak = ({
                                     data-[state=active]:shadow-sm
                                 "
                             >
+
                                 <Gamepad2 className="h-3.5 w-3.5" />
+
                                 Gameplay
+
                             </TabsTrigger>
+
 
                             <TabsTrigger
                                 value="deposit"
@@ -539,12 +726,17 @@ const DailyStreak = ({
                                     data-[state=active]:shadow-sm
                                 "
                             >
+
                                 <WalletCards className="h-3.5 w-3.5" />
+
                                 Deposit
+
                             </TabsTrigger>
 
                         </TabsList>
+
                     </Tabs>
+
 
                     {/* STREAK DESCRIPTION */}
 
@@ -552,17 +744,20 @@ const DailyStreak = ({
 
                         <div className="flex items-center gap-1.5">
 
-                            {streakType === "gameplay" ? (
+                            {streakType ===
+                                "gameplay" ? (
                                 <Gamepad2 className="h-3.5 w-3.5 text-primary" />
                             ) : (
                                 <WalletCards className="h-3.5 w-3.5 text-primary" />
                             )}
 
                             <span className="text-[11px] font-medium text-muted-foreground">
+
                                 {streakType ===
                                     "gameplay"
                                     ? "Play at least once every day"
                                     : "Make a deposit every day"}
+
                             </span>
 
                         </div>
@@ -573,159 +768,183 @@ const DailyStreak = ({
 
                     </div>
 
+
                     {/* STREAK CALENDAR */}
+
 
                     <div className="grid grid-cols-7 gap-1.5">
 
-                        {streakDays.map((item) => {
-                            const completed =
-                                item.hasActivity;
+                        { activityLoading? <>Loading</>: streakDays.map(
+                            (item) => {
+                                const completed =
+                                    item.hasActivity;
 
-                            const today =
-                                item.isToday;
+                                const today =
+                                    item.isToday;
 
-                            const future =
-                                item.isFuture;
+                                const future =
+                                    item.isFuture;
 
-                            return (
-                                <div
-                                    key={item.dateKey}
-                                    className={`
-                                        relative
-                                        flex
-                                        h-[72px]
-                                        min-w-0
-                                        flex-col
-                                        items-center
-                                        justify-center
-                                        overflow-hidden
-                                        rounded-xl
-                                        border
-                                        transition-all
-
-                                        ${completed
-                                            ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                                            : today
-                                                ? "border-primary/50 bg-primary/10 text-primary"
-                                                : future
-                                                    ? "border-border/40 bg-muted/60 text-muted-foreground"
-                                                    : "border-destructive/20 bg-destructive/10 text-destructive"
-                                        }
-                                    `}
-                                >
-
-                                    {/* STATUS ICON */}
-
+                                return (
                                     <div
+                                        key={
+                                            item.dateKey
+                                        }
                                         className={`
-                                            absolute
-                                            top-1.5
+                                            relative
                                             flex
-                                            h-4
-                                            w-4
+                                            h-[72px]
+                                            min-w-0
+                                            flex-col
                                             items-center
                                             justify-center
-                                            rounded-full
-
+                                            overflow-hidden
+                                            rounded-xl
+                                            border
+                                            transition-all
                                             ${completed
-                                                ? "bg-primary-foreground/20"
+                                                ? "border-primary bg-primary text-primary-foreground shadow-sm"
                                                 : today
-                                                    ? "bg-primary/10"
+                                                    ? "border-primary/50 bg-primary/10 text-primary"
                                                     : future
-                                                        ? "bg-muted"
-                                                        : "bg-destructive/10"
+                                                        ? "border-border/40 bg-muted/60 text-muted-foreground"
+                                                        : "border-destructive/20 bg-destructive/10 text-destructive"
                                             }
                                         `}
                                     >
-                                        {completed ? (
-                                            <CircleCheck
-                                                className="h-3 w-3"
-                                                strokeWidth={3}
-                                            />
-                                        ) : today ? (
-                                            <Clock3
-                                                className="h-3 w-3"
-                                                strokeWidth={2.5}
-                                            />
-                                        ) : future ? (
-                                            <Clock3 className="h-3 w-3" />
-                                        ) : (
-                                            <X
-                                                className="h-3 w-3"
-                                                strokeWidth={3}
-                                            />
-                                        )}
-                                    </div>
 
-                                    {/* DAY */}
+                                        {/* STATUS ICON */}
 
-                                    <span className="mt-2 text-[17px] font-bold leading-none">
-                                        {item.day}
-                                    </span>
-
-                                    {/* MONTH */}
-
-                                    <span className="mt-1 text-[9px] font-medium uppercase">
-                                        {item.month}
-                                    </span>
-
-                                    {/* TODAY */}
-
-                                    {today && (
                                         <div
                                             className={`
                                                 absolute
-                                                bottom-0
-                                                left-2
-                                                right-2
-                                                h-[2px]
+                                                top-1.5
+                                                flex
+                                                h-4
+                                                w-4
+                                                items-center
+                                                justify-center
                                                 rounded-full
-
                                                 ${completed
-                                                    ? "bg-primary-foreground"
-                                                    : "bg-primary"
+                                                    ? "bg-primary-foreground/20"
+                                                    : today
+                                                        ? "bg-primary/10"
+                                                        : future
+                                                            ? "bg-muted"
+                                                            : "bg-destructive/10"
                                                 }
                                             `}
-                                        />
-                                    )}
+                                        >
 
-                                </div>
-                            );
-                        })}
+                                            {completed ? (
+                                                <CircleCheck
+                                                    className="h-3 w-3"
+                                                    strokeWidth={
+                                                        3
+                                                    }
+                                                />
+                                            ) : today ? (
+                                                <Clock3
+                                                    className="h-3 w-3"
+                                                    strokeWidth={
+                                                        2.5
+                                                    }
+                                                />
+                                            ) : future ? (
+                                                <Clock3 className="h-3 w-3" />
+                                            ) : (
+                                                <X
+                                                    className="h-3 w-3"
+                                                    strokeWidth={
+                                                        3
+                                                    }
+                                                />
+                                            )}
+
+                                        </div>
+
+
+                                        {/* DAY */}
+
+                                        <span className="mt-2 text-[17px] font-bold leading-none">
+                                            {item.day}
+                                        </span>
+
+
+                                        {/* MONTH */}
+
+                                        <span className="mt-1 text-[9px] font-medium uppercase">
+                                            {item.month}
+                                        </span>
+
+
+                                        {/* TODAY */}
+
+                                        {today && (
+                                            <div
+                                                className={`
+                                                    absolute
+                                                    bottom-0
+                                                    left-2
+                                                    right-2
+                                                    h-[2px]
+                                                    rounded-full
+                                                    ${completed
+                                                        ? "bg-primary-foreground"
+                                                        : "bg-primary"
+                                                    }
+                                                `}
+                                            />
+                                        )}
+
+                                    </div>
+                                );
+                            },
+                        )}
 
                     </div>
+
 
                     {/* SMALL LEGEND */}
 
                     <div className="mt-2.5 flex items-center justify-center gap-3">
 
                         <div className="flex items-center gap-1">
+
                             <span className="h-1.5 w-1.5 rounded-full bg-primary" />
 
                             <span className="text-[9px] text-muted-foreground">
                                 Completed
                             </span>
+
                         </div>
 
+
                         <div className="flex items-center gap-1">
+
                             <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
 
                             <span className="text-[9px] text-muted-foreground">
                                 Missed
                             </span>
+
                         </div>
 
+
                         <div className="flex items-center gap-1">
+
                             <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
 
                             <span className="text-[9px] text-muted-foreground">
                                 Upcoming
                             </span>
+
                         </div>
 
                     </div>
 
                 </div>
+
 
                 {/* =================================================
                     DAILY CASHBACK
@@ -738,6 +957,7 @@ const DailyStreak = ({
                     <div className="pointer-events-none absolute -right-12 -top-8 h-44 w-44 rounded-full border-[6px] border-primary-foreground/20" />
 
                     <div className="pointer-events-none absolute -right-4 top-6 h-32 w-32 rounded-full border-2 border-primary-foreground/15" />
+
 
                     {/* CONTENT */}
 
@@ -767,6 +987,7 @@ const DailyStreak = ({
                             </div>
 
                         </div>
+
 
                         {/* COUNTDOWN */}
 
@@ -801,6 +1022,7 @@ const DailyStreak = ({
 
                     </div>
 
+
                     {/* CASHBACK BADGE */}
 
                     <div className="pointer-events-none absolute -right-3 top-[47px] z-20 -rotate-6">
@@ -810,9 +1032,11 @@ const DailyStreak = ({
                             <div className="absolute inset-[5px] rounded-[13px] border border-primary-foreground/50" />
 
                             <div className="relative text-center text-[22px] font-black leading-[0.85] tracking-tight">
+
                                 CASH
                                 <br />
                                 BACK
+
                             </div>
 
                         </div>
@@ -820,6 +1044,7 @@ const DailyStreak = ({
                     </div>
 
                 </div>
+
 
                 {/* =================================================
                     ACTIONS
@@ -860,8 +1085,11 @@ const DailyStreak = ({
                         >
 
                             <div className="pointer-events-none absolute right-0 top-0 opacity-[0.08]">
+
                                 <BarChart3 className="h-24 w-24" />
+
                             </div>
+
 
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/10">
 
@@ -871,6 +1099,7 @@ const DailyStreak = ({
                                 />
 
                             </div>
+
 
                             <div className="relative z-10 ml-3 min-w-0">
 
@@ -884,12 +1113,14 @@ const DailyStreak = ({
 
                             </div>
 
+
                             <ArrowRight
                                 className="relative z-10 ml-auto h-5 w-5 shrink-0 transition-transform group-active:translate-x-1"
                                 strokeWidth={2.5}
                             />
 
                         </button>
+
 
                         {/* AFFILIATE */}
 
@@ -920,8 +1151,11 @@ const DailyStreak = ({
                         >
 
                             <div className="pointer-events-none absolute right-0 top-0 opacity-[0.08]">
+
                                 <Users className="h-24 w-24" />
+
                             </div>
+
 
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/10">
 
@@ -931,6 +1165,7 @@ const DailyStreak = ({
                                 />
 
                             </div>
+
 
                             <div className="relative z-10 ml-3 min-w-0">
 
@@ -944,6 +1179,7 @@ const DailyStreak = ({
 
                             </div>
 
+
                             <ArrowRight
                                 className="relative z-10 ml-auto h-5 w-5 shrink-0 transition-transform group-active:translate-x-1"
                                 strokeWidth={2.5}
@@ -952,6 +1188,7 @@ const DailyStreak = ({
                         </button>
 
                     </div>
+
 
                     {/* MORE GIFTS */}
 
@@ -999,6 +1236,7 @@ const DailyStreak = ({
 
             </section>
 
+
             {/* =====================================================
                 AFFILIATE DIALOG
             ===================================================== */}
@@ -1042,13 +1280,14 @@ const DailyStreak = ({
                             </DialogTitle>
 
                             <DialogDescription className="mt-1.5 text-center text-xs leading-5 text-primary-foreground/75">
-                                Invite friends and earn rewards
-                                when they join EtyPoto.
+                                Invite friends and earn 50etb
+                                when they join gebeta games.
                             </DialogDescription>
 
                         </DialogHeader>
 
                     </div>
+
 
                     {/* BODY */}
 
@@ -1061,11 +1300,15 @@ const DailyStreak = ({
                             <div className="rounded-xl border border-border/60 bg-muted/50 p-3 text-center">
 
                                 {getInviteDataloading ? (
+
                                     <div className="mx-auto h-6 w-8 animate-pulse rounded bg-muted" />
+
                                 ) : (
+
                                     <p className="text-xl font-bold text-primary">
                                         {totalInvites}
                                     </p>
+
                                 )}
 
                                 <p className="mt-0.5 text-[10px] text-muted-foreground">
@@ -1074,17 +1317,25 @@ const DailyStreak = ({
 
                             </div>
 
+
                             <div className="rounded-xl border border-border/60 bg-muted/50 p-3 text-center">
 
                                 {getInviteDataloading ? (
+
                                     <div className="mx-auto h-6 w-14 animate-pulse rounded bg-muted" />
+
                                 ) : (
+
                                     <p className="text-xl font-bold text-primary">
+
                                         {Number(
                                             totalEarnings,
                                         ).toLocaleString()}{" "}
+
                                         ETB
+
                                     </p>
+
                                 )}
 
                                 <p className="mt-0.5 text-[10px] text-muted-foreground">
@@ -1094,6 +1345,7 @@ const DailyStreak = ({
                             </div>
 
                         </div>
+
 
                         {/* ERROR */}
 
@@ -1107,6 +1359,21 @@ const DailyStreak = ({
 
                             </div>
                         )}
+
+
+                        {/* ACTIVITY ERROR */}
+
+                        {activityError && (
+                            <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-center">
+
+                                <p className="text-[10px] text-destructive">
+                                    Failed to load daily
+                                    activity.
+                                </p>
+
+                            </div>
+                        )}
+
 
                         {/* REFERRAL LINK */}
 
@@ -1133,16 +1400,19 @@ const DailyStreak = ({
                                     }
                                     className="h-8 w-8 shrink-0 rounded-lg"
                                 >
+
                                     {copied ? (
                                         <Check className="h-3.5 w-3.5" />
                                     ) : (
                                         <Copy className="h-3.5 w-3.5" />
                                     )}
+
                                 </Button>
 
                             </div>
 
                         </div>
+
 
                         {/* INVITED USERS */}
 
@@ -1160,7 +1430,9 @@ const DailyStreak = ({
 
                             </div>
 
+
                             {getInviteDataloading ? (
+
                                 <div className="space-y-2">
 
                                     {[1, 2, 3].map(
@@ -1173,8 +1445,10 @@ const DailyStreak = ({
                                     )}
 
                                 </div>
+
                             ) : invitedUsers.length ===
                                 0 ? (
+
                                 <div className="rounded-xl border border-border/60 bg-muted/50 p-4 text-center">
 
                                     <Users className="mx-auto h-6 w-6 text-muted-foreground/50" />
@@ -1190,10 +1464,12 @@ const DailyStreak = ({
                                     </p>
 
                                 </div>
+
                             ) : (
+
                                 <div className="max-h-40 space-y-2 overflow-y-auto pr-0.5">
 
-                                    {/* {invitedUsers.map(
+                                    {invitedUsers.map(
                                         (
                                             invitedUser,
                                             index,
@@ -1214,7 +1490,9 @@ const DailyStreak = ({
                                             const displayName =
                                                 fullName ||
                                                 invitedUser.username ||
-                                                `User ${index + 1}`;
+                                                `User ${index +
+                                                1
+                                                }`;
 
                                             return (
                                                 <div
@@ -1226,12 +1504,15 @@ const DailyStreak = ({
                                                 >
 
                                                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+
                                                         {displayName
                                                             .charAt(
                                                                 0,
                                                             )
                                                             .toUpperCase()}
+
                                                     </div>
+
 
                                                     <div className="min-w-0 flex-1">
 
@@ -1252,17 +1533,20 @@ const DailyStreak = ({
 
                                                     </div>
 
+
                                                     <Check className="h-4 w-4 shrink-0 text-primary" />
 
                                                 </div>
                                             );
                                         },
-                                    )} */}
+                                    )}
 
                                 </div>
+
                             )}
 
                         </div>
+
 
                         {/* SHARE */}
 
@@ -1283,6 +1567,7 @@ const DailyStreak = ({
 
                         </Button>
 
+
                         <p className="px-3 text-center text-[10px] leading-4 text-muted-foreground">
                             Share your referral link with
                             friends and earn rewards when
@@ -1299,6 +1584,7 @@ const DailyStreak = ({
 };
 
 export default DailyStreak;
+
 
 // =====================================================
 // COUNTDOWN BOX
@@ -1328,6 +1614,7 @@ export const CountdownBox = ({
     );
 };
 
+
 // =====================================================
 // COUNTDOWN SEPARATOR
 // =====================================================
@@ -1339,4 +1626,3 @@ export const CountdownSeparator = () => {
         </div>
     );
 };
-

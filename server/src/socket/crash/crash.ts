@@ -1,11 +1,10 @@
-/*eslint-disable*/
+/* eslint-disable */
 import { Server, Socket } from "socket.io";
-import { randomInt } from "crypto";
-
 import { walletService } from "../../services/wallet.service";
 import { supabase } from "../../config/supabase";
 import { wageringService } from "../../services/waggering.service";
-import BetAmount from "./../../../../client/src/components/game/BetAmount";
+
+// ======================== TYPES ========================
 
 interface JwtPayload {
   userId: string;
@@ -54,6 +53,7 @@ interface CrashCashoutResult {
   error?: string;
 }
 
+// Public state (what clients see)
 interface PublicGameState {
   gameBets: Record<string, number>;
   gamePlayers: Record<string, CrashPlayer>;
@@ -62,53 +62,64 @@ interface PublicGameState {
   phase: CrashPhase;
 }
 
+// Internal state (crashPoint kept secret)
 interface GameState {
-  gameBets: Record<string, number>;
-  gamePlayers: Record<string, CrashPlayer>;
-  autoCashouts: Record<string, number>;
+  gameBets: Map<string, number>;
+  gamePlayers: Map<string, CrashPlayer>;
+  autoCashouts: Map<string, number>;
   crashPoint: number;
   gameStartTime: number | null;
   roundId: string | null;
   phase: CrashPhase;
 }
 
+// ======================== UTILITIES ========================
+
 const freshState = (): GameState => ({
-  gameBets: {},
-  gamePlayers: {},
-  autoCashouts: {},
+  gameBets: new Map(),
+  gamePlayers: new Map(),
+  autoCashouts: new Map(),
   crashPoint: 1.01,
   gameStartTime: null,
   roundId: null,
   phase: "betting",
 });
 
-/**
- * Only expose information the frontend actually needs.
- *
- * IMPORTANT:
- * crashPoint is intentionally NOT included here.
- */
-const publicState = (state: GameState) => ({
-  gameBets: state.gameBets,
-  gamePlayers: state.gamePlayers,
+const publicState = (state: GameState): PublicGameState => ({
+  gameBets: Object.fromEntries(state.gameBets),
+  gamePlayers: Object.fromEntries(state.gamePlayers),
   gameStartTime: state.gameStartTime,
   roundId: state.roundId,
   phase: state.phase,
 });
 
-const recordCrashTransaction = async ({
-  userId,
-  type,
-  amount,
-  roundId,
-  multiplier,
-}: {
+/**
+ * Generate crash point with 95% RTP (5% house edge).
+ * Uses fast Math.random() – NOT cryptographically secure.
+ */
+function generateCrashPoint(): number {
+  const random = Math.random();
+  let crash = 0.95 / (1 - random);
+  if (crash < 1.01) crash = 1.01;
+  if (crash > 1000) crash = 1000;
+  return Math.floor(crash * 100) / 100;
+}
+
+function calculateMultiplierAt(elapsedMs: number): number {
+  return Math.floor(Math.exp(elapsedMs / 10_000) * 100) / 100;
+}
+
+/**
+ * Record a transaction – kept separate for clarity.
+ */
+const recordCrashTransaction = async (params: {
   userId: string;
   type: "win" | "lose";
   amount: number;
   roundId: string | null;
   multiplier?: number;
-}) => {
+}): Promise<void> => {
+  const { userId, type, amount, roundId, multiplier } = params;
   const { error } = await supabase.from("transactions").insert({
     user_id: userId,
     type,
@@ -121,84 +132,40 @@ const recordCrashTransaction = async ({
       ...(multiplier !== undefined ? { multiplier } : {}),
     },
   });
-
-  if (error) {
-    console.error("Failed to record crash transaction:", error);
-  }
+  if (error) console.error("Failed to record crash transaction:", error);
 };
 
-/**
- * Generate a crash point.
- *
- * Uses crypto randomness instead of Math.random().
- *
- * This is still NOT a full provably-fair implementation.
- * For production gambling, use a committed server seed/client seed
- * scheme and store the resulting hash/seed information.
- */
-function generateCrashPoint(): number {
-  const random = randomInt(0, 1_000_000) / 1_000_000;
-
-  const crash = 1 / (1 - random);
-
-  return Math.max(1.01, Math.min(1000, Math.floor(crash * 100) / 100));
-}
-
-/**
- * Calculate the current multiplier.
- */
-function calculateMultiplierAt(elapsedMs: number): number {
-  const multiplier = Math.exp(elapsedMs / 10_000);
-
-  return Math.floor(multiplier * 100) / 100;
-}
+// ======================== GAME ENGINE ========================
 
 const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
-  let gameState: GameState = freshState();
-
+  let gameState = freshState();
   let stopped = false;
-
   let nextRound: NodeJS.Timeout | null = null;
-
   let ticker: NodeJS.Timeout | null = null;
 
   const pendingBets = new Set<string>();
-
   const pendingCashouts = new Set<string>();
 
-  /**
-   * --------------------------------
-   * SEND STATE TO ONE SOCKET
-   * --------------------------------
-   */
   const sendState = (socket: CustomSocket) => {
     socket.emit("crash:sync", publicState(gameState));
   };
 
   /**
-   * --------------------------------
-   * SETTLE CASHOUT
-   * --------------------------------
+   * Settle a single cashout – returns true on success.
    */
   const settleCashout = async (
     userId: string,
     multiplier: number,
-    notify: Function,
-  ) => {
-    const player = gameState.gamePlayers[userId];
-
-    if (!player || player.payout != null || pendingCashouts.has(userId)) {
+    notify: (data: CrashCashoutData) => void,
+  ): Promise<boolean> => {
+    const player = gameState.gamePlayers.get(userId);
+    if (!player || player.payout !== null || pendingCashouts.has(userId)) {
       return false;
     }
-
-    const betAmount = gameState.gameBets[userId];
-
-    if (!betAmount) {
-      return false;
-    }
+    const betAmount = gameState.gameBets.get(userId);
+    if (!betAmount) return false;
 
     const payout = betAmount * multiplier;
-
     pendingCashouts.add(userId);
 
     try {
@@ -207,26 +174,23 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
         payout,
         betAmount,
       );
-
-      await recordCrashTransaction({
-        userId,
-        type: "win",
-        amount: payout,
-        roundId: gameState.roundId,
-        multiplier,
-      });
+      await Promise.all([
+        supabase.rpc("record_daily_activity", {
+          p_user_id: userId,
+          p_activity_type: "played",
+        }),
+        recordCrashTransaction({
+          userId,
+          type: "win",
+          amount: payout,
+          roundId: gameState.roundId,
+          multiplier,
+        }),
+      ]);
 
       player.payout = multiplier;
-
       io.emit("crash:gameState", publicState(gameState));
-
-      notify({
-        userId,
-        payout,
-        multiplier,
-        wallet,
-      });
-
+      notify({ userId, payout, multiplier, wallet });
       return true;
     } catch (err) {
       console.error("Cashout error:", err);
@@ -237,52 +201,30 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
   };
 
   /**
-   * --------------------------------
-   * OPEN BETTING
-   * --------------------------------
+   * Open betting phase.
    */
   const openBetting = () => {
-    if (stopped) {
-      return;
-    }
-
+    if (stopped) return;
     gameState = freshState();
-
     gameState.roundId = `crash_${Date.now()}`;
-
-    /**
-     * Generate the crash point on the SERVER.
-     *
-     * It is NOT included in publicState().
-     */
     gameState.crashPoint = generateCrashPoint();
-
     gameState.phase = "betting";
-
     io.emit("crash:gameState", publicState(gameState));
-
     nextRound = setTimeout(runRound, bettingMs);
   };
 
   /**
-   * --------------------------------
-   * RUN ROUND
-   * --------------------------------
+   * Run the round – start multiplier ticker.
    */
   const runRound = () => {
-    if (stopped) {
-      return;
-    }
-
+    if (stopped) return;
     gameState.phase = "running";
-
     gameState.gameStartTime = Date.now();
 
     io.emit("crash:start", {
       roundId: gameState.roundId,
       gameStartTime: gameState.gameStartTime,
     });
-
     io.emit("crash:gameState", publicState(gameState));
 
     let ticking = false;
@@ -290,16 +232,10 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
     const multiplierInterval = setInterval(async () => {
       if (stopped) {
         clearInterval(multiplierInterval);
-
         return;
       }
-
-      if (ticking) {
-        return;
-      }
-
+      if (ticking) return;
       ticking = true;
-
       try {
         await tick();
       } catch (err) {
@@ -312,34 +248,26 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
     ticker = multiplierInterval;
 
     /**
-     * --------------------------------
-     * TICK
-     * --------------------------------
+     * Tick function – called every tickMs.
      */
-    const tick = async () => {
-      if (!gameState.gameStartTime) {
-        return;
-      }
+    const tick = async (): Promise<void> => {
+      if (!gameState.gameStartTime) return;
 
       const elapsedMs = Date.now() - gameState.gameStartTime;
-
       const currentMultiplier = calculateMultiplierAt(elapsedMs);
 
-      /**
-       * --------------------------------
-       * AUTO CASHOUTS
-       * --------------------------------
-       */
-      const dueAutoCashouts = Object.entries(gameState.autoCashouts).filter(
-        ([, target]) =>
-          target <= currentMultiplier && target < gameState.crashPoint,
-      );
+      // ---- AUTO CASHOUTS ----
+      const dueAutoCashouts: [string, number][] = [];
+      for (const [userId, target] of gameState.autoCashouts) {
+        if (target <= currentMultiplier && target < gameState.crashPoint) {
+          dueAutoCashouts.push([userId, target]);
+        }
+      }
 
       if (dueAutoCashouts.length > 0) {
         await Promise.all(
           dueAutoCashouts.map(async ([userId, target]) => {
-            delete gameState.autoCashouts[userId];
-
+            gameState.autoCashouts.delete(userId);
             await settleCashout(userId, target, (data) => {
               io.to(userId).emit("crash:cashoutSuccess", data);
             });
@@ -347,245 +275,141 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
         );
       }
 
-      /**
-       * --------------------------------
-       * CRASH
-       * --------------------------------
-       */
+      // ---- CRASH CONDITION ----
       if (currentMultiplier >= gameState.crashPoint) {
         clearInterval(multiplierInterval);
-
         ticker = null;
-
         gameState.phase = "crashed";
 
-        /**
-         * The final multiplier is exactly
-         * the generated crash point.
-         */
         io.emit("crash:multiplier", gameState.crashPoint);
 
-        /**
-         * --------------------------------
-         * LOSING BETS
-         * --------------------------------
-         *
-         * IMPORTANT:
-         *
-         * Do NOT call unlockBalance() here
-         * if unlockBalance returns the locked
-         * bet to the user's available balance.
-         *
-         * A losing bet must be CONSUMED from
-         * locked_balance.
-         *
-         * You need a wallet service method such as:
-         *
-         * walletService.consumeLockedBalance(...)
-         *
-         * or
-         *
-         * walletService.settleLoss(...)
-         *
-         * Use the actual method from your
-         * wallet.service.ts.
-         */
-        for (const [userId, player] of Object.entries(gameState.gamePlayers)) {
+        // Settle all losing bets in parallel
+        const lossPromises: Promise<void>[] = [];
+        for (const [userId, player] of gameState.gamePlayers) {
           if (player.payout === null) {
-            const betAmount = gameState.gameBets[userId];
-
+            const betAmount = gameState.gameBets.get(userId);
             if (!betAmount) continue;
-
-            try {
-              await walletService.consumeLockedBalance(userId, betAmount);
-
-              await recordCrashTransaction({
-                userId,
-                type: "lose",
-                amount: betAmount,
-                roundId: gameState.roundId,
-              });
-
-              console.log(`Player ${userId} lost ${betAmount} ETB.`);
-            } catch (err) {
-              console.error("Failed to settle losing bet:", userId, err);
-            }
+            lossPromises.push(
+              (async () => {
+                try {
+                  await walletService.consumeLockedBalance(userId, betAmount);
+                  await Promise.all([
+                    supabase.rpc("record_daily_activity", {
+                      p_user_id: userId,
+                      p_activity_type: "played",
+                    }),
+                    recordCrashTransaction({
+                      userId,
+                      type: "lose",
+                      amount: betAmount,
+                      roundId: gameState.roundId,
+                    }),
+                  ]);
+                } catch (err) {
+                  console.error("Failed to settle losing bet:", userId, err);
+                }
+              })(),
+            );
           }
         }
+        await Promise.all(lossPromises);
 
-        /**
-         * Tell clients the round crashed.
-         *
-         * This is the FIRST time crashPoint
-         * is exposed.
-         */
+        // Emit final results
         io.emit("crash:result", gameState.crashPoint);
-
         io.emit("crash:reveal", {
           roundId: gameState.roundId,
           crashPoint: gameState.crashPoint,
         });
-
         io.emit("crash:gameState", publicState(gameState));
 
-        /**
-         * Start next betting round.
-         */
         openBetting();
-
         return;
       }
 
-      /**
-       * --------------------------------
-       * NORMAL MULTIPLIER UPDATE
-       * --------------------------------
-       */
+      // ---- NORMAL MULTIPLIER UPDATE ----
       io.emit("crash:multiplier", currentMultiplier);
     };
   };
 
-  /**
-   * --------------------------------
-   * REGISTER ONE CONNECTED SOCKET
-   * --------------------------------
-   */
-  const registerSocket = (socket: CustomSocket) => {
-    /**
-     * Join a private room using userId.
-     *
-     * This makes:
-     *
-     * io.to(userId).emit(...)
-     *
-     * work.
-     */
-    socket.join(socket.user.userId);
+  // ======================== SOCKET REGISTRATION ========================
 
-    /**
-     * Send current game immediately.
-     */
+  const registerSocket = (socket: CustomSocket) => {
+    socket.join(socket.user.userId);
     sendState(socket);
 
-    /**
-     * Client asks for current state.
-     */
     socket.on("crash:requestState", () => {
       sendState(socket);
     });
 
-    /**
-     * --------------------------------
-     * BET
-     * --------------------------------
-     */
+    // ---- BET ----
     socket.on(
       "crash:bet",
-      async (bet: unknown, callback?: (result: any) => void) => {
-        const reply = (result: any) => {
-          if (typeof callback === "function") {
-            callback(result);
-          }
+      async (
+        bet: unknown,
+        callback?: (result: CrashBetResult) => void,
+      ): Promise<void> => {
+        const reply = (result: CrashBetResult) => {
+          if (typeof callback === "function") callback(result);
         };
 
         try {
           const userId = socket.user?.userId;
-
           if (!userId) {
-            return reply({
-              error: "You must be logged in to bet",
-            });
+            return reply({ error: "You must be logged in to bet" });
           }
 
-          /**
-           * Only betting phase accepts bets.
-           */
           if (gameState.phase !== "betting") {
-            return reply({
-              error: "Betting is closed for this round",
-            });
+            return reply({ error: "Betting is closed for this round" });
           }
 
           const payload =
             typeof bet === "object" && bet !== null
-              ? (bet as {
-                  amount?: unknown;
-                  autoCashoutAt?: unknown;
-                })
-              : {
-                  amount: bet,
-                };
+              ? (bet as CrashBetPayload)
+              : { amount: bet };
 
           const amount = Number(payload.amount);
-
           const autoCashoutAt =
             payload.autoCashoutAt == null
               ? null
               : Number(payload.autoCashoutAt);
 
-          /**
-           * Integer ETB bet.
-           */
-          if (amount < 10 || amount > 1_000_000) {
+          if (!Number.isFinite(amount) || amount < 10 || amount > 1_000_000) {
             return reply({
-              error: "minimum bet 10 ETB",
+              error: "Minimum bet 10 ETB, maximum 1,000,000 ETB",
             });
           }
 
-          /**
-           * Validate auto cashout.
-           */
           if (
             autoCashoutAt !== null &&
             (!Number.isFinite(autoCashoutAt) ||
               autoCashoutAt < 1.01 ||
               autoCashoutAt > 1000)
           ) {
-            return reply({
-              error: "Invalid auto cashout target",
-            });
+            return reply({ error: "Invalid auto cashout target" });
           }
 
-          /**
-           * Prevent duplicate bet.
-           */
-          if (
-            gameState.gameBets[userId] !== undefined ||
-            pendingBets.has(userId)
-          ) {
-            return reply({
-              error: "You already have a bet this round",
-            });
+          if (gameState.gameBets.has(userId) || pendingBets.has(userId)) {
+            return reply({ error: "You already have a bet this round" });
           }
 
           pendingBets.add(userId);
-
           try {
-            /**
-             * Lock balance atomically.
-             */
             const locked = await walletService.lockandchcekBalance(
               userId,
               amount,
             );
-
             if (!locked) {
-              return reply({
-                error: "Insufficient funds",
-              });
+              return reply({ error: "Insufficient funds" });
             }
+
             await wageringService.recordWager(
               userId,
               amount,
               "Crash",
-              gameState?.roundId,
+              gameState.roundId,
             );
 
-            /**
-             * Get ONLY data required by LiveBets.
-             *
-             * Do NOT select wallet information.
-             */
+            // Fetch user info – minimal fields
             const { data: user, error } = await supabase
               .from("users")
               .select("id, username, Fname, Lname")
@@ -593,226 +417,126 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 80 } = {}) => {
               .single();
 
             if (error || !user) {
-              /**
-               * User lookup failed, so return
-               * the locked balance.
-               */
               await walletService.unlockBalance(userId);
-
-              return reply({
-                error: "User not found",
-              });
+              return reply({ error: "User not found" });
             }
 
-            /**
-             * Save bet.
-             */
-            gameState.gameBets[userId] = amount;
-
-            /**
-             * Save auto cashout.
-             */
+            gameState.gameBets.set(userId, amount);
             if (autoCashoutAt !== null) {
-              gameState.autoCashouts[userId] = autoCashoutAt;
+              gameState.autoCashouts.set(userId, autoCashoutAt);
             }
-
-            /**
-             * Save SAFE public player data.
-             */
-            gameState.gamePlayers[userId] = {
+            gameState.gamePlayers.set(userId, {
               id: user.id,
               username: user.username ?? "",
               Fname: user.Fname ?? "",
               Lname: user.Lname ?? "",
               payout: null,
-            };
-
-            /**
-             * Broadcast updated live bets.
-             */
-            io.emit("crash:gameState", publicState(gameState));
-
-            return reply({
-              ok: true,
-              roundId: gameState.roundId,
             });
+
+            io.emit("crash:gameState", publicState(gameState));
+            return reply({ ok: true, roundId: gameState.roundId });
           } finally {
             pendingBets.delete(userId);
           }
         } catch (err) {
           console.error("Crash bet error:", err);
-
-          return reply({
-            error: "Could not place the bet",
-          });
+          return reply({ error: "Could not place the bet" });
         }
       },
     );
 
-    /**
-     * --------------------------------
-     * CASHOUT
-     * --------------------------------
-     */
-    socket.on("crash:cashout", async (callback?: (result: any) => void) => {
-      const done = (result?: any) => {
-        if (typeof callback === "function") {
-          callback(result);
+    // ---- CASHOUT ----
+    socket.on(
+      "crash:cashout",
+      async (
+        callback?: (result: CrashCashoutResult) => void,
+      ): Promise<void> => {
+        const done = (result: CrashCashoutResult) => {
+          if (typeof callback === "function") callback(result);
+        };
+
+        try {
+          const userId = socket.user?.userId;
+          if (!userId) {
+            return done({ error: "You must be logged in" });
+          }
+
+          if (gameState.phase !== "running" || !gameState.gameStartTime) {
+            return done({ error: "Game is not running" });
+          }
+
+          const player = gameState.gamePlayers.get(userId);
+          if (!player) {
+            return done({ error: "You don't have a bet" });
+          }
+          if (player.payout !== null) {
+            return done({ error: "Already cashed out" });
+          }
+          if (pendingCashouts.has(userId)) {
+            return done({ error: "Cashout already processing" });
+          }
+
+          const currentMultiplier = calculateMultiplierAt(
+            Date.now() - gameState.gameStartTime,
+          );
+
+          if (currentMultiplier >= gameState.crashPoint) {
+            return done({ error: "Too late" });
+          }
+
+          gameState.autoCashouts.delete(userId);
+
+          const success = await settleCashout(
+            userId,
+            currentMultiplier,
+            (data) => {
+              socket.emit("crash:cashoutSuccess", data);
+            },
+          );
+
+          if (!success) {
+            return done({ error: "Cashout failed" });
+          }
+
+          return done({ ok: true, multiplier: currentMultiplier });
+        } catch (err) {
+          console.error("Crash cashout error:", err);
+          return done({ error: "Cashout failed" });
         }
-      };
+      },
+    );
 
-      try {
-        const userId = socket.user?.userId;
-
-        if (!userId) {
-          return done({
-            error: "You must be logged in",
-          });
-        }
-
-        /**
-         * Must be running.
-         */
-        if (gameState.phase !== "running" || !gameState.gameStartTime) {
-          return done({
-            error: "Game is not running",
-          });
-        }
-
-        const player = gameState.gamePlayers[userId];
-
-        if (!player) {
-          return done({
-            error: "You don't have a bet",
-          });
-        }
-
-        if (player.payout !== null) {
-          return done({
-            error: "Already cashed out",
-          });
-        }
-
-        if (pendingCashouts.has(userId)) {
-          return done({
-            error: "Cashout already processing",
-          });
-        }
-
-        const currentMultiplier = calculateMultiplierAt(
-          Date.now() - gameState.gameStartTime,
-        );
-
-        /**
-         * Crash already happened.
-         */
-        if (currentMultiplier >= gameState.crashPoint) {
-          return done({
-            error: "Too late",
-          });
-        }
-
-        /**
-         * Remove auto cashout because
-         * user manually cashed out.
-         */
-        delete gameState.autoCashouts[userId];
-
-        const success = await settleCashout(
-          userId,
-          currentMultiplier,
-          (data) => {
-            socket.emit("crash:cashoutSuccess", data);
-          },
-        );
-
-        if (!success) {
-          return done({
-            error: "Cashout failed",
-          });
-        }
-
-        return done({
-          ok: true,
-          multiplier: currentMultiplier,
-        });
-      } catch (err) {
-        console.error("Crash cashout error:", err);
-
-        return done({
-          error: "Cashout failed",
-        });
-      }
-    });
-
-    /**
-     * Remove crash listeners when
-     * this socket disconnects.
-     *
-     * The actual game DOES NOT stop.
-     */
     socket.on("disconnect", () => {
       socket.removeAllListeners("crash:requestState");
-
       socket.removeAllListeners("crash:bet");
-
       socket.removeAllListeners("crash:cashout");
     });
   };
 
-  /**
-   * Start game ONCE.
-   */
   openBetting();
 
-  /**
-   * Stop global game.
-   */
   const stop = () => {
     stopped = true;
-
     if (nextRound) {
       clearTimeout(nextRound);
       nextRound = null;
     }
-
     if (ticker) {
       clearInterval(ticker);
       ticker = null;
     }
   };
 
-  return {
-    registerSocket,
-    stop,
-  };
+  return { registerSocket, stop };
 };
 
-/**
- * ========================================
- * GLOBAL CRASH GAME INSTANCE
- * ========================================
- *
- * There should be only ONE crash game running
- * for this Node.js process.
- */
+// ======================== SINGLETON INSTANCE ========================
+
 let crashGameInstance: ReturnType<typeof crashGame> | null = null;
 
-/**
- * ========================================
- * CRASH SOCKET MODULE
- * ========================================
- */
 export default function Crash(io: Server, socket: CustomSocket) {
-  /**
-   * Create the game only once.
-   */
   if (!crashGameInstance) {
     crashGameInstance = crashGame(io);
   }
-
-  /**
-   * Register THIS user's socket.
-   */
   crashGameInstance.registerSocket(socket);
 }

@@ -76,11 +76,48 @@ const CrashGame = () => {
   const queuedRef = useRef<BetPayload | null>(null);
   const userIdRef = useRef<string | undefined>(user?.id);
   const countdownRAF = useRef<number | null>(null);
+  const soundMap = useRef<Record<string, HTMLAudioElement>>({});
 
   // Keep userId ref updated
   useEffect(() => {
     userIdRef.current = user?.id;
   }, [user]);
+
+  // ----- SOUND SETUP -----
+  useEffect(() => {
+    const sounds = ["crashfly", "crash", "click", "cashout"];
+    sounds.forEach((name) => {
+      const audio = new Audio(`/sounds/${name}.mp3`);
+      audio.preload = "auto";
+      if (name === "crashfly") {
+        audio.loop = true;
+      }
+      soundMap.current[name] = audio;
+    });
+
+    return () => {
+      Object.values(soundMap.current).forEach((audio) => {
+        audio.pause();
+        audio.src = "";
+      });
+    };
+  }, []);
+
+  const playSound = useCallback((name: string) => {
+    const audio = soundMap.current[name];
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => { });
+    }
+  }, []);
+
+  const stopFlySound = useCallback(() => {
+    const audio = soundMap.current["crashfly"];
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, []);
 
   // ----- MEMOIZED VALUES -----
   const availableBalance = useMemo(() => {
@@ -101,7 +138,7 @@ const CrashGame = () => {
     };
   }, [bet, cashoutAt]);
 
-  // ----- PLACE BET (stable) -----
+  // ----- PLACE BET -----
   const placeBet = useCallback(
     (payload: BetPayload) => {
       if (!user) {
@@ -122,14 +159,16 @@ const CrashGame = () => {
           }
           if (result) {
             dispatch(initAuth());
+            // Play click sound on successful bet
+            playSound("click");
           }
         }
       );
     },
-    [socket, user, dispatch]
+    [socket, user, dispatch, playSound]
   );
 
-  // ----- HANDLE BET (stable) -----
+  // ----- HANDLE BET -----
   const handleBet = useCallback(() => {
     if (!isLogged) {
       toast.error("Please login first.");
@@ -145,7 +184,6 @@ const CrashGame = () => {
       return;
     }
 
-    // If game already running, queue/cancel queue
     if (gameStarted) {
       if (queuedRef.current) {
         queuedRef.current = null;
@@ -166,7 +204,7 @@ const CrashGame = () => {
     placeBet(payload);
   }, [isLogged, userGambled, bet, availableBalance, gameStarted, buildPayload, placeBet]);
 
-  // ----- HANDLE CASHOUT (stable) -----
+  // ----- HANDLE CASHOUT -----
   const handleCashout = useCallback(() => {
     if (!userGambled || userCashedOut) return;
     if (!gameStarted) return;
@@ -199,13 +237,15 @@ const CrashGame = () => {
         if (result?.wallet) {
           dispatch(initAuth());
         }
+        // Play cashout sound on successful cashout
+        playSound("cashout");
       }
     );
-  }, [userGambled, userCashedOut, gameStarted, socket, dispatch]);
+  }, [userGambled, userCashedOut, gameStarted, socket, dispatch, playSound]);
 
-  // ----- SOCKET LISTENERS (stable via useCallback + useEffect) -----
+  // ----- SOCKET LISTENERS -----
 
-  // Cashout success
+  // Cashout success (from server push)
   useEffect(() => {
     const onCashoutSuccess = (data: {
       multiplier: number;
@@ -221,12 +261,14 @@ const CrashGame = () => {
       if (data.wallet) {
         dispatch(initAuth());
       }
+      // Play cashout sound
+      playSound("cashout");
     };
     socket.on("crash:cashoutSuccess", onCashoutSuccess);
     return () => {
       socket.off("crash:cashoutSuccess", onCashoutSuccess);
     };
-  }, [socket, dispatch]);
+  }, [socket, dispatch, playSound]);
 
   // Game state sync
   useEffect(() => {
@@ -234,7 +276,6 @@ const CrashGame = () => {
       setGameState(state);
 
       const id = userIdRef.current;
-      // Betting phase
       if (state.phase === "betting") {
         setGameStarted(false);
         setGameEnded(false);
@@ -255,10 +296,10 @@ const CrashGame = () => {
         return;
       }
 
-      // Running phase
       if (state.phase === "running") {
         setGameStarted(true);
         setGameEnded(false);
+        // Fly sound is started on "crash:start" event (below)
         if (!id) return;
         const stake = state.gameBets?.[id];
         if (stake == null) return;
@@ -271,7 +312,6 @@ const CrashGame = () => {
         return;
       }
 
-      // Crashed
       if (state.phase === "crashed") {
         setGameStarted(false);
         setGameEnded(true);
@@ -337,6 +377,8 @@ const CrashGame = () => {
       setUserCashedOut(false);
       setUserMultiplier(0);
       setCountDown(0);
+      // Play fly sound when round starts
+      playSound("crashfly");
     };
 
     const onResult = (point: number) => {
@@ -358,6 +400,9 @@ const CrashGame = () => {
       });
       setCountDown(BETTING_COUNTDOWN);
       setUserGambled(false);
+      // Stop fly sound and play crash sound
+      stopFlySound();
+      playSound("crash");
     };
 
     const onMultiplier = (value: number) => {
@@ -373,7 +418,7 @@ const CrashGame = () => {
       socket.off("crash:result", onResult);
       socket.off("crash:multiplier", onMultiplier);
     };
-  }, [socket]);
+  }, [socket, playSound, stopFlySound]);
 
   // ----- COUNTDOWN with requestAnimationFrame -----
   useEffect(() => {
@@ -388,7 +433,7 @@ const CrashGame = () => {
     let lastTimestamp: number | null = null;
     const step = (timestamp: number) => {
       if (!lastTimestamp) lastTimestamp = timestamp;
-      const delta = (timestamp - lastTimestamp) / 1000; // seconds
+      const delta = (timestamp - lastTimestamp) / 1000;
       if (delta >= 0.1) {
         setCountDown((prev) => {
           const newValue = Math.max(0, prev - delta);
@@ -453,4 +498,4 @@ const CrashGame = () => {
   );
 };
 
-export default CrashGame; 
+export default CrashGame;

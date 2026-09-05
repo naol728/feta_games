@@ -8,7 +8,7 @@ async function emitBalance(userId: string) {
 
   const { data: wallet } = await supabase
     .from("wallets")
-    .select("balance, locked_balance")
+    .select("balance, locked_balance,withdrawable_balance,available_balance")
     .eq("user_id", userId)
     .single();
 

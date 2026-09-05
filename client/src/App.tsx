@@ -98,6 +98,7 @@ export default function App() {
               <Route path="/wheel" element={<Slots />} />
               <Route path="/chicken-road" element={<Slots />} />
               <Route path="/joker-x" element={<Slots />} />
+              <Route path="/plinko" element={<Slots />} />
             </Route>
 
             <Route element={<MinimalLayout />}>

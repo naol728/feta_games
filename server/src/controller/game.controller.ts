@@ -7,6 +7,7 @@ import { catchAsync } from "../utils/catchAsync";
 import { supabase } from "../config/supabase";
 import { wageringService } from "../services/waggering.service";
 import { AppError } from "../utils/AppError";
+import { walletService } from "../services/wallet.service";
 
 // ============================================================
 // TYPES
@@ -412,6 +413,7 @@ export const spinSlote = catchAsync(
     //
     // ========================================================
 
+    const wallet = await walletService.getWallet(userId);
     const responseData = {
       success: true,
 
@@ -432,9 +434,7 @@ export const spinSlote = catchAsync(
       totalPayout,
 
       newBalance,
-
-      // Optional debugging information.
-      // Remove this in production if you don't need it.
+      wallet,
       processingTime: Date.now() - startTime,
     };
 

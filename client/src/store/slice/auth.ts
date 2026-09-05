@@ -1,4 +1,5 @@
-/*eslint-disable*/
+/* eslint-disable */
+
 import apiClient from "@/api/apiClient";
 import {
   createSlice,
@@ -10,11 +11,48 @@ export const initAuth = createAsyncThunk("auth/init", async () => {
   const res = await apiClient.post(`/auth/telegram`, {
     initData: window.Telegram.WebApp.initData,
   });
+
   const data = res.data;
-  if (!data?.access_token) throw new Error("Auth failed");
+
+  if (!data?.access_token) {
+    throw new Error("Auth failed");
+  }
+
   localStorage.setItem("access_token", data.access_token);
+
   return data.user;
 });
+
+/**
+ * Fetch current wallet from backend
+ *
+ * GET /wallet
+ */
+export const fetchWallet = createAsyncThunk(
+  "auth/fetchWallet",
+  async (_, { rejectWithValue }) => {
+    try {
+      const res = await apiClient.get("/wallet");
+
+      const data = res.data;
+
+      if (!data) {
+        throw new Error("Wallet data not found");
+      }
+
+      // Supports either:
+      // { wallet: {...} }
+      // or directly {...}
+      return data.wallet ?? data;
+    } catch (error: any) {
+      return rejectWithValue(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to fetch wallet",
+      );
+    }
+  },
+);
 
 interface Wallet {
   balance: number;
@@ -22,6 +60,7 @@ interface Wallet {
   withdrawable_balance: number;
   available_balance: number;
 }
+
 export interface User {
   id: string;
   telegram_id: number;
@@ -38,44 +77,86 @@ export interface User {
 type InitalState = {
   user: User | null;
   loading: boolean;
+  walletLoading: boolean;
 };
+
 const initialState: InitalState = {
   user: null,
   loading: true,
+  walletLoading: false,
 };
 
 const authSlice = createSlice({
   name: "auth",
+
   initialState,
+
   reducers: {
-    setUserWallet: (state, action) => {
+    /**
+     * Manually update wallet in Redux
+     */
+    setUserWallet: (state, action: PayloadAction<Wallet>) => {
       if (state.user) {
-        state.user.wallets.balance = action.payload.balance;
-        state.user.wallets.locked_balance = action.payload.locked_balance;
-        state.user.wallets.withdrawable_balance =
-          action.payload.withdrawable_balance;
-        state.user.wallets.available_balance = action.payload.available_balance;
+        state.user.wallets = {
+          ...state.user.wallets,
+          ...action.payload,
+        };
       }
     },
+
     setUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload;
 
       localStorage.setItem("user", JSON.stringify(action.payload));
     },
   },
+
   extraReducers: (builder) => {
     builder
+
+      // =========================
+      // INIT AUTH
+      // =========================
       .addCase(initAuth.pending, (state) => {
         state.loading = true;
       })
+
       .addCase(initAuth.fulfilled, (state, action) => {
         state.user = action.payload;
         state.loading = false;
       })
+
       .addCase(initAuth.rejected, (state) => {
         state.loading = false;
+      })
+
+      // =========================
+      // FETCH WALLET
+      // =========================
+      .addCase(fetchWallet.pending, (state) => {
+        state.walletLoading = true;
+      })
+
+      .addCase(fetchWallet.fulfilled, (state, action) => {
+        state.walletLoading = false;
+
+        if (state.user) {
+          state.user.wallets = {
+            ...state.user.wallets,
+            ...action.payload,
+          };
+
+          // Keep localStorage synchronized
+          localStorage.setItem("user", JSON.stringify(state.user));
+        }
+      })
+
+      .addCase(fetchWallet.rejected, (state) => {
+        state.walletLoading = false;
       });
   },
 });
+
 export const { setUserWallet, setUser } = authSlice.actions;
+
 export default authSlice.reducer;

@@ -11,7 +11,7 @@ import GameContainer from "./GameContainer";
 import SideMenu from "./SideMenu";
 
 import { useAppDispatch, useAppSelector } from "@/store/hook";
-import { initAuth } from "@/store/slice/auth";
+import { setUserWallet } from "@/store/slice/auth";
 import { getSocket } from "@/lib/socket";
 
 // ======================== TYPES ========================
@@ -36,6 +36,32 @@ interface CrashGameState {
 interface BetPayload {
   amount: number;
   autoCashoutAt: number | null;
+}
+
+// Types for socket callbacks
+interface CrashBetResult {
+  ok?: boolean;
+  roundId?: string | null;
+  wallet?: {
+    balance: number;
+    locked_balance: number;
+    withdrawable_balance: number;
+    available_balance: number;
+  };
+  error?: string;
+}
+
+interface CrashCashoutResult {
+  ok?: boolean;
+  multiplier?: number;
+  wallet?: {
+    balance: number;
+    locked_balance: number;
+    withdrawable_balance: number;
+    available_balance: number;
+  };
+  payout?: number;
+  error?: string;
 }
 
 const BETTING_COUNTDOWN = 10;
@@ -85,7 +111,6 @@ const CrashGame = () => {
   }, [user]);
 
   // ----- SOUND SETUP -----
-  // ----- SOUND SETUP -----
   useEffect(() => {
     const sounds = ["crashfly", "crash", "click", "cashout"];
 
@@ -124,9 +149,7 @@ const CrashGame = () => {
     audio.loop = true;
 
     if (audio.paused) {
-      audio.play().catch(() => {
-        // Browser may block autoplay until user interaction
-      });
+      audio.play().catch(() => { });
     }
   }, [soundEnabled]);
 
@@ -138,6 +161,7 @@ const CrashGame = () => {
     audio.pause();
     audio.currentTime = 0;
   }, []);
+
   // ----- START CRASHFLY WHEN PAGE IS OPEN -----
   useEffect(() => {
     startCrashFlySound();
@@ -158,8 +182,6 @@ const CrashGame = () => {
     },
     [soundEnabled]
   );
-
-
 
   const toggleSound = useCallback(() => {
     setSoundEnabled((prev) => {
@@ -215,14 +237,14 @@ const CrashGame = () => {
       socket.emit(
         "crash:bet",
         payload,
-        (result: { ok?: boolean; error?: string }) => {
+        (result: CrashBetResult) => {
           if (result?.error) {
             setUserGambled(false);
             toast.error(result.error);
             return;
           }
-          if (result) {
-            dispatch(initAuth());
+          if (result.wallet) {
+            dispatch(setUserWallet(result.wallet));
             playSound("click");
           }
         }
@@ -276,17 +298,7 @@ const CrashGame = () => {
     socket.emit(
       "crash:cashout",
       {},
-      (result: {
-        ok?: boolean;
-        error?: string;
-        multiplier?: number;
-        wallet?: {
-          balance: number;
-          locked_balance: number;
-          withdrawable_balance: number;
-        };
-        payout?: number;
-      }) => {
+      (result: CrashCashoutResult) => {
         if (result?.error) {
           toast.error(result.error);
           setDisableButton(false);
@@ -298,7 +310,7 @@ const CrashGame = () => {
         setUserCashedOut(true);
         setDisableButton(false);
         if (result?.wallet) {
-          dispatch(initAuth());
+          dispatch(setUserWallet(result.wallet));
         }
         playSound("cashout");
       }
@@ -306,6 +318,26 @@ const CrashGame = () => {
   }, [userGambled, userCashedOut, gameStarted, socket, dispatch, playSound]);
 
   // ----- SOCKET LISTENERS -----
+
+  // Wallet update (from server after loss)
+  useEffect(() => {
+    const onWalletUpdate = (wallet: {
+      balance: number;
+      locked_balance: number;
+      withdrawable_balance: number;
+      available_balance: number;
+    }) => {
+      if (wallet) {
+        dispatch(setUserWallet(wallet));
+      }
+    };
+
+    socket.on("crash:wallet", onWalletUpdate);
+
+    return () => {
+      socket.off("crash:wallet", onWalletUpdate);
+    };
+  }, [socket, dispatch]);
 
   // Cashout success (from server push)
   useEffect(() => {
@@ -315,13 +347,14 @@ const CrashGame = () => {
         balance: number;
         locked_balance: number;
         withdrawable_balance: number;
+        available_balance: number;
       };
     }) => {
       setUserMultiplier(data.multiplier);
       setUserCashedOut(true);
       setDisableButton(false);
       if (data.wallet) {
-        dispatch(initAuth());
+        dispatch(setUserWallet(data.wallet));
       }
       playSound("cashout");
     };
@@ -474,7 +507,7 @@ const CrashGame = () => {
       socket.off("crash:result", onResult);
       socket.off("crash:multiplier", onMultiplier);
     };
-  }, [socket, playSound, toggleSound]);
+  }, [socket, playSound]);
 
   // ----- COUNTDOWN with requestAnimationFrame -----
   useEffect(() => {

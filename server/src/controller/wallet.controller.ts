@@ -327,7 +327,27 @@ export const withDraw = catchAsync(
 );
 
 export const wallet = catchAsync(
-  async (req: WalletRequest, res: Response, next: NextFunction) => {},
+  async (req: WalletRequest, res: Response, next: NextFunction) => {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return next(new AppError("unautorized", 401));
+    }
+
+    const { data, error } = await supabase
+      .from("wallets")
+      .select("*")
+      .eq("user_id", userId);
+
+    if (error) {
+      return next(new AppError(error.message, 500));
+    }
+    res.json({
+      status: true,
+      message: "wallet retrived sucessfully",
+      wallet:data,
+    });
+  },
 );
 
 export const transactions = catchAsync(

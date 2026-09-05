@@ -16,6 +16,8 @@ export function registerSocketListeners() {
       setUserWallet({
         balance: wallet.balance,
         locked_balance: wallet.locked_balance,
+        available_balance: wallet.available_balance,
+        withdrawable_balance: wallet.withdrawable_balance,
       }),
     );
   });

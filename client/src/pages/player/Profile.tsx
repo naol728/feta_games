@@ -128,6 +128,7 @@ export default function Profile() {
                     balance: data.withdrawalId.balance,
                     withdrawable_balance: data.withdrawalId.withdrawable_balance,
                     locked_balance: data.withdrawalId.locked_balance,
+                    available_balance: data.witdrawalId.available_balance
                 })
             );
 

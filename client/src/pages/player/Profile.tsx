@@ -496,7 +496,7 @@ export default function Profile() {
 
                     </CardContent>
                 </Card>
-                <DailyStreak mappedTransactions={mappedTransactions} />
+                <DailyStreak />
                 {/* ================= TABS ================= */}
                 <Tabs defaultValue="transactions" className="space-y-3">
 

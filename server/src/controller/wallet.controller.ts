@@ -119,6 +119,10 @@ export const deposit = catchAsync(
       3,
       trx.id,
     );
+    await supabase.rpc("record_daily_activity", {
+      p_user_id: trx.user_id,
+      p_activity_type: "deposited",
+    });
     return res.status(200).json({
       message: "Deposit successful",
     });

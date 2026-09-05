@@ -9,6 +9,7 @@ import { Server } from "socket.io";
 import initSocket from "./socket";
 import { globalErrorHandler } from "./middleware/globalErrorHandler";
 import { AppError } from "./utils/AppError";
+import statRoute from "./routes/stats.route";
 
 const app = express();
 const corsConfig = {
@@ -31,6 +32,7 @@ app.use("/auth", authRoute);
 app.use("/wallet", walletRoute);
 app.use("/games", GameRoute);
 app.use("/invites", inviteRoute);
+app.use("/stats", statRoute);
 app.all("*", (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl}`, 404));
 });

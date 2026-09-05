@@ -63,6 +63,7 @@ const CrashGame = () => {
   const [userMultiplier, setUserMultiplier] = useState(0);
   const [userCashedOut, setUserCashedOut] = useState(false);
   const [disableButton, setDisableButton] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   const [gameState, setGameState] = useState<CrashGameState>({
     gameBets: {},
@@ -84,39 +85,102 @@ const CrashGame = () => {
   }, [user]);
 
   // ----- SOUND SETUP -----
+  // ----- SOUND SETUP -----
   useEffect(() => {
     const sounds = ["crashfly", "crash", "click", "cashout"];
+
     sounds.forEach((name) => {
       const audio = new Audio(`/sounds/${name}.mp3`);
+
       audio.preload = "auto";
+
       if (name === "crashfly") {
         audio.loop = true;
+        audio.volume = 0.35;
       }
+
       soundMap.current[name] = audio;
     });
 
     return () => {
       Object.values(soundMap.current).forEach((audio) => {
         audio.pause();
+        audio.currentTime = 0;
         audio.src = "";
       });
+
+      soundMap.current = {};
     };
   }, []);
 
-  const playSound = useCallback((name: string) => {
-    const audio = soundMap.current[name];
-    if (audio) {
-      audio.currentTime = 0;
-      audio.play().catch(() => { });
-    }
-  }, []);
+  // ----- CONTINUOUS CRASH FLY SOUND -----
+  const startCrashFlySound = useCallback(() => {
+    if (!soundEnabled) return;
 
-  const stopFlySound = useCallback(() => {
     const audio = soundMap.current["crashfly"];
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
+
+    if (!audio) return;
+
+    audio.loop = true;
+
+    if (audio.paused) {
+      audio.play().catch(() => {
+        // Browser may block autoplay until user interaction
+      });
     }
+  }, [soundEnabled]);
+
+  const stopCrashFlySound = useCallback(() => {
+    const audio = soundMap.current["crashfly"];
+
+    if (!audio) return;
+
+    audio.pause();
+    audio.currentTime = 0;
+  }, []);
+  // ----- START CRASHFLY WHEN PAGE IS OPEN -----
+  useEffect(() => {
+    startCrashFlySound();
+
+    return () => {
+      stopCrashFlySound();
+    };
+  }, [startCrashFlySound, stopCrashFlySound]);
+
+  const playSound = useCallback(
+    (name: string) => {
+      if (!soundEnabled) return;
+      const audio = soundMap.current[name];
+      if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(() => { });
+      }
+    },
+    [soundEnabled]
+  );
+
+
+
+  const toggleSound = useCallback(() => {
+    setSoundEnabled((prev) => {
+      const next = !prev;
+
+      const audio = soundMap.current["crashfly"];
+
+      if (!audio) {
+        return next;
+      }
+
+      if (next) {
+        audio.loop = true;
+        audio.play().catch(() => { });
+      } else {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+
+      return next;
+    });
   }, []);
 
   // ----- MEMOIZED VALUES -----
@@ -159,7 +223,6 @@ const CrashGame = () => {
           }
           if (result) {
             dispatch(initAuth());
-            // Play click sound on successful bet
             playSound("click");
           }
         }
@@ -237,7 +300,6 @@ const CrashGame = () => {
         if (result?.wallet) {
           dispatch(initAuth());
         }
-        // Play cashout sound on successful cashout
         playSound("cashout");
       }
     );
@@ -261,7 +323,6 @@ const CrashGame = () => {
       if (data.wallet) {
         dispatch(initAuth());
       }
-      // Play cashout sound
       playSound("cashout");
     };
     socket.on("crash:cashoutSuccess", onCashoutSuccess);
@@ -286,7 +347,6 @@ const CrashGame = () => {
         setUserMultiplier(0);
         setDisableButton(false);
 
-        // Submit queued bet
         if (queuedRef.current) {
           const payload = queuedRef.current;
           queuedRef.current = null;
@@ -299,7 +359,6 @@ const CrashGame = () => {
       if (state.phase === "running") {
         setGameStarted(true);
         setGameEnded(false);
-        // Fly sound is started on "crash:start" event (below)
         if (!id) return;
         const stake = state.gameBets?.[id];
         if (stake == null) return;
@@ -377,8 +436,6 @@ const CrashGame = () => {
       setUserCashedOut(false);
       setUserMultiplier(0);
       setCountDown(0);
-      // Play fly sound when round starts
-      playSound("crashfly");
     };
 
     const onResult = (point: number) => {
@@ -400,8 +457,7 @@ const CrashGame = () => {
       });
       setCountDown(BETTING_COUNTDOWN);
       setUserGambled(false);
-      // Stop fly sound and play crash sound
-      stopFlySound();
+
       playSound("crash");
     };
 
@@ -418,7 +474,7 @@ const CrashGame = () => {
       socket.off("crash:result", onResult);
       socket.off("crash:multiplier", onMultiplier);
     };
-  }, [socket, playSound, stopFlySound]);
+  }, [socket, playSound, toggleSound]);
 
   // ----- COUNTDOWN with requestAnimationFrame -----
   useEffect(() => {
@@ -489,6 +545,8 @@ const CrashGame = () => {
           userData={user!}
           userMultiplier={userMultiplier}
           disableButton={disableButton}
+          soundEnabled={soundEnabled}
+          toggleSound={toggleSound}
         />
       </div>
       <div className="mx-auto w-full max-w-[520px]">

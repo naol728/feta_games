@@ -6,13 +6,6 @@ import { Star } from "lucide-react";
 
 const games = [
   {
-    name: "Card Draw",
-    path: "/carddraw",
-    image: "/carddrawduel.jpg",
-    isNew: true,
-    underdevelopment: false,
-  },
-  {
     name: "Chicken Coin",
     path: "/slot",
     image: "/images/slot/chicken/chickencoin.png",
@@ -42,7 +35,7 @@ const games = [
   },
   {
     name: "Plinko",
-    path: "/rocket",
+    path: "/plinko",
     image: "https://vfair.games/games/plinko.webp",
     isNew: true,
     underdevelopment: false,

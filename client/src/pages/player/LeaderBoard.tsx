@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+
 import {
     Crown,
     Trophy,
@@ -24,11 +25,16 @@ import {
 } from "@/components/ui/avatar";
 
 import { Badge } from "@/components/ui/badge";
-
 import { Separator } from "@/components/ui/separator";
-
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CountdownBox, CountdownSeparator } from "./DailyStreak";
+
+import {
+    CountdownBox,
+    CountdownSeparator,
+} from "./DailyStreak";
+
+import { useQuery } from "@tanstack/react-query";
+import { getDailyLeaderboard } from "@/api/stat";
 
 type LeaderboardPeriod =
     | "today"
@@ -46,257 +52,229 @@ interface LeaderboardPlayer {
     isCurrentUser?: boolean;
 }
 
-const leaderboardData: Record<
-    LeaderboardPeriod,
-    LeaderboardPlayer[]
-> = {
-    today: [
-        {
-            id: "1",
-            name: "እውነተኛ ተጫዋች",
-            phone: "+251912****70",
-            points: 11789,
-            prize: 300,
-            rank: 1,
-        },
-        {
-            id: "2",
-            name: "Yonas",
-            phone: "+251972****77",
-            points: 7285,
-            prize: 200,
-            rank: 2,
-        },
-        {
-            id: "3",
-            name: "KIYA",
-            phone: "+251912****47",
-            points: 6657,
-            prize: 175,
-            rank: 3,
-        },
-        {
-            id: "4",
-            name: "Bisrat",
-            phone: "+251917****41",
-            points: 6058,
-            prize: 25,
-            rank: 4,
-        },
-        {
-            id: "5",
-            name: "Golicha",
-            phone: "+251995****05",
-            points: 5103,
-            prize: 25,
-            rank: 5,
-        },
-        {
-            id: "6",
-            name: "Chelachew",
-            phone: "+251911****21",
-            points: 4688,
-            prize: 20,
-            rank: 6,
-        },
-        {
-            id: "7",
-            name: "Dawit",
-            phone: "+251922****33",
-            points: 4210,
-            prize: 20,
-            rank: 7,
-        },
-        {
-            id: "8",
-            name: "Henok",
-            phone: "+251934****18",
-            points: 3950,
-            prize: 15,
-            rank: 8,
-        },
-        {
-            id: "9",
-            name: "Miki",
-            phone: "+251911****55",
-            points: 3675,
-            prize: 15,
-            rank: 9,
-        },
-        {
-            id: "10",
-            name: "Abel",
-            phone: "+251922****81",
-            points: 3420,
-            prize: 10,
-            rank: 10,
-        },
-    ],
+interface ApiLeaderboardPlayer {
+    rank: number;
+    user_id: string;
+    username?: string | null;
+    fname?: string | null;
+    lname?: string | null;
+    phone?: string | null;
+    telegram_id?: number;
+    total_points: number;
+    reward: number;
+}
 
-    yesterday: [
-        {
-            id: "11",
-            name: "Dawit",
-            phone: "+251922****33",
-            points: 13250,
-            prize: 300,
-            rank: 1,
-        },
-        {
-            id: "12",
-            name: "Yonas",
-            phone: "+251972****77",
-            points: 9870,
-            prize: 200,
-            rank: 2,
-        },
-        {
-            id: "13",
-            name: "KIYA",
-            phone: "+251912****47",
-            points: 8120,
-            prize: 175,
-            rank: 3,
-        },
-        {
-            id: "14",
-            name: "Bisrat",
-            phone: "+251917****41",
-            points: 6980,
-            prize: 25,
-            rank: 4,
-        },
-        {
-            id: "15",
-            name: "Golicha",
-            phone: "+251995****05",
-            points: 6210,
-            prize: 25,
-            rank: 5,
-        },
-    ],
+interface DailyLeaderboardResponse {
+    success: boolean;
+    date: string;
+    leaderboard: ApiLeaderboardPlayer[];
+}
 
-    "2days": [
-        {
-            id: "21",
-            name: "KIYA",
-            phone: "+251912****47",
-            points: 15420,
-            prize: 300,
-            rank: 1,
-        },
-        {
-            id: "22",
-            name: "Dawit",
-            phone: "+251922****33",
-            points: 12100,
-            prize: 200,
-            rank: 2,
-        },
-        {
-            id: "23",
-            name: "Yonas",
-            phone: "+251972****77",
-            points: 9840,
-            prize: 175,
-            rank: 3,
-        },
-        {
-            id: "24",
-            name: "Henok",
-            phone: "+251934****18",
-            points: 7230,
-            prize: 25,
-            rank: 4,
-        },
-    ],
+/* ==================== DATE HELPERS ==================== */
 
-    "3days": [
-        {
-            id: "31",
-            name: "Yonas",
-            phone: "+251972****77",
-            points: 16200,
-            prize: 300,
-            rank: 1,
-        },
-        {
-            id: "32",
-            name: "KIYA",
-            phone: "+251912****47",
-            points: 13800,
-            prize: 200,
-            rank: 2,
-        },
-        {
-            id: "33",
-            name: "Dawit",
-            phone: "+251922****33",
-            points: 11200,
-            prize: 175,
-            rank: 3,
-        },
-    ],
+const getDateForPeriod = (
+    period: LeaderboardPeriod
+): string => {
+    const date = new Date();
+
+    switch (period) {
+        case "today":
+            break;
+
+        case "yesterday":
+            date.setDate(date.getDate() - 1);
+            break;
+
+        case "2days":
+            date.setDate(date.getDate() - 2);
+            break;
+
+        case "3days":
+            date.setDate(date.getDate() - 3);
+            break;
+    }
+
+    // YYYY-MM-DD
+    return date.toISOString().split("T")[0];
 };
 
+/* ==================== FORMATTERS ==================== */
 
-const formatNumber = (
-    value: number,
-) =>
-    String(value).padStart(
-        2,
-        "0",
-    );
-
+const formatNumber = (value: number) =>
+    String(value).padStart(2, "0");
 
 const formatPoints = (points: number) => {
     return points.toLocaleString();
 };
 
 const getInitials = (name: string) => {
-    const parts = name.trim().split(" ");
+    const safeName = name?.trim() || "User";
+
+    const parts = safeName.split(" ");
+
     if (parts.length === 1) {
-        return name.slice(0, 2).toUpperCase();
+        return safeName.slice(0, 2).toUpperCase();
     }
+
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 };
 
+/* ==================== RANK STYLES ==================== */
+
 const getRankBadgeClass = (rank: number) => {
-    if (rank === 1) return "bg-primary text-primary-foreground";
-    if (rank === 2) return "bg-secondary text-secondary-foreground";
-    if (rank === 3) return "bg-accent text-accent-foreground";
+    if (rank === 1) {
+        return "bg-primary text-primary-foreground";
+    }
+
+    if (rank === 2) {
+        return "bg-secondary text-secondary-foreground";
+    }
+
+    if (rank === 3) {
+        return "bg-accent text-accent-foreground";
+    }
+
     return "bg-muted text-muted-foreground";
 };
 
 const getRankRowClass = (rank: number) => {
-    if (rank === 1) return "border-primary/40 bg-primary/5";
-    if (rank === 2) return "border-border bg-muted/50";
-    if (rank === 3) return "border-border/70 bg-secondary/30";
+    if (rank === 1) {
+        return "border-primary/40 bg-primary/5";
+    }
+
+    if (rank === 2) {
+        return "border-border bg-muted/50";
+    }
+
+    if (rank === 3) {
+        return "border-border/70 bg-secondary/30";
+    }
+
     return "";
 };
+
+/* ==================== COMPONENT ==================== */
 
 const Leaderboard = () => {
     const [period, setPeriod] =
         useState<LeaderboardPeriod>("today");
+
     const [countdown, setCountdown] = useState({
         hours: 0,
         minutes: 0,
         seconds: 0,
     });
 
-    const players = leaderboardData[period];
+    /*
+     * Get the date based on selected tab.
+     */
+    const selectedDate = useMemo(() => {
+        return getDateForPeriod(period);
+    }, [period]);
 
+    /*
+     * Fetch leaderboard for selected date.
+     */
+    const {
+        data,
+        error,
+        isLoading,
+    } = useQuery<DailyLeaderboardResponse>({
+        queryKey: [
+            "getDailyLeaderboard",
+            selectedDate,
+        ],
+        queryFn: () =>
+            getDailyLeaderboard(selectedDate),
+    });
+
+    console.log("Daily leaderboard:", data);
+
+    /*
+     * Get current user ID.
+     *
+     * Change this if your auth state stores the
+     * user ID somewhere else.
+     */
+    const currentUserId =
+        localStorage.getItem("user_id");
+
+    /*
+     * Convert API data into the format expected
+     * by your existing UI.
+     */
+    const players: LeaderboardPlayer[] =
+        useMemo(() => {
+            const apiPlayers =
+                data?.leaderboard ?? [];
+
+            return apiPlayers.map((player) => {
+                /*
+                 * Prefer first name.
+                 * Then username.
+                 * Then phone.
+                 * Finally "User".
+                 */
+                const name =
+                    player.fname?.trim() ||
+                    player.username?.trim() ||
+                    player.phone ||
+                    "User";
+
+                return {
+                    id: player.user_id,
+
+                    name,
+
+                    phone:
+                        player.phone ?? undefined,
+
+                    points:
+                        Number(player.total_points) || 0,
+
+                    prize:
+                        Number(player.reward) || 0,
+
+                    rank:
+                        Number(player.rank),
+
+                    isCurrentUser:
+                        currentUserId === player.user_id,
+                };
+            });
+        }, [data, currentUserId]);
+
+    /*
+     * Top 3 players.
+     */
     const topThree = useMemo(() => {
         return players
-            .filter((player) => player.rank <= 3)
-            .sort((a, b) => a.rank - b.rank);
+            .filter(
+                (player) =>
+                    player.rank <= 3
+            )
+            .sort(
+                (a, b) =>
+                    a.rank - b.rank
+            );
     }, [players]);
 
+    /*
+     * Remaining players.
+     */
     const remainingPlayers = useMemo(() => {
         return players
-            .filter((player) => player.rank > 3)
-            .sort((a, b) => a.rank - b.rank);
+            .filter(
+                (player) =>
+                    player.rank > 3
+            )
+            .sort(
+                (a, b) =>
+                    a.rank - b.rank
+            );
     }, [players]);
+
+    /* ==================== COUNTDOWN ==================== */
 
     useEffect(() => {
         const updateCountdown = () => {
@@ -308,7 +286,7 @@ const Leaderboard = () => {
                 24,
                 0,
                 0,
-                0,
+                0
             );
 
             const difference =
@@ -317,17 +295,17 @@ const Leaderboard = () => {
 
             const totalSeconds = Math.max(
                 Math.floor(
-                    difference / 1000,
+                    difference / 1000
                 ),
-                0,
+                0
             );
 
             const hours = Math.floor(
-                totalSeconds / 3600,
+                totalSeconds / 3600
             );
 
             const minutes = Math.floor(
-                (totalSeconds % 3600) / 60,
+                (totalSeconds % 3600) / 60
             );
 
             const seconds =
@@ -342,10 +320,11 @@ const Leaderboard = () => {
 
         updateCountdown();
 
-        const interval = setInterval(
-            updateCountdown,
-            1000,
-        );
+        const interval =
+            setInterval(
+                updateCountdown,
+                1000
+            );
 
         return () =>
             clearInterval(interval);
@@ -396,7 +375,7 @@ const Leaderboard = () => {
 
                         <CountdownBox
                             value={formatNumber(
-                                countdown.hours,
+                                countdown.hours
                             )}
                             label="HRS"
                         />
@@ -405,7 +384,7 @@ const Leaderboard = () => {
 
                         <CountdownBox
                             value={formatNumber(
-                                countdown.minutes,
+                                countdown.minutes
                             )}
                             label="MIN"
                         />
@@ -414,7 +393,7 @@ const Leaderboard = () => {
 
                         <CountdownBox
                             value={formatNumber(
-                                countdown.seconds,
+                                countdown.seconds
                             )}
                             label="SEC"
                         />
@@ -432,9 +411,11 @@ const Leaderboard = () => {
                         <div className="absolute inset-[5px] rounded-[13px] border border-primary-foreground/50" />
 
                         <div className="relative text-center text-[22px] font-black leading-[0.85] tracking-tight">
+
                             CASH
                             <br />
                             BACK
+
                         </div>
 
                     </div>
@@ -442,120 +423,224 @@ const Leaderboard = () => {
                 </div>
 
             </div>
+
             <section className="w-full min-w-0 pb-4">
 
                 <Card className="overflow-hidden rounded-2xl border-border/60 bg-card shadow-sm">
 
                     {/* ==================== HEADER ==================== */}
+
                     <div className="border-b border-border/60 px-2.5 pb-2 pt-2.5">
+
                         <div className="mb-2 flex items-center gap-2">
+
                             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+
                                 <Trophy className="h-4 w-4 text-primary" />
+
                             </div>
+
                             <div className="min-w-0">
+
                                 <h1 className="text-[15px] font-bold leading-tight">
                                     Leaderboard
                                 </h1>
+
                                 <p className="text-[9px] text-muted-foreground">
                                     Compete and win daily prizes
                                 </p>
+
                             </div>
+
                         </div>
 
-                        {/* Period Tabs */}
+                        {/* PERIOD TABS */}
+
                         <Tabs
                             value={period}
                             onValueChange={(value) =>
-                                setPeriod(value as LeaderboardPeriod)
+                                setPeriod(
+                                    value as LeaderboardPeriod
+                                )
                             }
                         >
+
                             <TabsList className="flex h-8 w-full gap-0.5 overflow-x-auto rounded-lg bg-muted/80 p-0.5">
+
                                 <TabsTrigger
                                     value="today"
                                     className="h-6 shrink-0 rounded-md px-2.5 text-[10px] font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
                                 >
                                     Today
                                 </TabsTrigger>
+
                                 <TabsTrigger
                                     value="yesterday"
                                     className="h-6 shrink-0 rounded-md px-2.5 text-[10px] font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
                                 >
                                     Yesterday
                                 </TabsTrigger>
+
                                 <TabsTrigger
                                     value="2days"
                                     className="h-6 shrink-0 rounded-md px-2.5 text-[10px] font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
                                 >
                                     2 Days Ago
                                 </TabsTrigger>
+
                                 <TabsTrigger
                                     value="3days"
                                     className="h-6 shrink-0 rounded-md px-2.5 text-[10px] font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
                                 >
                                     3 Days Ago
                                 </TabsTrigger>
+
                             </TabsList>
+
                         </Tabs>
+
                     </div>
 
                     <CardContent className="p-2.5">
 
-                        {/* ==================== TOP 3 LIST ==================== */}
-                        {topThree.length > 0 && (
-                            <div className="space-y-1.5">
-                                {topThree.map((player) => (
-                                    <TopPlayerRow key={player.id} player={player} />
-                                ))}
+                        {/* ==================== LOADING ==================== */}
+
+                        {isLoading && (
+                            <div className="flex items-center justify-center py-10">
+
+                                <p className="text-[11px] text-muted-foreground">
+                                    Loading leaderboard...
+                                </p>
+
                             </div>
                         )}
 
-                        {/* ==================== TABLE HEADER ==================== */}
-                        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_62px_58px] items-center gap-1.5 px-0.5">
-                            <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
-                                Player
-                            </span>
-                            <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
-                                Points
-                            </span>
-                            <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
-                                Prize
-                            </span>
-                        </div>
+                        {/* ==================== ERROR ==================== */}
 
-                        <Separator className="mt-1.5" />
+                        {error && !isLoading && (
+                            <div className="flex items-center justify-center py-10">
 
-                        {/* ==================== REMAINING PLAYERS ==================== */}
-                        <ScrollArea className="h-[230px]">
-                            <div className="pr-0.5">
-                                {remainingPlayers.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                                        <Medal className="h-6 w-6 text-muted-foreground/40" />
-                                        <p className="mt-1.5 text-[10px] font-medium">
-                                            No more players
-                                        </p>
-                                    </div>
-                                ) : (
-                                    remainingPlayers.map((player) => (
-                                        <PlayerRow key={player.id} player={player} />
-                                    ))
-                                )}
+                                <p className="text-[11px] text-destructive">
+                                    Failed to load leaderboard
+                                </p>
+
                             </div>
-                        </ScrollArea>
+                        )}
+
+                        {/* ==================== CONTENT ==================== */}
+
+                        {!isLoading &&
+                            !error && (
+                                <>
+
+                                    {/* TOP 3 LIST */}
+
+                                    {topThree.length > 0 && (
+                                        <div className="space-y-1.5">
+
+                                            {topThree.map(
+                                                (player) => (
+                                                    <TopPlayerRow
+                                                        key={
+                                                            player.id
+                                                        }
+                                                        player={
+                                                            player
+                                                        }
+                                                    />
+                                                )
+                                            )}
+
+                                        </div>
+                                    )}
+
+                                    {/* TABLE HEADER */}
+
+                                    <div className="mt-4 grid grid-cols-[minmax(0,1fr)_62px_58px] items-center gap-1.5 px-0.5">
+
+                                        <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
+                                            Player
+                                        </span>
+
+                                        <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
+                                            Points
+                                        </span>
+
+                                        <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
+                                            Prize
+                                        </span>
+
+                                    </div>
+
+                                    <Separator className="mt-1.5" />
+
+                                    {/* REMAINING PLAYERS */}
+
+                                    <ScrollArea className="h-[230px]">
+
+                                        <div className="pr-0.5">
+
+                                            {remainingPlayers.length ===
+                                                0 ? (
+                                                <div className="flex flex-col items-center justify-center py-8 text-center">
+
+                                                    <Medal className="h-6 w-6 text-muted-foreground/40" />
+
+                                                    <p className="mt-1.5 text-[10px] font-medium">
+                                                        {players.length ===
+                                                            0
+                                                            ? "No players yet"
+                                                            : "No more players"}
+                                                    </p>
+
+                                                </div>
+                                            ) : (
+                                                remainingPlayers.map(
+                                                    (
+                                                        player
+                                                    ) => (
+                                                        <PlayerRow
+                                                            key={
+                                                                player.id
+                                                            }
+                                                            player={
+                                                                player
+                                                            }
+                                                        />
+                                                    )
+                                                )
+                                            )}
+
+                                        </div>
+
+                                    </ScrollArea>
+
+                                </>
+                            )}
+
                     </CardContent>
+
                 </Card>
+
             </section>
         </>
     );
 };
 
-// ==================== TOP PLAYER ROW (ranks 1–3) ====================
+/* ==================== TOP PLAYER ROW ==================== */
+
 interface TopPlayerRowProps {
     player: LeaderboardPlayer;
 }
 
-const TopPlayerRow = ({ player }: TopPlayerRowProps) => {
+const TopPlayerRow = ({
+    player,
+}: TopPlayerRowProps) => {
+
     const rank = player.rank;
-    const isFirst = rank === 1;
+
+    const isFirst =
+        rank === 1;
 
     return (
         <div
@@ -566,10 +651,15 @@ const TopPlayerRow = ({ player }: TopPlayerRowProps) => {
                 transition-colors
             `}
         >
-            {/* Player info */}
+
+            {/* PLAYER INFO */}
+
             <div className="flex min-w-0 items-center gap-2">
-                {/* Rank badge with crown for 1st */}
+
+                {/* RANK */}
+
                 <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+
                     <div
                         className={`
                             flex h-8 w-8 items-center justify-center rounded-full
@@ -579,55 +669,93 @@ const TopPlayerRow = ({ player }: TopPlayerRowProps) => {
                     >
                         {rank}
                     </div>
+
                     {isFirst && (
                         <Crown className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 text-primary" />
                     )}
+
                 </div>
 
-                {/* Avatar + name */}
+                {/* AVATAR + NAME */}
+
                 <div className="flex items-center gap-1.5 min-w-0">
+
                     <Avatar className="h-8 w-8 shrink-0 border border-border">
+
                         <AvatarFallback className="bg-muted text-[9px] font-bold text-muted-foreground">
-                            {getInitials(player.name)}
+
+                            {getInitials(
+                                player.name
+                            )}
+
                         </AvatarFallback>
+
                     </Avatar>
+
                     <div className="min-w-0">
+
                         <p className="truncate text-[13px] font-bold leading-tight">
+
                             {player.name}
+
                         </p>
+
                         {player.phone && (
                             <p className="truncate text-[8px] text-muted-foreground">
+
                                 {player.phone}
+
                             </p>
                         )}
+
                     </div>
+
                 </div>
+
             </div>
 
-            {/* Points */}
+            {/* POINTS */}
+
             <div className="min-w-0">
+
                 <p className="truncate text-[13px] font-bold text-primary">
-                    {formatPoints(player.points)}
+
+                    {formatPoints(
+                        player.points
+                    )}
+
                 </p>
+
             </div>
 
-            {/* Prize */}
+            {/* PRIZE */}
+
             <div className="flex items-center justify-between gap-0.5">
+
                 <p className="truncate text-[11px] font-bold">
+
                     {player.prize} ETB
+
                 </p>
+
                 <ChevronRight className="hidden h-3 w-3 text-muted-foreground/50 sm:block" />
+
             </div>
+
         </div>
     );
 };
 
-// ==================== REGULAR PLAYER ROW ====================
+/* ==================== REGULAR PLAYER ROW ==================== */
+
 interface PlayerRowProps {
     player: LeaderboardPlayer;
 }
 
-const PlayerRow = ({ player }: PlayerRowProps) => {
+const PlayerRow = ({
+    player,
+}: PlayerRowProps) => {
+
     return (
         <div
             className={`
@@ -635,60 +763,105 @@ const PlayerRow = ({ player }: PlayerRowProps) => {
                 grid grid-cols-[minmax(0,1fr)_62px_58px] items-center gap-1.5
                 border-b border-border/60 px-0.5 py-1.5
                 transition-colors
-                ${player.isCurrentUser ? "rounded-lg bg-primary/5" : ""}
+                ${player.isCurrentUser
+                    ? "rounded-lg bg-primary/5"
+                    : ""
+                }
             `}
         >
-            {/* Player info */}
+
+            {/* PLAYER INFO */}
+
             <div className="flex min-w-0 items-center gap-1.5">
+
                 <div
                     className={`
                         flex h-6 w-6 shrink-0 items-center justify-center rounded-full
                         text-[10px] font-bold
-                        ${getRankBadgeClass(player.rank)}
+                        ${getRankBadgeClass(
+                        player.rank
+                    )}
                     `}
                 >
                     {player.rank}
                 </div>
+
                 <Avatar className="h-6 w-6 shrink-0">
+
                     <AvatarFallback className="bg-muted text-[8px] font-bold text-muted-foreground">
-                        {getInitials(player.name)}
+
+                        {getInitials(
+                            player.name
+                        )}
+
                     </AvatarFallback>
+
                 </Avatar>
+
                 <div className="min-w-0">
+
                     <div className="flex min-w-0 items-center gap-1">
+
                         <p className="truncate text-[11px] font-semibold leading-tight">
+
                             {player.name}
+
                         </p>
+
                         {player.isCurrentUser && (
-                            <Badge variant="secondary" className="h-3.5 shrink-0 px-1 text-[7px]">
+                            <Badge
+                                variant="secondary"
+                                className="h-3.5 shrink-0 px-1 text-[7px]"
+                            >
                                 YOU
                             </Badge>
                         )}
+
                     </div>
+
                     {player.phone && (
                         <p className="truncate text-[7px] text-muted-foreground">
+
                             {player.phone}
+
                         </p>
                     )}
+
                 </div>
+
             </div>
 
-            {/* Points */}
+            {/* POINTS */}
+
             <div className="min-w-0">
+
                 <p className="truncate text-[12px] font-bold text-primary">
-                    {formatPoints(player.points)}
+
+                    {formatPoints(
+                        player.points
+                    )}
+
                 </p>
+
             </div>
 
-            {/* Prize */}
+            {/* PRIZE */}
+
             <div className="flex items-center justify-between gap-0.5">
+
                 <p className="truncate text-[10px] font-bold">
+
                     {player.prize} ETB
+
                 </p>
+
                 <ChevronRight className="hidden h-2.5 w-2.5 text-muted-foreground/50 sm:block" />
+
             </div>
+
         </div>
     );
 };
 
 export default Leaderboard;
+

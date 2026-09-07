@@ -23,11 +23,6 @@ export const initAuth = createAsyncThunk("auth/init", async () => {
   return data.user;
 });
 
-/**
- * Fetch current wallet from backend
- *
- * GET /wallet
- */
 export const fetchWallet = createAsyncThunk(
   "auth/fetchWallet",
   async (_, { rejectWithValue }) => {
@@ -40,9 +35,6 @@ export const fetchWallet = createAsyncThunk(
         throw new Error("Wallet data not found");
       }
 
-      // Supports either:
-      // { wallet: {...} }
-      // or directly {...}
       return data.wallet ?? data;
     } catch (error: any) {
       return rejectWithValue(
@@ -53,12 +45,28 @@ export const fetchWallet = createAsyncThunk(
     }
   },
 );
-
 interface Wallet {
   balance: number;
   locked_balance: number;
   withdrawable_balance: number;
   available_balance: number;
+}
+
+interface UserProgress {
+  user_id: string;
+  current_level: number;
+  total_points: number;
+  total_deposit: number;
+  current_level_required_points: number;
+  current_level_minimum_deposit: number;
+  next_level: number | null;
+  next_level_required_points: number;
+  next_level_minimum_deposit: number;
+  points_remaining: number;
+  deposit_remaining: number;
+  points_progress_percent: number;
+  deposit_progress_percent: number;
+  is_max_level: boolean;
 }
 
 export interface User {
@@ -68,12 +76,15 @@ export interface User {
   created_at: string;
   updated_at: string;
   Fname: string;
-  Lname: string;
+  Lname: string | null;
   referral_id: string;
-  wallets: Wallet;
+  invited_by: string | null;
   phone: string | null;
+  wallets: Wallet;
+  progress?: UserProgress;
 }
 
+// Redux state – unchanged
 type InitalState = {
   user: User | null;
   loading: boolean;

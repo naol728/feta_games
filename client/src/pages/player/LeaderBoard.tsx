@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-    Crown,
     Trophy,
     Medal,
     ChevronRight,
     Coins,
-    User,
-    Award,
+
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";

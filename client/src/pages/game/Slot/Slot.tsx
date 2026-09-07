@@ -151,6 +151,7 @@ const Slots = () => {
 
         onSuccess: (data) => {
             setResponse(data);
+
             setGrid(data.gridState);
 
             setWinningLines(
@@ -158,10 +159,12 @@ const Slots = () => {
                     (result: { line: any }) => result.line
                 ) || []
             );
-            console.log(data)
-            if (data.wallet) {
-                dispatch(setUserWallet(data.wallet))
 
+            // IMPORTANT:
+            // Update only the wallet.
+            // Do NOT call initAuth() here.
+            if (data?.wallet) {
+                dispatch(setUserWallet(data.wallet));
             }
 
             // Big win
@@ -182,7 +185,6 @@ const Slots = () => {
                 setLostCount(0);
             }
 
-            // Stop spin after animation
             setTimeout(() => {
                 setIsSpinning(false);
                 stopSpinSound();
@@ -204,7 +206,6 @@ const Slots = () => {
             stopSpinSound();
         },
     });
-
     // ----- BIG WIN CLICK -----
     const handleClick = () => {
         if (openBigWin) {

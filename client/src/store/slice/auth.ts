@@ -96,12 +96,9 @@ const authSlice = createSlice({
      * Manually update wallet in Redux
      */
     setUserWallet: (state, action: PayloadAction<Wallet>) => {
-      if (state.user) {
-        state.user.wallets = {
-          ...state.user.wallets,
-          ...action.payload,
-        };
-      }
+      if (!state.user) return;
+
+      state.user.wallets = action.payload;
     },
 
     setUser: (state, action: PayloadAction<User>) => {

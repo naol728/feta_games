@@ -116,7 +116,7 @@ export const deposit = catchAsync(
     await wageringService.addDepositRequirement(
       trx.user_id,
       trx.amount,
-      3,
+      1,
       trx.id,
     );
     await supabase.rpc("record_daily_activity", {
@@ -345,7 +345,7 @@ export const wallet = catchAsync(
     res.json({
       status: true,
       message: "wallet retrived sucessfully",
-      wallet:data,
+      wallet: data,
     });
   },
 );

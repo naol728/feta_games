@@ -10,65 +10,118 @@ export const telegramAuth = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
 
-    // =========================
-    // 1. Try JWT Authentication
-    // =========================
+    // =========================================================
+    // Helper: Fetch complete user data
+    // =========================================================
+    const fetchUserData = async (userId: string) => {
+      // -----------------------------
+      // User + Wallet
+      // -----------------------------
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select(
+          `*,
+            wallets (
+              balance,
+              locked_balance,
+              withdrawable_balance,
+              available_balance
+            )`,
+        )
+        .eq("id", userId)
+        .single();
 
+      if (userError || !user) {
+        throw new AppError("User not found", 401);
+      }
+
+      // -----------------------------
+      // Level Progress
+      // -----------------------------
+      const { data: progress, error: progressError } = await supabase.rpc(
+        "get_user_level_progress",
+        {
+          p_user_id: userId,
+        },
+      );
+
+      if (progressError) {
+        throw new AppError(
+          `Failed to fetch user progress: ${progressError.message}`,
+          500,
+        );
+      }
+
+      // -----------------------------
+      // Wagering Requirements
+      // -----------------------------
+      const { data: wagering, error: wageringError } = await supabase
+        .from("wagering_requirements")
+        .select(
+          `
+            id,
+            type,
+            source_amount,
+            wagering_multiplier,
+            required_amount,
+            wagered_amount,
+            remaining_amount,
+            status,
+            reference_id,
+            created_at,
+            completed_at,
+            expires_at
+          `,
+        )
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
+
+      if (wageringError) {
+        throw new AppError(
+          `Failed to fetch wagering requirement: ${wageringError.message}`,
+          500,
+        );
+      }
+
+      // -----------------------------
+      // Final User Object
+      // -----------------------------
+      const userWithProgress = {
+        ...user,
+        progress: progress?.[0] ?? null,
+      };
+
+      return {
+        user: userWithProgress,
+        wagering: wagering ?? [],
+      };
+    };
+
+    // =========================================================
+    // 1. JWT Authentication
+    // =========================================================
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.split(" ")[1];
 
       try {
-        const payload = jwt.verify(token, env.JWT_SECRET) as any;
-
-        const { data: user, error } = await supabase
-          .from("users")
-          .select(
-            `*,
-             wallets (
-               balance,
-               locked_balance,
-               withdrawable_balance,
-               available_balance
-             )`,
-          )
-          .eq("id", payload.userId)
-          .single();
-
-        if (error || !user) {
-          return next(new AppError("User not found", 401));
-        }
-
-        // =========================
-        // Get User Level Progress
-        // =========================
-
-        const { data: progress, error: progressError } = await supabase.rpc(
-          "get_user_level_progress",
-          {
-            p_user_id: payload.userId,
-          },
-        );
-
-        if (progressError) {
-          return next(
-            new AppError(
-              `Failed to fetch user progress: ${progressError.message}`,
-              500,
-            ),
-          );
-        }
-
-        // Add progress to existing user object
-        const userWithProgress = {
-          ...user,
-          progress: progress?.[0] ?? null,
+        const payload = jwt.verify(token, env.JWT_SECRET) as {
+          userId: string;
+          telegramId?: number;
         };
+
+        const { user, wagering } = await fetchUserData(payload.userId);
 
         return res.json({
           access_token: token,
-          user: userWithProgress,
+          user,
+          wagering,
         });
       } catch (err: any) {
+        if (err instanceof AppError) {
+          return next(err);
+        }
+
         if (err.name === "JsonWebTokenError") {
           return next(new AppError("Invalid token", 401));
         }
@@ -77,14 +130,15 @@ export const telegramAuth = catchAsync(
           return next(new AppError("Token expired", 401));
         }
 
-        // Unknown error
+        console.error("JWT authentication error:", err);
+
         return next(new AppError("Authentication failed", 401));
       }
     }
 
-    // =========================
-    // 2. Telegram Auth Flow
-    // =========================
+    // =========================================================
+    // 2. Telegram Authentication
+    // =========================================================
 
     const { initData } = req.body;
 
@@ -92,26 +146,35 @@ export const telegramAuth = catchAsync(
       return next(new AppError("initData is required", 400));
     }
 
+    // -----------------------------
+    // Validate Telegram initData
+    // -----------------------------
     let tgUser;
 
     try {
       tgUser = validateTelegramData(env.BOT_TOKEN, initData);
     } catch (err) {
+      console.error("Telegram validation error:", err);
+
       return next(new AppError("Invalid Telegram data", 401));
     }
 
-    // =========================
-    // Create / Fetch User
-    // =========================
+    if (!tgUser?.user?.id) {
+      return next(new AppError("Telegram user not found", 401));
+    }
 
-    const { data: user, error } = await supabase
+    // =========================================================
+    // Create / Fetch User
+    // =========================================================
+
+    const { data: user, error: userError } = await supabase
       .from("users")
       .upsert(
         {
           telegram_id: tgUser.user.id,
-          username: tgUser.user.username,
-          Fname: tgUser.user.first_name,
-          Lname: tgUser.user.last_name,
+          username: tgUser.user.username ?? null,
+          Fname: tgUser.user.first_name ?? null,
+          Lname: tgUser.user.last_name ?? null,
         },
         {
           onConflict: "telegram_id",
@@ -120,13 +183,15 @@ export const telegramAuth = catchAsync(
       .select()
       .single();
 
-    if (error || !user) {
+    if (userError || !user) {
+      console.error("User upsert error:", userError);
+
       return next(new AppError("Failed to create or fetch user", 500));
     }
 
-    // =========================
+    // =========================================================
     // Create JWT
-    // =========================
+    // =========================================================
 
     const token = jwt.sign(
       {
@@ -139,65 +204,25 @@ export const telegramAuth = catchAsync(
       },
     );
 
-    // =========================
-    // Fetch User + Wallet
-    // =========================
+    // =========================================================
+    // Fetch Complete User Data
+    // =========================================================
 
-    const { data: userdata, error: userdataerr } = await supabase
-      .from("users")
-      .select(
-        `*,
-         wallets (
-           balance,
-           locked_balance,
-           withdrawable_balance,
-           available_balance
-         )`,
-      )
-      .eq("id", user.id)
-      .single();
+    try {
+      const { user: userWithProgress, wagering } = await fetchUserData(user.id);
 
-    if (userdataerr || !userdata) {
-      return next(new AppError("Failed to fetch user data", 500));
+      // =======================================================
+      // SAME RESPONSE STRUCTURE AS JWT FLOW
+      // =======================================================
+
+      return res.json({
+        access_token: token,
+        user: userWithProgress,
+        wagering,
+      });
+    } catch (err) {
+      return next(err);
     }
-
-    // =========================
-    // Get User Level Progress
-    // =========================
-
-    const { data: progress, error: progressError } = await supabase.rpc(
-      "get_user_level_progress",
-      {
-        p_user_id: user.id,
-      },
-    );
-
-    if (progressError) {
-      return next(
-        new AppError(
-          `Failed to fetch user progress: ${progressError.message}`,
-          500,
-        ),
-      );
-    }
-
-    // =========================
-    // Add Progress To User
-    // =========================
-
-    const userWithProgress = {
-      ...userdata,
-      progress: progress?.[0] ?? null,
-    };
-
-    // =========================
-    // SAME RESPONSE STRUCTURE
-    // =========================
-
-    return res.json({
-      access_token: token,
-      user: userWithProgress,
-    });
   },
 );
 

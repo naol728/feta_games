@@ -26,6 +26,7 @@ import LeaderBoard from "./pages/player/LeaderBoard";
 import CrashGame from "./pages/Crash/Crash";
 import PhoneNumberSetup from "./components/PhoneNumberSetup";
 import Deposit from "./pages/player/Deposit";
+import Support from "./pages/player/Support";
 
 
 export default function App() {
@@ -83,6 +84,7 @@ export default function App() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/leaderboard" element={<LeaderBoard />} />
               <Route path="/invite" element={<Invite />} />
+              <Route path="/support" element={<Support />} />
               <Route path="/promo" element={<Invite />} />
             </Route>
             <Route element={<MatchMakingLayout />}>

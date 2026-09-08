@@ -11,3 +11,9 @@ export const getDailyLeaderboard = async (date?: string) => {
 
   return res.data;
 };
+
+export const getSupport = async () => {
+  const res = await apiClient.get("/stats/support");
+
+  return res.data;
+};

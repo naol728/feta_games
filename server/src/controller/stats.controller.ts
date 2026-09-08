@@ -91,3 +91,18 @@ export const getDailyLeaderboard = catchAsync(
     });
   },
 );
+
+export const getSupport = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const { data, error } = await supabase.rpc("get_support_rules");
+
+    if (error) {
+      return next(new AppError("Failed to fetch support information", 500));
+    }
+
+    res.status(200).json({
+      success: true,
+      data,
+    });
+  },
+);

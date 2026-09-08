@@ -15,12 +15,10 @@ import {
     History,
     Trophy,
     Star,
+    Target,
     ChevronRight,
     CircleDollarSign,
-    Gift,
-    Sparkles,
-    Shield,
-    Zap,
+    Info, // <-- new import
 } from "lucide-react";
 
 import { useAppDispatch, useAppSelector } from "@/store/hook";
@@ -29,7 +27,6 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
     DialogTrigger,
@@ -59,7 +56,7 @@ import { setUserWallet } from "@/store/slice/auth";
 
 import DailyStreak from "./DailyStreak";
 
-// ========== Types ==========
+// Types
 interface Transaction {
     id: string;
     type: "deposit" | "withdrawal" | "bet" | "win";
@@ -69,49 +66,55 @@ interface Transaction {
     description: string;
 }
 
-interface Benefit {
-    type: string;
-    unit: string;
-    label: string;
-    value: number | boolean;
-    description: string;
-}
+// ---------- Circular Progress Component ----------
+const CircularProgress = ({
+    percentage,
+    size = 60,
+    strokeWidth = 6,
+}: {
+    percentage: number;
+    size?: number;
+    strokeWidth?: number;
+}) => {
+    const radius = (size - strokeWidth) / 2;
+    const circumference = radius * 2 * Math.PI;
+    const offset = circumference - (percentage / 100) * circumference;
 
-interface UserProgress {
-    user_id: string;
-    current_level: number;
-    total_points: number;
-    total_deposit: number;
-    current_level_required_points: number;
-    current_level_minimum_deposit: number;
-    current_level_description?: string;
-    current_level_benefits?: Benefit[];
-    next_level: number | null;
-    next_level_required_points: number;
-    next_level_minimum_deposit: number;
-    next_level_description?: string;
-    next_level_benefits?: Benefit[];
-    points_remaining: number;
-    deposit_remaining: number;
-    points_progress_percent: number;
-    deposit_progress_percent: number;
-    is_max_level: boolean;
-}
-
-// ========== Helper to get benefit icon ==========
-const getBenefitIcon = (type: string) => {
-    switch (type) {
-        case "daily_cashback":
-            return <TrendingUp className="h-4 w-4 text-green-500" />;
-        case "daily_bonus":
-            return <Gift className="h-4 w-4 text-amber-500" />;
-        case "deposit_bonus":
-            return <CircleDollarSign className="h-4 w-4 text-blue-500" />;
-        case "priority_support":
-            return <Shield className="h-4 w-4 text-purple-500" />;
-        default:
-            return <Sparkles className="h-4 w-4 text-muted-foreground" />;
-    }
+    return (
+        <div className="relative inline-flex items-center justify-center">
+            <svg
+                width={size}
+                height={size}
+                className="transform -rotate-90"
+                viewBox={`0 0 ${size} ${size}`}
+            >
+                <circle
+                    stroke="currentColor"
+                    fill="transparent"
+                    strokeWidth={strokeWidth}
+                    r={radius}
+                    cx={size / 2}
+                    cy={size / 2}
+                    className="text-muted/20"
+                />
+                <circle
+                    stroke="currentColor"
+                    fill="transparent"
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={circumference}
+                    strokeDashoffset={offset}
+                    r={radius}
+                    cx={size / 2}
+                    cy={size / 2}
+                    className="text-primary transition-all duration-300"
+                    style={{ strokeLinecap: "round" }}
+                />
+            </svg>
+            <span className="absolute text-xs font-semibold text-foreground">
+                {Math.round(percentage)}%
+            </span>
+        </div>
+    );
 };
 
 export default function Profile() {
@@ -125,13 +128,13 @@ export default function Profile() {
     const [bankName, setBankName] = useState("CBE");
     const [accountName, setAccountName] = useState("");
     const [page, setPage] = useState(1);
-    const [benefitsOpen, setBenefitsOpen] = useState(false);
+    const [showWageringDialog, setShowWageringDialog] = useState(false); // <-- new state
 
     const limit = 5;
     const queryclient = useQueryClient();
 
     // ========== User Progress ==========
-    const progress = user?.progress as UserProgress | undefined;
+    const progress = user?.progress;
 
     const currentLevel = Number(progress?.current_level ?? 1);
     const totalPoints = Number(progress?.total_points ?? 0);
@@ -139,21 +142,9 @@ export default function Profile() {
     const nextLevel = progress?.next_level ? Number(progress.next_level) : null;
     const pointsRemaining = Number(progress?.points_remaining ?? 0);
     const depositRemaining = Number(progress?.deposit_remaining ?? 0);
-    const pointsProgress = Math.min(
-        Number(progress?.points_progress_percent ?? 0),
-        100
-    );
-    const depositProgress = Math.min(
-        Number(progress?.deposit_progress_percent ?? 0),
-        100
-    );
+    const pointsProgress = Math.min(Number(progress?.points_progress_percent ?? 0), 100);
+    const depositProgress = Math.min(Number(progress?.deposit_progress_percent ?? 0), 100);
     const isMaxLevel = Boolean(progress?.is_max_level);
-
-    // Level description and benefits
-    const currentLevelDescription = progress?.current_level_description || "";
-    const currentBenefits = progress?.current_level_benefits || [];
-    const nextLevelDescription = progress?.next_level_description || "";
-    const nextBenefits = progress?.next_level_benefits || [];
 
     // ========== Wallet balances ==========
     const wallet = user?.wallets;
@@ -161,6 +152,18 @@ export default function Profile() {
     const withdrawable = Number(wallet?.withdrawable_balance ?? 0);
     const locked = Number(wallet?.locked_balance ?? 0);
     const available = Number(wallet?.balance ?? 0);
+    console.log(user)
+    // ========== Wagering ==========
+    const wageringItems = user?.wagering ?? [];
+    const activeWagering = useMemo(
+        () => wageringItems.filter((item: any) => item.status === "active"),
+        [wageringItems]
+    );
+    const totalRemainingWagering = useMemo(
+        () => activeWagering.reduce((sum: number, item: any) => sum + (item.remaining_amount || 0), 0),
+        [activeWagering]
+    );
+    const activeWageringCount = activeWagering.length;
 
     // ========== Transactions ==========
     const { data, isLoading, isFetching } = useQuery({
@@ -196,26 +199,25 @@ export default function Profile() {
     });
 
     // ========== Withdraw mutation ==========
-    const { mutate: withdrawrequestmutate, isPending: withdrawalreqpending } =
-        useMutation({
-            mutationFn: withDrawRequest,
-            onError: (error: any) => toast.error(error.message),
-            onSuccess: (data) => {
-                toast.success(data.message);
-                queryclient.invalidateQueries({ queryKey: ["getwithDrawRequest"] });
-                dispatch(
-                    setUserWallet({
-                        balance: data.withdrawalId.balance,
-                        withdrawable_balance: data.withdrawalId.withdrawable_balance,
-                        locked_balance: data.withdrawalId.locked_balance,
-                        available_balance: data.withdrawalId.available_balance,
-                    })
-                );
-                setWithdrawAmount("");
-                setAccountNumber("");
-                setAccountName("");
-            },
-        });
+    const { mutate: withdrawrequestmutate, isPending: withdrawalreqpending } = useMutation({
+        mutationFn: withDrawRequest,
+        onError: (error: any) => toast.error(error.message),
+        onSuccess: (data) => {
+            toast.success(data.message);
+            queryclient.invalidateQueries({ queryKey: ["getwithDrawRequest"] });
+            dispatch(
+                setUserWallet({
+                    balance: data.withdrawalId.balance,
+                    withdrawable_balance: data.withdrawalId.withdrawable_balance,
+                    locked_balance: data.withdrawalId.locked_balance,
+                    available_balance: data.withdrawalId.available_balance,
+                })
+            );
+            setWithdrawAmount("");
+            setAccountNumber("");
+            setAccountName("");
+        },
+    });
 
     // ========== Helpers ==========
     const getStatusIcon = (processed: boolean) =>
@@ -227,13 +229,9 @@ export default function Profile() {
 
     const getStatusBadge = (processed: boolean) =>
         processed ? (
-            <Badge className="bg-green-50 text-green-700 border-green-200">
-                Completed
-            </Badge>
+            <Badge className="bg-green-50 text-green-700 border-green-200">Completed</Badge>
         ) : (
-            <Badge className="bg-amber-50 text-amber-700 border-amber-200">
-                Pending
-            </Badge>
+            <Badge className="bg-amber-50 text-amber-700 border-amber-200">Pending</Badge>
         );
 
     const getTransactionIcon = (type: string) => {
@@ -311,170 +309,166 @@ export default function Profile() {
 
     // ========== Main UI ==========
     return (
-        <div className="min-h-screen bg-background pb-16 px-3">
-            <div className="max-w-sm mx-auto space-y-4">
+        <div className="min-h-screen bg-background pb-16 px-2">
+            <div className="max-w-sm mx-auto space-y-3">
 
                 {/* --- Profile Card --- */}
-                <Card className="rounded-3xl border-border/60 shadow-md overflow-hidden">
-                    <CardContent className="p-4 space-y-4">
+                <Card className="rounded-2xl border-border/60 shadow-sm overflow-hidden">
+                    <CardContent className="p-3 space-y-3">
 
-                        {/* User row with larger avatar */}
-                        <div className="flex items-center gap-3">
-                            <Avatar className="h-12 w-12 border-2 border-primary/20">
-                                <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">
+                        {/* User row */}
+                        <div className="flex items-center gap-2">
+                            <Avatar className="h-9 w-9 border border-primary/20">
+                                <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">
                                     {user?.Fname?.charAt(0)?.toUpperCase()}
                                     {user?.Lname?.charAt(0)?.toUpperCase()}
                                 </AvatarFallback>
                             </Avatar>
                             <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                    <h2 className="truncate text-base font-semibold">
+                                <div className="flex items-center gap-1.5">
+                                    <h2 className="truncate text-sm font-semibold">
                                         {user?.Fname} {user?.Lname}
                                     </h2>
-                                    <Badge className="bg-primary/10 text-primary text-[9px] px-2 py-0.5 border-0">
+                                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[8px] font-medium text-primary">
                                         Lv.{currentLevel}
-                                    </Badge>
+                                    </span>
                                 </div>
-                                <p className="text-[11px] text-muted-foreground truncate">
+                                <p className="text-[10px] text-muted-foreground truncate">
                                     @{user?.username || "user"}
                                 </p>
                             </div>
                         </div>
 
-                        {/* --- Balance Summary (Enhanced) --- */}
-                        <div className="rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4 border border-primary/10">
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-medium text-muted-foreground">Total Balance</span>
-                                <span className="text-2xl font-bold tracking-tight">
-                                    {totalBalance.toFixed(2)} <span className="text-sm font-normal text-muted-foreground">ETB</span>
-                                </span>
+                        {/* --- Balance Summary (clear) --- */}
+                        <div className="rounded-xl border border-primary/10 bg-gradient-to-br from-primary/5 to-transparent p-3">
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-xs font-medium">Total Balance</span>
+                                <span className="text-lg font-bold">{totalBalance.toFixed(2)} ETB</span>
                             </div>
-                            <div className="mt-3 grid grid-cols-2 gap-2">
-                                <div className="bg-background/60 rounded-xl p-2.5 text-center">
-                                    <span className="text-[10px] text-muted-foreground">Withdrawable</span>
-                                    <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">
-                                        {withdrawable.toFixed(2)}
-                                    </p>
-                                </div>
-                                <div className="bg-background/60 rounded-xl p-2.5 text-center">
-                                    <span className="text-[10px] text-muted-foreground">Locked</span>
-                                    <p className="text-base font-bold text-amber-600 dark:text-amber-400">
-                                        {locked.toFixed(2)}
-                                    </p>
+                            {/* --- Withdrawable Balance (only) --- */}
+                            <div className="rounded-xl border border-primary/10 bg-gradient-to-br from-primary/5 to-transparent p-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-medium text-muted-foreground">Withdrawable</span>
+                                    <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                                        {withdrawable.toFixed(2)} ETB
+                                    </span>
                                 </div>
                             </div>
+
+                            {/* --- Wagering Summary (clickable) --- */}
+                            {activeWageringCount > 0 && (
+                                <div
+                                    className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer hover:underline transition"
+                                    onClick={() => setShowWageringDialog(true)}
+                                >
+                                    <Info className="h-3 w-3" />
+                                    <span>
+                                        Wagering: {activeWageringCount} active ({totalRemainingWagering.toFixed(2)} ETB remaining)
+                                    </span>
+                                </div>
+                            )}
+                            {activeWageringCount === 0 && wageringItems.length > 0 && (
+                                <div className="mt-1.5 text-[10px] text-muted-foreground">
+                                    No active wagering requirements
+                                </div>
+                            )}
+                            {wageringItems.length === 0 && (
+                                <div className="mt-1.5 text-[10px] text-muted-foreground">
+                                    No wagering requirements
+                                </div>
+                            )}
                         </div>
 
-                        {/* --- Level Progress (Enhanced) --- */}
-                        <div className="bg-muted/20 rounded-2xl p-3 border border-border/40">
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                    <Trophy className="h-5 w-5 text-primary" />
-                                    <span className="text-sm font-semibold">Level {currentLevel}</span>
+                        {/* --- Level Progress with clear remaining --- */}
+                        <div className="bg-muted/20 rounded-xl p-2.5 border border-border/40">
+                            <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-1.5">
+                                    <Trophy className="h-4 w-4 text-primary" />
+                                    <span className="text-xs font-medium">Level {currentLevel}</span>
                                     {!isMaxLevel && (
                                         <>
-                                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                            <span className="text-sm text-muted-foreground">{nextLevel}</span>
+                                            <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                            <span className="text-xs text-muted-foreground">{nextLevel}</span>
                                         </>
                                     )}
                                 </div>
-                                <button
-                                    onClick={() => setBenefitsOpen(true)}
-                                    className="flex items-center gap-1 text-[10px] font-medium text-primary hover:underline"
-                                >
-                                    <Sparkles className="h-3 w-3" />
-                                    Benefits
-                                </button>
+                                <span className="text-[10px] text-muted-foreground">
+                                    {isMaxLevel ? "MAX" : "Progress"}
+                                </span>
                             </div>
 
-                            {/* Level description */}
-                            {currentLevelDescription && (
-                                <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
-                                    {currentLevelDescription}
-                                </p>
-                            )}
-
                             {/* Points progress */}
-                            <div className="mb-3">
-                                <div className="flex items-center justify-between text-xs">
+                            <div className="mb-1.5">
+                                <div className="flex items-center justify-between text-[10px]">
                                     <span className="flex items-center gap-1">
-                                        <Star className="h-3.5 w-3.5 text-primary" /> Points
+                                        <Star className="h-3 w-3" /> Points
                                     </span>
-                                    <span className="font-medium">
-                                        {totalPoints.toLocaleString()} / {progress?.next_level_required_points?.toLocaleString() ?? "—"}
-                                    </span>
+                                    <span>{totalPoints.toLocaleString()} / {progress?.next_level_required_points?.toLocaleString() ?? "—"}</span>
                                 </div>
-                                <div className="h-2 bg-muted rounded-full overflow-hidden mt-1">
-                                    <div
-                                        className="h-full bg-gradient-to-r from-primary/70 to-primary transition-all duration-500"
-                                        style={{ width: `${pointsProgress}%` }}
-                                    />
+                                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary transition-all duration-300" style={{ width: `${pointsProgress}%` }} />
                                 </div>
-                                <div className="text-[10px] text-muted-foreground mt-0.5">
-                                    {pointsRemaining > 0 ? `${pointsRemaining.toLocaleString()} points remaining` : "✅ Points goal met"}
+                                <div className="text-[9px] text-muted-foreground mt-0.5">
+                                    {pointsRemaining > 0 ? `${pointsRemaining.toLocaleString()} points remaining` : "✔️ Points goal met"}
                                 </div>
                             </div>
 
                             {/* Deposit progress */}
                             <div>
-                                <div className="flex items-center justify-between text-xs">
+                                <div className="flex items-center justify-between text-[10px]">
                                     <span className="flex items-center gap-1">
-                                        <CircleDollarSign className="h-3.5 w-3.5 text-primary" /> Deposit
+                                        <CircleDollarSign className="h-3 w-3" /> Deposit
                                     </span>
-                                    <span className="font-medium">
-                                        {totalDeposit.toFixed(0)} ETB / {progress?.next_level_minimum_deposit?.toFixed(0) ?? "—"} ETB
-                                    </span>
+                                    <span>{totalDeposit.toFixed(0)} ETB / {progress?.next_level_minimum_deposit?.toFixed(0) ?? "—"} ETB</span>
                                 </div>
-                                <div className="h-2 bg-muted rounded-full overflow-hidden mt-1">
-                                    <div
-                                        className="h-full bg-gradient-to-r from-primary/50 to-primary/80 transition-all duration-500"
-                                        style={{ width: `${depositProgress}%` }}
-                                    />
+                                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary/70 transition-all duration-300" style={{ width: `${depositProgress}%` }} />
                                 </div>
-                                <div className="text-[10px] text-muted-foreground mt-0.5">
-                                    {depositRemaining > 0 ? `${depositRemaining.toFixed(0)} ETB remaining` : "✅ Deposit goal met"}
+                                <div className="text-[9px] text-muted-foreground mt-0.5">
+                                    {depositRemaining > 0 ? `${depositRemaining.toFixed(0)} ETB remaining` : "✔️ Deposit goal met"}
                                 </div>
                             </div>
 
                             {isMaxLevel && (
-                                <div className="mt-3 text-center text-xs font-medium text-primary">
+                                <div className="mt-2 text-center text-[10px] text-primary font-medium">
                                     🏆 Maximum level reached!
                                 </div>
                             )}
                         </div>
 
-                        {/* Action buttons - larger, more prominent */}
-                        <div className="grid grid-cols-2 gap-3">
+                        {/* Action buttons */}
+                        <div className="grid grid-cols-2 gap-2">
+                            {/* Deposit Dialog */}
                             <Dialog>
                                 <DialogTrigger asChild>
-                                    <Button className="h-11 w-full rounded-2xl text-sm font-semibold shadow-sm">
-                                        <ArrowDownCircle className="mr-2 h-4 w-4" />
+                                    <Button className="h-9 w-full rounded-xl text-xs font-semibold shadow-sm">
+                                        <ArrowDownCircle className="mr-1.5 h-3.5 w-3.5" />
                                         Deposit
                                     </Button>
                                 </DialogTrigger>
-                                <DialogContent className="rounded-3xl max-w-[340px] p-6">
+                                <DialogContent className="rounded-2xl max-w-[320px]">
                                     <DialogHeader>
-                                        <DialogTitle className="text-xl">Add Funds</DialogTitle>
-                                        <DialogDescription className="text-sm">
+                                        <DialogTitle className="text-base">Add Funds</DialogTitle>
+                                        <DialogDescription className="text-xs">
                                             Enter amount (10–5,000 ETB)
                                         </DialogDescription>
                                     </DialogHeader>
-                                    <div className="space-y-3">
+                                    <div className="space-y-2">
                                         <div className="relative">
                                             <Input
                                                 type="number"
                                                 placeholder="Amount"
                                                 value={amount}
                                                 onChange={(e) => setAmount(e.target.value)}
-                                                className="h-12 rounded-2xl pr-14 text-base"
+                                                className="h-10 rounded-xl pr-14 text-sm"
                                             />
-                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
                                                 ETB
                                             </span>
                                         </div>
                                         <Button
                                             disabled={!isValid || isPending}
-                                            className="h-12 w-full rounded-2xl text-base"
+                                            className="h-10 w-full rounded-xl"
                                             onClick={() => mutate({ amount })}
                                         >
                                             {isPending ? "Processing..." : `Deposit ${numericAmount} ETB`}
@@ -483,31 +477,32 @@ export default function Profile() {
                                 </DialogContent>
                             </Dialog>
 
+                            {/* Withdraw Dialog */}
                             <Dialog>
                                 <DialogTrigger asChild>
                                     <Button
                                         variant="outline"
-                                        className="h-11 w-full rounded-2xl border-destructive/30 text-sm font-semibold text-destructive hover:bg-destructive/5"
+                                        className="h-9 w-full rounded-xl border-destructive/30 text-xs font-semibold text-destructive hover:bg-destructive/5"
                                     >
-                                        <ArrowUpCircle className="mr-2 h-4 w-4" />
+                                        <ArrowUpCircle className="mr-1.5 h-3.5 w-3.5" />
                                         Withdraw
                                     </Button>
                                 </DialogTrigger>
-                                <DialogContent className="rounded-3xl max-w-[340px] p-6">
+                                <DialogContent className="rounded-2xl max-w-[320px]">
                                     <DialogHeader>
-                                        <DialogTitle className="text-xl">Withdraw Funds</DialogTitle>
-                                        <DialogDescription className="text-sm">
+                                        <DialogTitle className="text-base">Withdraw Funds</DialogTitle>
+                                        <DialogDescription className="text-xs">
                                             Enter bank details (min 50 ETB)
                                         </DialogDescription>
                                     </DialogHeader>
-                                    <div className="space-y-3">
+                                    <div className="space-y-2">
                                         <Input
                                             placeholder="Amount"
                                             type="number"
                                             min={50}
                                             value={withdrawamount}
                                             onChange={(e) => setWithdrawAmount(e.target.value)}
-                                            className="h-12 rounded-2xl"
+                                            className="h-10 rounded-xl"
                                         />
                                         <Input
                                             placeholder="Account number (13 digits)"
@@ -518,22 +513,22 @@ export default function Profile() {
                                             onChange={(e) =>
                                                 setAccountNumber(e.target.value.replace(/\D/g, ""))
                                             }
-                                            className="h-12 rounded-2xl"
+                                            className="h-10 rounded-xl"
                                         />
                                         <Input
                                             placeholder="Bank name"
                                             value={bankName}
                                             onChange={(e) => setBankName(e.target.value)}
-                                            className="h-12 rounded-2xl"
+                                            className="h-10 rounded-xl"
                                         />
                                         <Input
                                             placeholder="Account holder name"
                                             value={accountName}
                                             onChange={(e) => setAccountName(e.target.value)}
-                                            className="h-12 rounded-2xl"
+                                            className="h-10 rounded-xl"
                                         />
                                         <Button
-                                            className="h-12 w-full rounded-2xl text-base"
+                                            className="h-10 w-full rounded-xl"
                                             disabled={
                                                 withdrawalreqpending ||
                                                 !withdrawamount ||
@@ -555,51 +550,51 @@ export default function Profile() {
                 {/* Daily Streak */}
                 <DailyStreak />
 
-                {/* Tabs - Enhanced */}
-                <Tabs defaultValue="transactions" className="space-y-3">
-                    <TabsList className="w-full h-11 rounded-2xl bg-muted p-1">
-                        <TabsTrigger value="transactions" className="text-xs flex-1 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                            <History className="w-4 h-4 mr-1.5" />
+                {/* Tabs */}
+                <Tabs defaultValue="transactions" className="space-y-2">
+                    <TabsList className="w-full h-9 rounded-xl bg-muted p-0.5">
+                        <TabsTrigger value="transactions" className="text-xs flex-1 py-1">
+                            <History className="w-3.5 h-3.5 mr-1" />
                             History
                         </TabsTrigger>
-                        <TabsTrigger value="withdrawals" className="text-xs flex-1 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                            <CreditCard className="w-4 h-4 mr-1.5" />
+                        <TabsTrigger value="withdrawals" className="text-xs flex-1 py-1">
+                            <CreditCard className="w-3.5 h-3.5 mr-1" />
                             Withdrawals
                         </TabsTrigger>
                     </TabsList>
 
                     {/* Transactions */}
-                    <TabsContent value="transactions" className="space-y-2">
+                    <TabsContent value="transactions" className="space-y-1.5">
                         {isLoading ? (
-                            <div className="flex justify-center py-6">
-                                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            <div className="flex justify-center py-4">
+                                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                             </div>
                         ) : mappedTransactions.length === 0 ? (
-                            <p className="text-center text-sm text-muted-foreground py-6">
+                            <p className="text-center text-sm text-muted-foreground py-4">
                                 No transactions yet
                             </p>
                         ) : (
                             <>
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                     {mappedTransactions.map((t) => (
                                         <Card
                                             key={t.id}
                                             onClick={() => handlenavigatetodeposit(t.id, t.status)}
-                                            className="rounded-2xl border-border/60 hover:bg-muted/30 transition cursor-pointer"
+                                            className="rounded-xl border-border/60 hover:bg-muted/30 transition cursor-pointer"
                                         >
-                                            <CardContent className="flex justify-between items-center p-3">
-                                                <div className="flex items-center gap-3">
+                                            <CardContent className="flex justify-between items-center p-2.5">
+                                                <div className="flex items-center gap-2">
                                                     {getTransactionIcon(t.type)}
                                                     <div>
                                                         <p className="text-sm font-medium capitalize">{t.type}</p>
-                                                        <p className="text-[11px] text-muted-foreground">
+                                                        <p className="text-[10px] text-muted-foreground">
                                                             {t.description}
                                                         </p>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-sm font-semibold">{t.amount} ETB</p>
-                                                    <Badge variant="outline" className="text-[10px] px-2 py-0">
+                                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0">
                                                         {t.status}
                                                     </Badge>
                                                 </div>
@@ -614,7 +609,7 @@ export default function Profile() {
                                         <button
                                             disabled={!data.pagination.hasPreviousPage || isFetching}
                                             onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-                                            className="rounded-xl border px-4 py-2 text-xs font-medium hover:bg-muted disabled:opacity-40"
+                                            className="rounded-lg border px-3 py-1 text-xs font-medium hover:bg-muted disabled:opacity-40"
                                         >
                                             Prev
                                         </button>
@@ -624,7 +619,7 @@ export default function Profile() {
                                         <button
                                             disabled={!data.pagination.hasNextPage || isFetching}
                                             onClick={() => setPage((prev) => prev + 1)}
-                                            className="rounded-xl border px-4 py-2 text-xs font-medium hover:bg-muted disabled:opacity-40"
+                                            className="rounded-lg border px-3 py-1 text-xs font-medium hover:bg-muted disabled:opacity-40"
                                         >
                                             Next
                                         </button>
@@ -640,27 +635,27 @@ export default function Profile() {
                     </TabsContent>
 
                     {/* Withdrawals */}
-                    <TabsContent value="withdrawals" className="space-y-2">
+                    <TabsContent value="withdrawals" className="space-y-1.5">
                         {withdrawLoading ? (
-                            <div className="flex justify-center py-6">
-                                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            <div className="flex justify-center py-4">
+                                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                             </div>
                         ) : withdrawals.length === 0 ? (
-                            <p className="text-center text-sm text-muted-foreground py-6">
+                            <p className="text-center text-sm text-muted-foreground py-4">
                                 No withdrawal requests
                             </p>
                         ) : (
                             withdrawals.map((w: any) => (
-                                <Card key={w.id} className="rounded-2xl border-border/60">
+                                <Card key={w.id} className="rounded-xl border-border/60">
                                     <CardContent className="flex justify-between items-center p-3">
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2">
                                             {getStatusIcon(w.processed)}
                                             <div>
                                                 <p className="text-sm font-medium">{w.account_holder_name}</p>
-                                                <p className="text-[11px] text-muted-foreground">
+                                                <p className="text-[10px] text-muted-foreground">
                                                     {w.bank_name} • {w.destination_account}
                                                 </p>
-                                                <p className="text-[10px] text-muted-foreground">
+                                                <p className="text-[9px] text-muted-foreground">
                                                     {formatDate(w.created_at)}
                                                 </p>
                                             </div>
@@ -676,94 +671,55 @@ export default function Profile() {
                     </TabsContent>
                 </Tabs>
 
-                {/* ========== Benefits Dialog (Enhanced) ========== */}
-                <Dialog open={benefitsOpen} onOpenChange={setBenefitsOpen}>
-                    <DialogContent className="rounded-3xl max-w-md max-h-[80vh] overflow-y-auto p-6">
+                {/* ===== Wagering Details Dialog ===== */}
+                <Dialog open={showWageringDialog} onOpenChange={setShowWageringDialog}>
+                    <DialogContent className="rounded-2xl max-w-sm max-h-[80vh] overflow-y-auto">
                         <DialogHeader>
-                            <DialogTitle className="text-xl flex items-center gap-2">
-                                <Trophy className="h-5 w-5 text-primary" />
-                                Level Benefits
+                            <DialogTitle className="text-base flex items-center gap-2">
+                                <Target className="h-4 w-4" />
+                                Wagering Requirements
                             </DialogTitle>
-                            <DialogDescription className="text-sm">
-                                Perks you unlock at your current level and the next.
+                            <DialogDescription className="text-xs">
+                                Active wagering obligations that need to be fulfilled.
                             </DialogDescription>
                         </DialogHeader>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                            {/* Current Level */}
-                            <div className="bg-muted/20 rounded-2xl p-4 border border-border/40">
-                                <h4 className="text-sm font-semibold flex items-center gap-2">
-                                    <Trophy className="h-4 w-4 text-primary" />
-                                    Level {currentLevel}
-                                </h4>
-                                {currentLevelDescription && (
-                                    <p className="text-[11px] text-muted-foreground mt-1">
-                                        {currentLevelDescription}
-                                    </p>
-                                )}
-                                <div className="mt-3 space-y-2">
-                                    {currentBenefits.length > 0 ? (
-                                        currentBenefits.map((benefit, idx) => (
-                                            <div
-                                                key={idx}
-                                                className="bg-background/60 rounded-xl p-2.5 flex items-start gap-2"
-                                            >
-                                                <div className="mt-0.5">{getBenefitIcon(benefit.type)}</div>
-                                                <div>
-                                                    <p className="text-xs font-medium">{benefit.label}</p>
-                                                    <p className="text-[10px] text-muted-foreground">
-                                                        {benefit.description}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <p className="text-[11px] text-muted-foreground">No benefits yet.</p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Next Level (if not max) */}
-                            {!isMaxLevel && nextLevel && (
-                                <div className="bg-muted/20 rounded-2xl p-4 border border-border/40">
-                                    <h4 className="text-sm font-semibold flex items-center gap-2">
-                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                        Level {nextLevel}
-                                    </h4>
-                                    {nextLevelDescription && (
-                                        <p className="text-[11px] text-muted-foreground mt-1">
-                                            {nextLevelDescription}
-                                        </p>
-                                    )}
-                                    <div className="mt-3 space-y-2">
-                                        {nextBenefits.length > 0 ? (
-                                            nextBenefits.map((benefit, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    className="bg-background/60 rounded-xl p-2.5 flex items-start gap-2"
-                                                >
-                                                    <div className="mt-0.5">{getBenefitIcon(benefit.type)}</div>
-                                                    <div>
-                                                        <p className="text-xs font-medium">{benefit.label}</p>
-                                                        <p className="text-[10px] text-muted-foreground">
-                                                            {benefit.description}
+                        <div className="space-y-3 mt-1">
+                            {activeWagering.length === 0 ? (
+                                <p className="text-center text-sm text-muted-foreground py-4">
+                                    No active wagering requirements.
+                                </p>
+                            ) : (
+                                activeWagering.map((item: any) => {
+                                    const progress =
+                                        item.required_amount > 0
+                                            ? Math.min((item.wagered_amount / item.required_amount) * 100, 100)
+                                            : 0;
+                                    return (
+                                        <Card key={item.id} className="rounded-xl border-border/60">
+                                            <CardContent className="p-3 flex items-center gap-3">
+                                                <CircularProgress percentage={progress} size={56} strokeWidth={5} />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between">
+                                                        <p className="text-sm font-medium capitalize">
+                                                            {item.type} Wagering
                                                         </p>
+                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+                                                            {item.status}
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground mt-0.5">
+                                                        <span>Source: {item.source_amount} ETB</span>
+                                                        <span>Multiplier: {item.wagering_multiplier}x</span>
+                                                        <span>Required: {item.required_amount} ETB</span>
+                                                        <span>Remaining: {item.remaining_amount} ETB</span>
                                                     </div>
                                                 </div>
-                                            ))
-                                        ) : (
-                                            <p className="text-[11px] text-muted-foreground">No benefits listed yet.</p>
-                                        )}
-                                    </div>
-                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })
                             )}
                         </div>
-
-                        <DialogFooter className="mt-4">
-                            <Button variant="outline" onClick={() => setBenefitsOpen(false)} className="rounded-2xl">
-                                Close
-                            </Button>
-                        </DialogFooter>
                     </DialogContent>
                 </Dialog>
             </div>

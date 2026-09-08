@@ -20,7 +20,7 @@ export const initAuth = createAsyncThunk("auth/init", async () => {
 
   localStorage.setItem("access_token", data.access_token);
 
-  return data.user;
+  return data;
 });
 
 export const fetchWallet = createAsyncThunk(
@@ -68,6 +68,20 @@ interface UserProgress {
   deposit_progress_percent: number;
   is_max_level: boolean;
 }
+interface WageringItem {
+  id: string;
+  type: string; // e.g., "deposit"
+  source_amount: number;
+  wagering_multiplier: number;
+  required_amount: number;
+  wagered_amount: number;
+  remaining_amount: number;
+  status: string; // "active", "completed", etc.
+  reference_id: string;
+  created_at: string;
+  completed_at: string | null;
+  expires_at: string | null;
+}
 
 export interface User {
   id: string;
@@ -82,6 +96,7 @@ export interface User {
   phone: string | null;
   wallets: Wallet;
   progress?: UserProgress;
+  wagering?: WageringItem[];
 }
 
 // Redux state – unchanged
@@ -130,7 +145,8 @@ const authSlice = createSlice({
       })
 
       .addCase(initAuth.fulfilled, (state, action) => {
-        state.user = action.payload;
+        const { user, wagering } = action.payload;
+        state.user = { ...user, wagering };
         state.loading = false;
       })
 

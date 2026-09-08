@@ -11,7 +11,7 @@ export const globalErrorHandler = (
   err.status = err.status || "error";
 
   // Development vs Production
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV === "Production") {
     return res.status(err.statusCode).json({
       status: err.status,
       message: err.message,

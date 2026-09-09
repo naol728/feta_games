@@ -4,6 +4,7 @@ import http from "http";
 import authRoute from "./routes/auth.route";
 import inviteRoute from "./routes/invite.route";
 import walletRoute from "./routes/wallet.route";
+import couponRoute from "./routes/coupon.route";
 import GameRoute from "./routes/game.route";
 import { Server } from "socket.io";
 import initSocket from "./socket";
@@ -33,6 +34,7 @@ app.use("/wallet", walletRoute);
 app.use("/games", GameRoute);
 app.use("/invites", inviteRoute);
 app.use("/stats", statRoute);
+app.use("/coupon", couponRoute);
 app.all("*", (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl}`, 404));
 });

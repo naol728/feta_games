@@ -174,7 +174,7 @@ export default function TopBar({
 
           <img
             src="/logo.jpg"
-            alt="Feta"
+            alt="WinGames"
             className="
               h-8
               w-auto

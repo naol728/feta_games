@@ -254,7 +254,7 @@ const DailyStreak = () => {
     // =====================================================
 
     const referralLink = user?.referral_id
-        ? `https://t.me/fetasgamebot?start=ref_${user.referral_id}`
+        ? `${import.meta.env.VITE_BOT_URL}?start=ref_${user.referral_id}`
         : "Referral link unavailable";
 
 
@@ -774,7 +774,7 @@ const DailyStreak = () => {
 
                     <div className="grid grid-cols-7 gap-1.5">
 
-                        { activityLoading? <>Loading</>: streakDays.map(
+                        {activityLoading ? <>Loading</> : streakDays.map(
                             (item) => {
                                 const completed =
                                     item.hasActivity;
@@ -1281,7 +1281,7 @@ const DailyStreak = () => {
 
                             <DialogDescription className="mt-1.5 text-center text-xs leading-5 text-primary-foreground/75">
                                 Invite friends and earn 50etb
-                                when they join gebeta games.
+                                when they join Win games.
                             </DialogDescription>
 
                         </DialogHeader>
@@ -1571,7 +1571,7 @@ const DailyStreak = () => {
                         <p className="px-3 text-center text-[10px] leading-4 text-muted-foreground">
                             Share your referral link with
                             friends and earn rewards when
-                            they join EtyPoto.
+                            they join .
                         </p>
 
                     </div>

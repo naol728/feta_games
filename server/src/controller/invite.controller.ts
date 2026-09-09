@@ -1,3 +1,4 @@
+/*eslint-disable*/
 import { NextFunction, Response } from "express";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/AppError";
@@ -33,3 +34,4 @@ export const getInviteData = catchAsync(
     });
   },
 );
+

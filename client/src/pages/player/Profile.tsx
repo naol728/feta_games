@@ -152,7 +152,6 @@ export default function Profile() {
     const withdrawable = Number(wallet?.withdrawable_balance ?? 0);
     const locked = Number(wallet?.locked_balance ?? 0);
     const available = Number(wallet?.balance ?? 0);
-    console.log(user)
     // ========== Wagering ==========
     const wageringItems = user?.wagering ?? [];
     const activeWagering = useMemo(

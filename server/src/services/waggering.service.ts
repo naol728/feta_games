@@ -1,6 +1,6 @@
 import { supabase } from "../config/supabase";
 import { redis } from "../config/radis";
-import { io } from "../app";
+import { io } from "../server";
 
 async function emitBalance(userId: string) {
   const socketId = await redis.get(`player:${userId}`);

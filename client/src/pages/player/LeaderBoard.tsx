@@ -170,24 +170,21 @@ const Leaderboard = () => {
             </div>
           </div>
 
-          {/* COUNTDOWN */}
+          {/* COUNTDOWN – no custom className passed */}
           <div className="mt-4 flex items-center gap-1.5">
             <CountdownBox
               value={formatNumber(countdown.hours)}
               label="HRS"
-              className="bg-primary-foreground/10 text-primary-foreground border border-primary-foreground/10"
             />
-            <CountdownSeparator className="text-primary-foreground/50" />
+            <CountdownSeparator />
             <CountdownBox
               value={formatNumber(countdown.minutes)}
               label="MIN"
-              className="bg-primary-foreground/10 text-primary-foreground border border-primary-foreground/10"
             />
-            <CountdownSeparator className="text-primary-foreground/50" />
+            <CountdownSeparator />
             <CountdownBox
               value={formatNumber(countdown.seconds)}
               label="SEC"
-              className="bg-primary-foreground/10 text-primary-foreground border border-primary-foreground/10"
             />
           </div>
         </div>

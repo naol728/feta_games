@@ -27,7 +27,7 @@ interface InviteStats {
 }
 
 export default function Invite() {
-    const user = useAppSelector((state) => state.auth.user);
+    const user = useAppSelector((state) => state.auth?.user);
     const { data: invitedata, isLoading: getInviteDataloading, error } = useQuery({
         queryFn: getInviteData,
         queryKey: ["getInviteData"],
@@ -46,7 +46,7 @@ export default function Invite() {
 
     const inviteLink = useMemo(() => {
         if (!user?.referral_id) return "";
-        return `https://t.me/fetasgamebot?start=ref_${user.referral_id}`;
+        return `${import.meta.env.VITE_BOT_URL}?start=ref_${user.referral_id}`;
     }, [user?.referral_id]);
 
     const handleCopyLink = async () => {

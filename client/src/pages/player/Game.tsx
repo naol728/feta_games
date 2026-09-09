@@ -1,9 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-// import { Badge } from "@/components/ui/badge"; // optional, but we'll use a custom span for lightness
 import Banner from "@/components/Banner";
-// import QuickActions from "./QuickActions";
-import { Star } from "lucide-react";
+import { Star, ChevronRight } from "lucide-react";
 
 const games = [
   {
@@ -59,89 +57,279 @@ const games = [
 
 export default function Game() {
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-background text-foreground px-2 pb-24 sm:px-3">
-      {/* Banner */}
-      <Banner />
+    <main className="min-h-screen w-full overflow-x-hidden bg-background text-foreground px-2.5 pb-24">
+      {/* ================================
+          HERO BANNER
+      ================================= */}
+      <section className="pt-2">
+        <Banner />
+      </section>
 
-      {/* Quick Actions (commented out) */}
-      {/* <div className="mt-3">
-        <QuickActions />
-      </div> */}
+      {/* ================================
+          SECTION HEADER
+      ================================= */}
+      <section className="mt-5 mb-3 flex items-center justify-between px-0.5">
+        <div>
+          <h2 className="text-[15px] font-bold tracking-tight text-foreground">
+            የተመረጡ ጨዋታዎች
+          </h2>
 
-      {/* Section Header */}
-      <div className="mt-5 mb-2 flex items-center justify-between px-1">
-        <h2 className="text-sm font-bold tracking-wide text-foreground">
-          የተመረጡ ጨዋታዎች
-        </h2>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            Choose your game and start playing
+          </p>
+        </div>
+
         <button
           type="button"
-          className="text-[11px] font-semibold text-primary active:opacity-70"
+          className="
+            flex items-center gap-0.5
+            rounded-md
+            px-1.5 py-1
+            text-[11px]
+            font-semibold
+            text-primary
+            transition-opacity
+            active:opacity-60
+          "
         >
-          See All →
+          See all
+          <ChevronRight size={13} strokeWidth={2.5} />
         </button>
-      </div>
+      </section>
 
-      {/* Game Grid */}
-      <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-        {games.map((game, i) => (
-          <Link key={i} to={game.path} className="block min-w-0">
+      {/* ================================
+          GAME GRID
+      ================================= */}
+      <section className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3">
+        {games.map((game) => (
+          <Link
+            key={game.path}
+            to={game.path}
+            className="
+              block
+              min-w-0
+              outline-none
+              focus-visible:ring-2
+              focus-visible:ring-primary
+              focus-visible:ring-offset-2
+              focus-visible:ring-offset-background
+              rounded-xl
+            "
+          >
             <Card
-              className={`
-                group relative aspect-[0.82/1] w-full overflow-hidden rounded-lg
-                border border-border/80 bg-card p-0 shadow-sm
-                transition-all duration-200 active:scale-[0.97]
-              `}
+              className="
+                group
+                relative
+                aspect-[0.88/1]
+                w-full
+                overflow-hidden
+                rounded-xl
+                border
+                border-border/70
+                bg-card
+                p-0
+                shadow-md
+                transition-all
+                duration-200
+                hover:border-primary/40
+                hover:shadow-lg
+                active:scale-[0.97]
+              "
             >
-              {/* Game Image */}
+              {/* ================================
+                  GAME IMAGE
+              ================================= */}
               <img
                 src={game.image}
                 alt={game.name}
                 loading="lazy"
-                className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                draggable={false}
+                className="
+                  absolute
+                  inset-0
+                  h-full
+                  w-full
+                  object-cover
+                  transition-transform
+                  duration-500
+                  ease-out
+                  group-hover:scale-[1.05]
+                "
               />
 
-              {/* Dark Gradient Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+              {/* ================================
+                  IMAGE OVERLAY
+              ================================= */}
+              <div
+                className="
+                  absolute
+                  inset-0
+                  bg-gradient-to-t
+                  from-black/90
+                  via-black/15
+                  to-transparent
+                "
+              />
 
-              {/* Star Icon (top-left) */}
-              <div className="absolute left-1.5 top-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-blue-500 shadow-md ring-2 ring-black/30">
-                <Star size={15} strokeWidth={2.5} fill="white" className="text-white" />
+              {/* ================================
+                  TOP GLOW
+              ================================= */}
+              <div
+                className="
+                  pointer-events-none
+                  absolute
+                  inset-x-0
+                  top-0
+                  h-16
+                  bg-gradient-to-b
+                  from-black/30
+                  to-transparent
+                "
+              />
+
+              {/* ================================
+                  FAVORITE / STAR
+              ================================= */}
+              <div
+                className="
+                  absolute
+                  left-2
+                  top-2
+                  z-10
+                  flex
+                  h-7
+                  w-7
+                  items-center
+                  justify-center
+                  rounded-full
+                  border
+                  border-white/15
+                  bg-black/55
+                  shadow-lg
+                  backdrop-blur-md
+                "
+              >
+                <Star
+                  size={14}
+                  strokeWidth={2.3}
+                  fill="currentColor"
+                  className="text-yellow-400"
+                />
               </div>
 
-              {/* NEW Badge – using shadcn-like colors (green‑500) */}
+              {/* ================================
+                  NEW BADGE
+              ================================= */}
               {game.isNew && (
-                <span className="absolute right-1 top-1 z-10 rounded-md bg-green-500 px-1.5 py-0.5 text-[8px] font-black uppercase text-white shadow">
-                  NEW
+                <span
+                  className="
+                    absolute
+                    right-2
+                    top-2
+                    z-10
+                    rounded-full
+                    border
+                    border-primary/30
+                    bg-primary
+                    px-2
+                    py-0.5
+                    text-[8px]
+                    font-extrabold
+                    uppercase
+                    tracking-wide
+                    text-white
+                    shadow-lg
+                  "
+                >
+                  New
                 </span>
               )}
 
-              {/* COMING SOON Overlay */}
+              {/* ================================
+                  COMING SOON
+              ================================= */}
               {game.underdevelopment && (
-                <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/45">
-                  <span className="rounded-full bg-black/70 px-2 py-1 text-[8px] font-bold text-white">
-                    COMING SOON
+                <div
+                  className="
+                    absolute
+                    inset-0
+                    z-20
+                    flex
+                    items-center
+                    justify-center
+                    bg-black/60
+                    backdrop-blur-[2px]
+                  "
+                >
+                  <span
+                    className="
+                      rounded-full
+                      border
+                      border-white/10
+                      bg-black/75
+                      px-3
+                      py-1.5
+                      text-[9px]
+                      font-bold
+                      uppercase
+                      tracking-wider
+                      text-white
+                    "
+                  >
+                    Coming Soon
                   </span>
                 </div>
               )}
 
-              {/* Game Name (bottom) */}
-              <div className="absolute bottom-0 left-0 right-0 z-10 px-1.5 pb-1.5 pt-6">
-                <p className="truncate text-[10px] font-bold leading-tight text-white drop-shadow-md sm:text-xs">
+              {/* ================================
+                  GAME INFORMATION
+              ================================= */}
+              <div
+                className="
+                  absolute
+                  bottom-0
+                  left-0
+                  right-0
+                  z-10
+                  p-2.5
+                  pt-10
+                "
+              >
+                <p
+                  className="
+                    truncate
+                    text-[12px]
+                    font-bold
+                    leading-tight
+                    text-white
+                    drop-shadow-lg
+                  "
+                >
                   {game.name}
                 </p>
+
                 {!game.underdevelopment && (
-                  <div className="mt-0.5 flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
-                    <span className="text-[8px] font-medium text-white/80">Play now</span>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <span
+                      className="
+                        h-1.5
+                        w-1.5
+                        rounded-full
+                        bg-emerald-400
+                        shadow-[0_0_6px_rgba(52,211,153,0.7)]
+                      "
+                    />
+
+                    <span className="text-[9px] font-medium text-white/75">
+                      Play now
+                    </span>
                   </div>
                 )}
               </div>
             </Card>
           </Link>
         ))}
-      </div>
-
-
-    </div>
+      </section>
+    </main>
   );
 }

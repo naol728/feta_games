@@ -6,98 +6,222 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-// ======================== TYPES ========================
-
-interface CrashPlayer {
-    payout?: number | null;
-    autoCashoutAt?: number | null;
-}
-
-interface CrashGameState {
-    gameBets: Record<string, number>;
-    gamePlayers: Record<string, CrashPlayer>;
-    gameStartTime: number | null;
-    crashPoint: number;
-    phase: "betting" | "running" | "crashed";
-}
+import type { CrashGameState, CrashPlayer } from "./../../types/crash";
 
 interface LiveBetsProps {
     gameState: CrashGameState;
+    /** Optional: highlights the viewer's own row. */
+    currentUserId?: string;
 }
 
-// ======================== HELPERS ========================
+// ======================== MODULE-LEVEL HELPERS ========================
+// Hoisted so they're constructed once, not once per row per render.
 
-const formatETB = (amount: number): string => {
-    return new Intl.NumberFormat("en-ET", {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-    }).format(amount);
+const currencyFormatter = new Intl.NumberFormat("en-ET", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+});
+
+const formatETB = (amount: number): string => currencyFormatter.format(amount);
+
+const getInitials = (name: string): string => {
+    const trimmed = name.trim();
+    if (!trimmed) return "PL";
+    const parts = trimmed.split(/\s+/);
+    if (parts.length === 1) return trimmed.slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
 };
 
-const getPlayerName = (playerId: string): string => {
-    return `Player ${playerId.slice(0, 5)}`;
-};
+interface PlayerRowData {
+    player: CrashPlayer;
+    hasCashedOut: boolean;
+    totalPayout: number | null;
+    profit: number | null;
+    isSelf: boolean;
+}
 
-const getInitials = (playerId: string): string => {
-    return playerId.slice(0, 2).toUpperCase();
-};
+/** Pure derivation, no hooks needed inside — safe to compute once per player up in the parent's useMemo instead of per-row. */
+function deriveRow(player: CrashPlayer, currentUserId?: string): PlayerRowData {
+    const payout = player.payout;
+    const hasCashedOut = payout !== null && payout !== undefined && Number.isFinite(payout);
+    const bet = player.betAmount;
 
-// ======================== COMPONENT ========================
+    return {
+        player,
+        hasCashedOut,
+        totalPayout: hasCashedOut ? (payout as number) * bet : null,
+        profit: hasCashedOut ? ((payout as number) - 1) * bet : null,
+        isSelf: !!currentUserId && player.userId === currentUserId,
+    };
+}
 
-const LiveBets: React.FC<LiveBetsProps> = React.memo(({ gameState }) => {
-    // ----- MEMOIZED DERIVATIONS -----
-    const players = useMemo(() => {
-        return Object.entries(gameState?.gamePlayers ?? {});
-    }, [gameState?.gamePlayers]);
+// ======================== ROW (memoized) ========================
+// Only re-renders when ITS player object reference changes. The parent's
+// merge logic only creates a new object for players whose data actually
+// changed, so a cashout affecting one player never touches the other rows.
 
-    const totalBets = useMemo(() => {
-        const bets = gameState?.gameBets ?? {};
-        return Object.values(bets).reduce((sum, bet) => sum + Number(bet || 0), 0);
-    }, [gameState?.gameBets]);
+const PlayerRow = React.memo<PlayerRowData>(
+    ({ player, hasCashedOut, totalPayout, profit, isSelf }) => {
+        const initials = getInitials(player.username);
 
-    const isRunning = gameState?.phase === "running";
+        return (
+            <div className={cn("px-2.5 py-2 sm:py-2.5", isSelf && "bg-primary/[0.04]")}>
+                {/* MOBILE LAYOUT */}
+                <div className="flex items-center justify-between sm:hidden">
+                    <div className="flex min-w-0 items-center gap-2">
+                        <Avatar className="h-7 w-7 shrink-0">
+                            <AvatarFallback
+                                className={cn(
+                                    "text-[8px] font-bold",
+                                    isSelf ? "bg-primary/20 text-primary" : "bg-primary/10 text-primary"
+                                )}
+                            >
+                                {initials}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                            <p className="max-w-[150px] truncate text-[10px] font-semibold">
+                                {player.username}
+                                {isSelf && <span className="ml-1 text-[8px] text-primary">(You)</span>}
+                            </p>
+                            <p className="text-[9px] text-muted-foreground">
+                                ETB {formatETB(player.betAmount)}
+                            </p>
+                        </div>
+                    </div>
 
-    // ----- RENDER -----
+                    <div className="shrink-0 text-right">
+                        {hasCashedOut ? (
+                            <>
+                                <p className="text-xs font-bold text-green-500">
+                                    {(player.payout as number).toFixed(2)}x
+                                </p>
+                                <p className="text-[9px] font-medium text-green-500">
+                                    +ETB {formatETB(profit ?? 0)}
+                                </p>
+                            </>
+                        ) : (
+                            <Badge
+                                variant="secondary"
+                                className="flex h-5 items-center gap-1 px-1.5 text-[8px] font-medium"
+                            >
+                                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
+                                Playing
+                            </Badge>
+                        )}
+                    </div>
+                </div>
+
+                {hasCashedOut && (
+                    <div className="mt-1.5 flex items-center justify-between border-t border-border/20 pt-1.5 sm:hidden">
+                        <span className="text-[8px] text-muted-foreground">Total payout</span>
+                        <span className="text-[9px] font-semibold">ETB {formatETB(totalPayout ?? 0)}</span>
+                    </div>
+                )}
+
+                {/* DESKTOP LAYOUT */}
+                <div className="hidden grid-cols-[1fr_75px_70px_80px] items-center gap-2 sm:grid">
+                    <div className="flex min-w-0 items-center gap-2">
+                        <Avatar className="h-7 w-7 shrink-0">
+                            <AvatarFallback
+                                className={cn(
+                                    "text-[8px] font-bold",
+                                    isSelf ? "bg-primary/20 text-primary" : "bg-primary/10 text-primary"
+                                )}
+                            >
+                                {initials}
+                            </AvatarFallback>
+                        </Avatar>
+                        <p className="truncate text-[10px] font-semibold">
+                            {player.username}
+                            {isSelf && <span className="ml-1 text-[8px] text-primary">(You)</span>}
+                        </p>
+                    </div>
+
+                    <span className="text-right text-[10px] font-medium">
+                        ETB {formatETB(player.betAmount)}
+                    </span>
+
+                    <span
+                        className={cn(
+                            "text-right text-[10px] font-bold",
+                            hasCashedOut ? "text-green-500" : "text-muted-foreground"
+                        )}
+                    >
+                        {hasCashedOut ? `${(player.payout as number).toFixed(2)}x` : "-"}
+                    </span>
+
+                    <span
+                        className={cn(
+                            "text-right text-[10px] font-bold",
+                            hasCashedOut ? "text-green-500" : "text-muted-foreground"
+                        )}
+                    >
+                        {hasCashedOut ? `+ ETB ${formatETB(profit ?? 0)}` : "-"}
+                    </span>
+                </div>
+            </div>
+        );
+    },
+    // Custom comparator: skip the default shallow-prop scan and just check
+    // what can actually change. player is a new object only when its data
+    // changed (see the reducer's `changed` flag in CrashGame.tsx), so an
+    // identity check on it is enough — no need to compare every primitive.
+    (prev, next) => prev.player === next.player && prev.isSelf === next.isSelf
+);
+
+PlayerRow.displayName = "PlayerRow";
+
+// ======================== MAIN COMPONENT ========================
+
+const LiveBets: React.FC<LiveBetsProps> = React.memo(({ gameState, currentUserId }) => {
+    const isRunning = gameState.phase === "running";
+
+    // Single pass: derive rows + running total together instead of two
+    // separate Object.values()/reduce() traversals.
+    const { rows, totalBets } = useMemo(() => {
+        const players = Object.values(gameState.players);
+
+        let total = 0;
+        const derived: PlayerRowData[] = new Array(players.length);
+
+        for (let i = 0; i < players.length; i++) {
+            const player = players[i];
+            total += player.betAmount;
+            derived[i] = deriveRow(player, currentUserId);
+        }
+
+        // Active bets first, then by bet size — cheap since list is small
+        // (typically tens, not thousands, of concurrent players).
+        derived.sort((a, b) => {
+            if (a.hasCashedOut !== b.hasCashedOut) return a.hasCashedOut ? 1 : -1;
+            return b.player.betAmount - a.player.betAmount;
+        });
+
+        return { rows: derived, totalBets: total };
+    }, [gameState.players, currentUserId]);
+
     return (
-        <Card
-            className="
-        w-full
-        overflow-hidden
-        rounded-xl
-        border-border/60
-        bg-card
-        shadow-none
-      "
-        >
-            {/* =========================
-          HEADER
-      ========================== */}
+        <Card className="w-full overflow-hidden rounded-xl border-border/60 bg-card shadow-none">
+            {/* HEADER */}
             <CardHeader className="p-2.5">
                 <div className="flex items-center justify-between">
                     <div className="flex min-w-0 items-center gap-1.5">
-                        {/* LIVE INDICATOR */}
                         <span
                             className={cn(
                                 "h-1.5 w-1.5 shrink-0 rounded-full",
-                                isRunning
-                                    ? "animate-pulse bg-green-500"
-                                    : "bg-muted-foreground/50"
+                                isRunning ? "animate-pulse bg-green-500" : "bg-muted-foreground/50"
                             )}
                         />
                         <span className="text-xs font-semibold">Live Bets</span>
-                        {players.length > 0 && (
-                            <Badge
-                                variant="secondary"
-                                className="h-4 rounded-full px-1.5 text-[9px] font-medium"
-                            >
-                                {players.length}
+                        {rows.length > 0 && (
+                            <Badge variant="secondary" className="h-4 rounded-full px-1.5 text-[9px] font-medium">
+                                {rows.length}
                             </Badge>
                         )}
                     </div>
                     <div className="text-right">
-                        <p className="text-[8px] uppercase tracking-wide text-muted-foreground">
-                            Total
-                        </p>
+                        <p className="text-[8px] uppercase tracking-wide text-muted-foreground">Total</p>
                         <p className="text-xs font-bold">ETB {formatETB(totalBets)}</p>
                     </div>
                 </div>
@@ -105,20 +229,8 @@ const LiveBets: React.FC<LiveBetsProps> = React.memo(({ gameState }) => {
 
             <Separator />
 
-            {/* =========================
-          DESKTOP TABLE HEADER (hidden on mobile, kept for responsiveness)
-      ========================== */}
-            <div
-                className="
-          hidden
-          grid-cols-[1fr_75px_70px_80px]
-          gap-2
-          bg-muted/20
-          px-2.5
-          py-1.5
-          sm:grid
-        "
-            >
+            {/* DESKTOP TABLE HEADER */}
+            <div className="hidden grid-cols-[1fr_75px_70px_80px] gap-2 bg-muted/20 px-2.5 py-1.5 sm:grid">
                 <span className="text-[8px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Player
                 </span>
@@ -134,158 +246,15 @@ const LiveBets: React.FC<LiveBetsProps> = React.memo(({ gameState }) => {
             </div>
 
             <CardContent className="p-0">
-                {players.length === 0 ? (
+                {rows.length === 0 ? (
                     <div className="flex min-h-[70px] items-center justify-center">
                         <p className="text-[10px] text-muted-foreground">No live bets</p>
                     </div>
                 ) : (
                     <div className="divide-y divide-border/30">
-                        {players.map(([playerId, player]) => {
-                            const bet = Number(gameState?.gameBets?.[playerId] ?? 0);
-                            const payout: number | null = player?.payout ?? null;
-                            const hasCashedOut = payout !== null && Number.isFinite(payout);
-
-                            const totalPayout = hasCashedOut ? payout * bet : null;
-                            const profit = hasCashedOut ? (payout - 1) * bet : null;
-
-                            const autoCashoutAt = player?.autoCashoutAt ?? null;
-                            const hasAutoCashout =
-                                autoCashoutAt !== null &&
-                                Number.isFinite(autoCashoutAt) &&
-                                autoCashoutAt >= 1.01;
-
-                            const playerName = getPlayerName(playerId);
-
-                            return (
-                                <div key={playerId} className="px-2.5 py-2 sm:py-2.5">
-                                    {/* =========================
-                      MOBILE LAYOUT
-                  ========================== */}
-                                    <div className="flex items-center justify-between sm:hidden">
-                                        {/* Player info */}
-                                        <div className="flex min-w-0 items-center gap-2">
-                                            <Avatar className="h-7 w-7 shrink-0">
-                                                <AvatarFallback className="bg-primary/10 text-[8px] font-bold text-primary">
-                                                    {getInitials(playerId)}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className="min-w-0">
-                                                <p className="max-w-[150px] truncate text-[10px] font-semibold">
-                                                    {playerName}
-                                                </p>
-                                                <p className="text-[9px] text-muted-foreground">
-                                                    ETB {formatETB(bet)}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* Status */}
-                                        <div className="shrink-0 text-right">
-                                            {hasCashedOut && payout !== null ? (
-                                                <>
-                                                    <p className="text-xs font-bold text-green-500">
-                                                        {payout.toFixed(2)}x
-                                                    </p>
-                                                    <p className="text-[9px] font-medium text-green-500">
-                                                        +ETB {formatETB(profit ?? 0)}
-                                                    </p>
-                                                </>
-                                            ) : (
-                                                <div className="flex flex-col items-end gap-0.5">
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className="
-                              h-5
-                              px-1.5
-                              text-[8px]
-                              font-medium
-                              flex
-                              items-center
-                              gap-1
-                            "
-                                                    >
-                                                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
-                                                        Playing
-                                                    </Badge>
-                                                    {hasAutoCashout && autoCashoutAt !== null && (
-                                                        <span className="text-[8px] text-muted-foreground">
-                                                            Auto {autoCashoutAt.toFixed(2)}x
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Mobile payout summary (if cashed out) */}
-                                    {hasCashedOut && (
-                                        <div className="mt-1.5 flex items-center justify-between border-t border-border/20 pt-1.5 sm:hidden">
-                                            <span className="text-[8px] text-muted-foreground">
-                                                Total payout
-                                            </span>
-                                            <span className="text-[9px] font-semibold">
-                                                ETB {formatETB(totalPayout ?? 0)}
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    {/* =========================
-                      DESKTOP LAYOUT
-                  ========================== */}
-                                    <div
-                                        className="
-                      hidden
-                      grid-cols-[1fr_75px_70px_80px]
-                      items-center
-                      gap-2
-                      sm:grid
-                    "
-                                    >
-                                        <div className="flex min-w-0 items-center gap-2">
-                                            <Avatar className="h-7 w-7 shrink-0">
-                                                <AvatarFallback className="bg-primary/10 text-[8px] font-bold text-primary">
-                                                    {getInitials(playerId)}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className="min-w-0">
-                                                <p className="truncate text-[10px] font-semibold">
-                                                    {playerName}
-                                                </p>
-                                                {hasAutoCashout && autoCashoutAt !== null && (
-                                                    <p className="text-[8px] text-muted-foreground">
-                                                        Auto {autoCashoutAt.toFixed(2)}x
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <span className="text-right text-[10px] font-medium">
-                                            ETB {formatETB(bet)}
-                                        </span>
-
-                                        <span
-                                            className={cn(
-                                                "text-right text-[10px] font-bold",
-                                                hasCashedOut ? "text-green-500" : "text-muted-foreground"
-                                            )}
-                                        >
-                                            {hasCashedOut && payout !== null
-                                                ? `${payout.toFixed(2)}x`
-                                                : "-"}
-                                        </span>
-
-                                        <span
-                                            className={cn(
-                                                "text-right text-[10px] font-bold",
-                                                hasCashedOut ? "text-green-500" : "text-muted-foreground"
-                                            )}
-                                        >
-                                            {hasCashedOut ? `+ ETB ${formatETB(profit ?? 0)}` : "-"}
-                                        </span>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                        {rows.map((row) => (
+                            <PlayerRow key={row.player.playerId} {...row} />
+                        ))}
                     </div>
                 )}
             </CardContent>

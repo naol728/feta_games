@@ -1,5 +1,5 @@
 /* eslint-disable */
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { toast } from "react-toastify";
 
 import falling from "/images/crash/falling.gif";
@@ -14,254 +14,364 @@ import { useAppDispatch, useAppSelector } from "@/store/hook";
 import { setUserWallet } from "@/store/slice/auth";
 import { getSocket } from "@/lib/socket";
 
-// ======================== TYPES ========================
+import {
+  decodeBetBatch,
+  decodeCashoutBatch,
+  decodeCrash,
+  decodeMultiplierTick,
+  decodeRoundStart,
+  decodeSync,
+} from "@/lib/crashProtocol";
 
-interface GameHistory {
-  crashPoint: number;
-}
-
-interface CrashPlayer {
-  payout?: number | null;
-  autoCashoutAt?: number | null;
-}
-
-interface CrashGameState {
-  gameBets: Record<string, number>;
-  gamePlayers: Record<string, CrashPlayer>;
-  gameStartTime: number | null;
-  crashPoint: number;
-  phase: "betting" | "running" | "crashed";
-}
-
-interface BetPayload {
-  amount: number;
-  autoCashoutAt: number | null;
-}
-
-// Types for socket callbacks
-interface CrashBetResult {
-  ok?: boolean;
-  roundId?: string | null;
-  wallet?: {
-    balance: number;
-    locked_balance: number;
-    withdrawable_balance: number;
-    available_balance: number;
-  };
-  error?: string;
-}
-
-interface CrashCashoutResult {
-  ok?: boolean;
-  multiplier?: number;
-  wallet?: {
-    balance: number;
-    locked_balance: number;
-    withdrawable_balance: number;
-    available_balance: number;
-  };
-  payout?: number;
-  error?: string;
-}
+import type {
+  BetPayload,
+  CrashGameState,
+  CrashPlayer,
+  GameHistoryEntry,
+  Wallet,
+} from "./../../types/crash";
 
 const BETTING_COUNTDOWN = 10;
 const MAX_HISTORY = 50;
+const MIN_BET = 10;
+const MAX_BET = 1_000_000;
 
-// ======================== COMPONENT ========================
+/* ============================================================
+   ROUND REDUCER
+   Everything that changes together on a socket event lives in
+   one state slot -> one re-render per event instead of up to 6.
+============================================================ */
 
-const CrashGame = () => {
+interface RoundState {
+  game: CrashGameState;
+  multiplier: number;
+  crashPoint: number | null;
+  history: GameHistoryEntry[];
+  gameStarted: boolean;
+  gameEnded: boolean;
+  countDown: number;
+  userGambled: boolean;
+  userMultiplier: number;
+  userCashedOut: boolean;
+  disableButton: boolean;
+}
+
+type RoundAction =
+  | { type: "SYNC"; phase: CrashGameState["phase"]; roundNumber: number; gameStartTime: number | null }
+  | { type: "ROUND_RESET" } // fresh betting phase, backend cleared round state
+  | { type: "ROUND_START"; roundNumber: number; gameStartTime: number }
+  | { type: "BET_BATCH_MERGE"; players: CrashGameState["players"]; userToPlayer: CrashGameState["userToPlayer"] }
+  | { type: "MARK_GAMBLED" }
+  | { type: "CASHOUT_BATCH_MERGE"; players: CrashGameState["players"] }
+  | { type: "SELF_CASHED_OUT"; multiplier: number }
+  | { type: "CRASH"; point: number }
+  | { type: "MULTIPLIER_TICK"; value: number }
+  | { type: "COUNTDOWN_TICK"; value: number }
+  | { type: "PLACE_BET_START" }
+  | { type: "PLACE_BET_FAILED" }
+  | { type: "SEED_SELF_PLAYER"; playerId: number; player: CrashPlayer; userId: string }
+  | { type: "CASHOUT_START" }
+  | { type: "CASHOUT_FAILED" };
+
+const DEFAULT_GAME_STATE: CrashGameState = {
+  players: {},
+  userToPlayer: {},
+  gameStartTime: null,
+  crashPoint: null,
+  roundNumber: 0,
+  phase: "betting",
+};
+
+const initialRoundState: RoundState = {
+  game: DEFAULT_GAME_STATE,
+  multiplier: 1,
+  crashPoint: null,
+  history: [],
+  gameStarted: false,
+  gameEnded: false,
+  countDown: 0,
+  userGambled: false,
+  userMultiplier: 0,
+  userCashedOut: false,
+  disableButton: false,
+};
+
+function roundReducer(state: RoundState, action: RoundAction): RoundState {
+  switch (action.type) {
+    case "SYNC": {
+      const next: RoundState = {
+        ...state,
+        game: {
+          ...state.game,
+          phase: action.phase,
+          roundNumber: action.roundNumber,
+          gameStartTime: action.gameStartTime,
+        },
+      };
+
+      if (action.phase === "running") {
+        next.gameStarted = true;
+        next.gameEnded = false;
+        next.countDown = 0;
+      }
+      if (action.phase === "betting") {
+        next.gameStarted = false;
+        next.gameEnded = false;
+        next.game = { ...next.game, players: {}, userToPlayer: {} };
+      }
+      if (action.phase === "crashed") {
+        next.gameStarted = false;
+        next.gameEnded = true;
+      }
+      return next;
+    }
+
+    case "ROUND_START":
+      return {
+        ...state,
+        multiplier: 1,
+        crashPoint: null,
+        gameStarted: true,
+        gameEnded: false,
+        countDown: 0,
+        userCashedOut: false,
+        userMultiplier: 0,
+        disableButton: false,
+        game: {
+          ...state.game,
+          phase: "running",
+          roundNumber: action.roundNumber,
+          gameStartTime: action.gameStartTime,
+          crashPoint: null,
+        },
+      };
+
+    case "BET_BATCH_MERGE":
+      return {
+        ...state,
+        game: { ...state.game, players: action.players, userToPlayer: action.userToPlayer },
+      };
+
+    case "MARK_GAMBLED":
+      return state.userGambled ? state : { ...state, userGambled: true };
+
+    case "CASHOUT_BATCH_MERGE":
+      return { ...state, game: { ...state.game, players: action.players } };
+
+    case "SELF_CASHED_OUT":
+      return { ...state, userCashedOut: true, userMultiplier: action.multiplier };
+
+    case "CRASH":
+      return {
+        ...state,
+        crashPoint: action.point,
+        multiplier: action.point,
+        gameStarted: false,
+        gameEnded: true,
+        countDown: BETTING_COUNTDOWN,
+        userGambled: false,
+        userCashedOut: false,
+        disableButton: false,
+        game: { ...state.game, phase: "crashed", crashPoint: action.point, gameStartTime: null },
+        history:
+          state.history.length >= MAX_HISTORY
+            ? [...state.history.slice(1), { crashPoint: action.point }]
+            : [...state.history, { crashPoint: action.point }],
+      };
+
+    case "MULTIPLIER_TICK":
+      return state.multiplier === action.value ? state : { ...state, multiplier: action.value };
+
+    case "COUNTDOWN_TICK":
+      return { ...state, countDown: action.value };
+
+    case "PLACE_BET_START":
+      return { ...state, userGambled: true, userCashedOut: false, disableButton: false };
+
+    case "PLACE_BET_FAILED":
+      return { ...state, userGambled: false };
+
+    case "SEED_SELF_PLAYER": {
+      if (state.game.players[action.playerId]) return state; // no-op, batch already has it
+      return {
+        ...state,
+        game: {
+          ...state.game,
+          players: { ...state.game.players, [action.playerId]: action.player },
+          userToPlayer: { ...state.game.userToPlayer, [action.userId]: action.playerId },
+        },
+      };
+    }
+
+    case "CASHOUT_START":
+      return { ...state, disableButton: true };
+
+    case "CASHOUT_FAILED":
+      return { ...state, disableButton: false };
+
+    default:
+      return state;
+  }
+}
+
+/* ============================================================
+   COMPONENT
+============================================================ */
+
+export default function CrashGame() {
   const socket = getSocket();
   const dispatch = useAppDispatch();
-  const user = useAppSelector((state) => state.auth.user);
-  const isLogged = !!user;
+  const user = useAppSelector((state) => state.auth?.user);
 
-  // ----- STATE -----
+  const [round, roundDispatch] = useReducer(roundReducer, initialRoundState);
+
   const [bet, setBet] = useState<number | null>(null);
   const [cashoutAt, setCashoutAt] = useState("");
   const [queued, setQueued] = useState(false);
-  const [multiplier, setMultiplier] = useState(1);
-  const [crashPoint, setCrashPoint] = useState<number | null>(null);
-  const [history, setHistory] = useState<GameHistory[]>([]);
-  const [gameStarted, setGameStarted] = useState(false);
-  const [gameEnded, setGameEnded] = useState(false);
-  const [countDown, setCountDown] = useState(0);
-  const [userGambled, setUserGambled] = useState(false);
-  const [userMultiplier, setUserMultiplier] = useState(0);
-  const [userCashedOut, setUserCashedOut] = useState(false);
-  const [disableButton, setDisableButton] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  const [gameState, setGameState] = useState<CrashGameState>({
-    gameBets: {},
-    gamePlayers: {},
-    gameStartTime: null,
-    crashPoint: 1,
-    phase: "betting",
-  });
-
-  // ----- REFS -----
-  const queuedRef = useRef<BetPayload | null>(null);
   const userIdRef = useRef<string | undefined>(user?.id);
+  const queuedBetRef = useRef<BetPayload | null>(null);
   const countdownRAF = useRef<number | null>(null);
-  const soundMap = useRef<Record<string, HTMLAudioElement>>({});
+  const soundsRef = useRef<Record<string, HTMLAudioElement>>({});
+  const roundRef = useRef(round);
 
-  // Keep userId ref updated
+  useEffect(() => {
+    roundRef.current = round;
+  }, [round]);
+
   useEffect(() => {
     userIdRef.current = user?.id;
   }, [user]);
 
-  // ----- SOUND SETUP -----
+  /* ---- sounds ---- */
   useEffect(() => {
-    const sounds = ["crashfly", "crash", "click", "cashout"];
-
-    sounds.forEach((name) => {
+    const names = ["crashfly", "crash", "click", "cashout"];
+    names.forEach((name) => {
       const audio = new Audio(`/sounds/${name}.mp3`);
-
       audio.preload = "auto";
-
       if (name === "crashfly") {
         audio.loop = true;
         audio.volume = 0.35;
       }
-
-      soundMap.current[name] = audio;
+      soundsRef.current[name] = audio;
     });
-
     return () => {
-      Object.values(soundMap.current).forEach((audio) => {
+      Object.values(soundsRef.current).forEach((audio) => {
         audio.pause();
         audio.currentTime = 0;
-        audio.src = "";
       });
-
-      soundMap.current = {};
+      soundsRef.current = {};
     };
   }, []);
-
-  // ----- CONTINUOUS CRASH FLY SOUND -----
-  const startCrashFlySound = useCallback(() => {
-    if (!soundEnabled) return;
-
-    const audio = soundMap.current["crashfly"];
-
-    if (!audio) return;
-
-    audio.loop = true;
-
-    if (audio.paused) {
-      audio.play().catch(() => { });
-    }
-  }, [soundEnabled]);
-
-  const stopCrashFlySound = useCallback(() => {
-    const audio = soundMap.current["crashfly"];
-
-    if (!audio) return;
-
-    audio.pause();
-    audio.currentTime = 0;
-  }, []);
-
-  // ----- START CRASHFLY WHEN PAGE IS OPEN -----
-  useEffect(() => {
-    startCrashFlySound();
-
-    return () => {
-      stopCrashFlySound();
-    };
-  }, [startCrashFlySound, stopCrashFlySound]);
 
   const playSound = useCallback(
     (name: string) => {
       if (!soundEnabled) return;
-      const audio = soundMap.current[name];
-      if (audio) {
-        audio.currentTime = 0;
-        audio.play().catch(() => { });
-      }
+      const audio = soundsRef.current[name];
+      if (!audio) return;
+      audio.currentTime = 0;
+      audio.play().catch(() => { });
     },
     [soundEnabled]
   );
 
+  const startFlySound = useCallback(() => {
+    if (!soundEnabled) return;
+    soundsRef.current.crashfly?.play().catch(() => { });
+  }, [soundEnabled]);
+
+  const stopFlySound = useCallback(() => {
+    const audio = soundsRef.current.crashfly;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+  }, []);
+
+  useEffect(() => {
+    if (round.gameStarted) startFlySound();
+    else stopFlySound();
+    return () => stopFlySound();
+  }, [round.gameStarted, startFlySound, stopFlySound]);
+
   const toggleSound = useCallback(() => {
-    setSoundEnabled((prev) => {
-      const next = !prev;
-
-      const audio = soundMap.current["crashfly"];
-
-      if (!audio) {
-        return next;
+    setSoundEnabled((previous) => {
+      const next = !previous;
+      const audio = soundsRef.current.crashfly;
+      if (audio) {
+        if (next && roundRef.current.gameStarted) audio.play().catch(() => { });
+        else {
+          audio.pause();
+          audio.currentTime = 0;
+        }
       }
-
-      if (next) {
-        audio.loop = true;
-        audio.play().catch(() => { });
-      } else {
-        audio.pause();
-        audio.currentTime = 0;
-      }
-
       return next;
     });
   }, []);
 
-  // ----- MEMOIZED VALUES -----
+  /* ---- derived ---- */
   const availableBalance = useMemo(() => {
     if (!user?.wallets) return 0;
     return (user.wallets.balance ?? 0) + (user.wallets.withdrawable_balance ?? 0);
   }, [user?.wallets]);
 
-  // ----- HELPERS -----
   const buildPayload = useCallback((): BetPayload | null => {
-    if (!bet || bet < 1) return null;
+    if (!bet || !Number.isFinite(bet)) return null;
     const target = parseFloat(cashoutAt);
-    return {
-      amount: bet,
-      autoCashoutAt:
-        Number.isFinite(target) && target >= 1.01
-          ? Math.round(target * 100) / 100
-          : null,
-    };
+    const autoCashoutAt = Number.isFinite(target) && target >= 1.01 ? Math.round(target * 100) / 100 : null;
+    return { amount: Math.round(bet * 100) / 100, autoCashoutAt };
   }, [bet, cashoutAt]);
 
-  // ----- PLACE BET -----
   const placeBet = useCallback(
     (payload: BetPayload) => {
       if (!user) {
-        toast.error("Please open the game through Telegram.");
+        toast.error("Please login first.");
         return;
       }
-      setUserGambled(true);
-      setUserCashedOut(false);
 
-      socket.emit(
-        "crash:bet",
-        payload,
-        (result: CrashBetResult) => {
-          if (result?.error) {
-            setUserGambled(false);
-            toast.error(result.error);
-            return;
-          }
-          if (result.wallet) {
-            dispatch(setUserWallet(result.wallet));
-            playSound("click");
-          }
+      roundDispatch({ type: "PLACE_BET_START" });
+
+      socket.emit("crash:bet", payload, (result: any) => {
+        if (!result || result.error) {
+          roundDispatch({ type: "PLACE_BET_FAILED" });
+          toast.error(result?.error ?? "Could not place bet.");
+          return;
         }
-      );
+
+        if (typeof result.playerId === "number") {
+          roundDispatch({
+            type: "SEED_SELF_PLAYER",
+            playerId: result.playerId,
+            userId: user.id,
+            player: {
+              playerId: result.playerId,
+              userId: user.id,
+              username: user.username ?? user.Fname ?? "You",
+              payout: null,
+              betAmount: payload.amount,
+            },
+          });
+        }
+
+        if (result.wallet) dispatch(setUserWallet(result.wallet));
+        playSound("click");
+      });
     },
     [socket, user, dispatch, playSound]
   );
 
-  // ----- HANDLE BET -----
   const handleBet = useCallback(() => {
-    if (!isLogged) {
+    if (!user) {
       toast.error("Please login first.");
       return;
     }
-    if (userGambled) return;
-    if (!bet || bet < 10) {
-      toast.error("Minimum Bet 10 ETB.");
+    if (round.userGambled) return;
+    if (!bet || bet < MIN_BET) {
+      toast.error(`Minimum bet is ${MIN_BET} ETB.`);
+      return;
+    }
+    if (bet > MAX_BET) {
+      toast.error(`Maximum bet is ${MAX_BET.toLocaleString()} ETB.`);
       return;
     }
     if (availableBalance < bet) {
@@ -269,249 +379,174 @@ const CrashGame = () => {
       return;
     }
 
-    if (gameStarted) {
-      if (queuedRef.current) {
-        queuedRef.current = null;
+    const payload = buildPayload();
+    if (!payload) return;
+
+    if (round.gameStarted) {
+      if (queuedBetRef.current) {
+        queuedBetRef.current = null;
         setQueued(false);
         toast.info("Queued bet cancelled.");
       } else {
-        const payload = buildPayload();
-        if (!payload) return;
-        queuedRef.current = payload;
+        queuedBetRef.current = payload;
         setQueued(true);
         toast.info("Bet queued for next round.");
       }
       return;
     }
 
-    const payload = buildPayload();
-    if (!payload) return;
     placeBet(payload);
-  }, [isLogged, userGambled, bet, availableBalance, gameStarted, buildPayload, placeBet]);
+  }, [user, round.userGambled, round.gameStarted, bet, availableBalance, buildPayload, placeBet]);
 
-  // ----- HANDLE CASHOUT -----
   const handleCashout = useCallback(() => {
-    if (!userGambled || userCashedOut) return;
-    if (!gameStarted) return;
-    setDisableButton(true);
+    if (!round.userGambled || round.userCashedOut || !round.gameStarted) return;
 
-    socket.emit(
-      "crash:cashout",
-      {},
-      (result: CrashCashoutResult) => {
-        if (result?.error) {
-          toast.error(result.error);
-          setDisableButton(false);
-          return;
-        }
-        if (result?.multiplier) {
-          setUserMultiplier(result.multiplier);
-        }
-        setUserCashedOut(true);
-        setDisableButton(false);
-        if (result?.wallet) {
-          dispatch(setUserWallet(result.wallet));
-        }
-        playSound("cashout");
+    roundDispatch({ type: "CASHOUT_START" });
+
+    socket.emit("crash:cashout", (result:any) => {
+      if (!result || result.error) {
+        roundDispatch({ type: "CASHOUT_FAILED" });
+        toast.error(result?.error ?? "Cashout failed.");
+        return;
       }
-    );
-  }, [userGambled, userCashedOut, gameStarted, socket, dispatch, playSound]);
 
-  // ----- SOCKET LISTENERS -----
-
-  // Wallet update (from server after loss)
-  useEffect(() => {
-    const onWalletUpdate = (wallet: {
-      balance: number;
-      locked_balance: number;
-      withdrawable_balance: number;
-      available_balance: number;
-    }) => {
-      if (wallet) {
-        dispatch(setUserWallet(wallet));
+      if (typeof result.multiplier === "number") {
+        roundDispatch({ type: "SELF_CASHED_OUT", multiplier: result.multiplier });
       }
-    };
-
-    socket.on("crash:wallet", onWalletUpdate);
-
-    return () => {
-      socket.off("crash:wallet", onWalletUpdate);
-    };
-  }, [socket, dispatch]);
-
-  // Cashout success (from server push)
-  useEffect(() => {
-    const onCashoutSuccess = (data: {
-      multiplier: number;
-      wallet?: {
-        balance: number;
-        locked_balance: number;
-        withdrawable_balance: number;
-        available_balance: number;
-      };
-    }) => {
-      setUserMultiplier(data.multiplier);
-      setUserCashedOut(true);
-      setDisableButton(false);
-      if (data.wallet) {
-        dispatch(setUserWallet(data.wallet));
-      }
+      roundDispatch({ type: "CASHOUT_FAILED" }); // clears disableButton; harmless re-use
+      if (result.wallet) dispatch(setUserWallet(result.wallet));
       playSound("cashout");
-    };
-    socket.on("crash:cashoutSuccess", onCashoutSuccess);
-    return () => {
-      socket.off("crash:cashoutSuccess", onCashoutSuccess);
-    };
-  }, [socket, dispatch, playSound]);
+    });
+  }, [socket, round.userGambled, round.userCashedOut, round.gameStarted, dispatch, playSound]);
 
-  // Game state sync
+  /* ---- socket listeners ---- */
   useEffect(() => {
-    const onGameState = (state: CrashGameState) => {
-      setGameState(state);
-
-      const id = userIdRef.current;
-      if (state.phase === "betting") {
-        setGameStarted(false);
-        setGameEnded(false);
-        setMultiplier(1);
-        setCrashPoint(null);
-        setUserGambled(false);
-        setUserCashedOut(false);
-        setUserMultiplier(0);
-        setDisableButton(false);
-
-        if (queuedRef.current) {
-          const payload = queuedRef.current;
-          queuedRef.current = null;
-          setQueued(false);
-          placeBet(payload);
-        }
-        return;
-      }
-
-      if (state.phase === "running") {
-        setGameStarted(true);
-        setGameEnded(false);
-        if (!id) return;
-        const stake = state.gameBets?.[id];
-        if (stake == null) return;
-        const player = state.gamePlayers?.[id];
-        setUserGambled(true);
-        if (player?.payout != null) {
-          setUserCashedOut(true);
-          setUserMultiplier(player.payout / stake);
-        }
-        return;
-      }
-
-      if (state.phase === "crashed") {
-        setGameStarted(false);
-        setGameEnded(true);
-      }
+    const handleSync = (data: unknown) => {
+      const decoded = decodeSync(data);
+      if (!decoded) return console.warn("Invalid crash sync packet");
+      roundDispatch({ type: "SYNC", ...decoded });
     };
-
-    socket.on("crash:gameState", onGameState);
-    return () => {
-      socket.off("crash:gameState", onGameState);
-    };
-  }, [socket, placeBet]);
-
-  // Sync state (initial / reconnect)
-  useEffect(() => {
-    const onSync = (sync: Partial<CrashGameState>) => {
-      const phase = sync.phase ?? "betting";
-      setGameState((prev) => ({
-        ...prev,
-        gameBets: sync.gameBets ?? {},
-        gamePlayers: sync.gamePlayers ?? {},
-        gameStartTime: sync.gameStartTime ?? null,
-        phase,
-      }));
-
-      if (phase === "running") {
-        setGameStarted(true);
-        setGameEnded(false);
-      } else if (phase === "betting") {
-        setGameStarted(false);
-        setGameEnded(false);
-      } else if (phase === "crashed") {
-        setGameStarted(false);
-        setGameEnded(true);
-      }
-
-      const id = userIdRef.current;
-      if (!id) return;
-      const stake = sync.gameBets?.[id];
-      if (stake == null) return;
-      const player = sync.gamePlayers?.[id];
-      setUserGambled(true);
-      if (player?.payout != null) {
-        setUserCashedOut(true);
-        setUserMultiplier(player.payout / stake);
-      }
-    };
-
-    socket.on("crash:sync", onSync);
+    socket.on("crash:sync", handleSync);
     socket.emit("crash:requestState");
-
-    return () => {
-      socket.off("crash:sync", onSync);
-    };
+    return () => void socket.off("crash:sync", handleSync);
   }, [socket]);
 
-  // Start / result / multiplier
   useEffect(() => {
-    const onStart = () => {
-      setMultiplier(1);
-      setCrashPoint(null);
-      setGameStarted(true);
-      setGameEnded(false);
-      setUserCashedOut(false);
-      setUserMultiplier(0);
-      setCountDown(0);
+    const handleRoundStart = (data: unknown) => {
+      const decoded = decodeRoundStart(data);
+      if (!decoded) return console.warn("Invalid crash start packet");
+      roundDispatch({ type: "ROUND_START", ...decoded });
     };
+    socket.on("crash:start", handleRoundStart);
+    return () => void socket.off("crash:start", handleRoundStart);
+  }, [socket]);
 
-    const onResult = (point: number) => {
-      setCrashPoint(point);
-      setMultiplier(point);
-      setGameStarted(false);
-      setGameEnded(true);
-      setGameState((prev) => ({
-        ...prev,
-        gameBets: {},
-        gamePlayers: {},
-        crashPoint: point,
-        gameStartTime: null,
-        phase: "crashed",
-      }));
-      setHistory((prev) => {
-        const newHistory = [...prev, { crashPoint: point }];
-        return newHistory.length > MAX_HISTORY ? newHistory.slice(-MAX_HISTORY) : newHistory;
-      });
-      setCountDown(BETTING_COUNTDOWN);
-      setUserGambled(false);
+  useEffect(() => {
+    const handleBetBatch = (data: unknown) => {
+      const entries = decodeBetBatch(data);
+      if (!entries || !entries.length) return;
 
+      const currentUserId = userIdRef.current;
+      const { players: prevPlayers, userToPlayer: prevMap } = roundRef.current.game;
+      let players = prevPlayers;
+      let userToPlayer = prevMap;
+      let changed = false;
+
+      for (const decoded of entries) {
+        if (players[decoded.playerId]) continue;
+        const isSelf = currentUserId !== undefined && prevMap[currentUserId] === decoded.playerId;
+
+        if (!changed) {
+          players = { ...players };
+          userToPlayer = { ...userToPlayer };
+          changed = true;
+        }
+
+        players[decoded.playerId] = {
+          playerId: decoded.playerId,
+          userId: isSelf ? currentUserId ?? "" : "",
+          username: isSelf ? user?.username ?? user?.Fname ?? "You" : "Player",
+          payout: null,
+          betAmount: decoded.amount,
+        };
+      }
+
+      if (changed) roundDispatch({ type: "BET_BATCH_MERGE", players, userToPlayer });
+
+      const selfPlayerId = currentUserId ? prevMap[currentUserId] : undefined;
+      if (selfPlayerId !== undefined && entries.some((e) => e.playerId === selfPlayerId)) {
+        roundDispatch({ type: "MARK_GAMBLED" });
+      }
+    };
+    socket.on("crash:bets", handleBetBatch);
+    return () => void socket.off("crash:bets", handleBetBatch);
+  }, [socket, user]);
+
+  useEffect(() => {
+    const handleCashoutBatch = (data: unknown) => {
+      const entries = decodeCashoutBatch(data);
+      if (!entries || !entries.length) return;
+
+      const prevPlayers = roundRef.current.game.players;
+      let players = prevPlayers;
+      let changed = false;
+
+      for (const decoded of entries) {
+        const player = players[decoded.playerId];
+        if (!player) continue;
+        if (!changed) {
+          players = { ...players };
+          changed = true;
+        }
+        players[decoded.playerId] = { ...player, payout: decoded.multiplier };
+      }
+
+      if (changed) roundDispatch({ type: "CASHOUT_BATCH_MERGE", players });
+
+      const currentUserId = userIdRef.current;
+      const selfPlayerId = currentUserId ? roundRef.current.game.userToPlayer[currentUserId] : undefined;
+      if (selfPlayerId !== undefined) {
+        const own = entries.find((e) => e.playerId === selfPlayerId);
+        if (own) roundDispatch({ type: "SELF_CASHED_OUT", multiplier: own.multiplier });
+      }
+    };
+    socket.on("crash:cashouts", handleCashoutBatch);
+    return () => void socket.off("crash:cashouts", handleCashoutBatch);
+  }, [socket]);
+
+  useEffect(() => {
+    const handleCrash = (data: unknown) => {
+      const point = decodeCrash(data);
+      if (point === null) return console.warn("Invalid crash packet");
+      roundDispatch({ type: "CRASH", point });
       playSound("crash");
     };
-
-    const onMultiplier = (value: number) => {
-      setMultiplier(value);
-    };
-
-    socket.on("crash:start", onStart);
-    socket.on("crash:result", onResult);
-    socket.on("crash:multiplier", onMultiplier);
-
-    return () => {
-      socket.off("crash:start", onStart);
-      socket.off("crash:result", onResult);
-      socket.off("crash:multiplier", onMultiplier);
-    };
+    socket.on("crash:crash", handleCrash);
+    return () => void socket.off("crash:crash", handleCrash);
   }, [socket, playSound]);
 
-  // ----- COUNTDOWN with requestAnimationFrame -----
   useEffect(() => {
-    if (countDown <= 0 || gameStarted) {
+    const handleMultiplier = (data: unknown) => {
+      const value = decodeMultiplierTick(data);
+      if (value === null) return;
+      roundDispatch({ type: "MULTIPLIER_TICK", value });
+    };
+    socket.on("crash:multiplier", handleMultiplier);
+    return () => void socket.off("crash:multiplier", handleMultiplier);
+  }, [socket]);
+
+  useEffect(() => {
+    const handleWallet = (wallet: Wallet) => {
+      if (!wallet) return;
+      dispatch(setUserWallet(wallet));
+    };
+    socket.on("crash:wallet", handleWallet);
+    return () => void socket.off("crash:wallet", handleWallet);
+  }, [socket, dispatch]);
+
+  /* ---- countdown (rAF, unchanged in spirit) ---- */
+  useEffect(() => {
+    if (round.countDown <= 0 || round.gameStarted) {
       if (countdownRAF.current) {
         cancelAnimationFrame(countdownRAF.current);
         countdownRAF.current = null;
@@ -520,73 +555,78 @@ const CrashGame = () => {
     }
 
     let lastTimestamp: number | null = null;
-    const step = (timestamp: number) => {
-      if (!lastTimestamp) lastTimestamp = timestamp;
+
+    const update = (timestamp: number) => {
+      if (lastTimestamp === null) lastTimestamp = timestamp;
       const delta = (timestamp - lastTimestamp) / 1000;
       if (delta >= 0.1) {
-        setCountDown((prev) => {
-          const newValue = Math.max(0, prev - delta);
-          return newValue;
-        });
+        roundDispatch({ type: "COUNTDOWN_TICK", value: Math.max(0, roundRef.current.countDown - delta) });
         lastTimestamp = timestamp;
       }
-      if (countDown > 0) {
-        countdownRAF.current = requestAnimationFrame(step);
-      } else {
-        countdownRAF.current = null;
-      }
+      countdownRAF.current = requestAnimationFrame(update);
     };
 
-    countdownRAF.current = requestAnimationFrame(step);
-
+    countdownRAF.current = requestAnimationFrame(update);
     return () => {
       if (countdownRAF.current) {
         cancelAnimationFrame(countdownRAF.current);
         countdownRAF.current = null;
       }
     };
-  }, [countDown, gameStarted]);
+  }, [round.countDown, round.gameStarted]);
 
-  // ----- RENDER -----
+  /* ---- auto-fire queued bet on next betting phase ---- */
+  useEffect(() => {
+    if (round.game.phase !== "betting" || !queuedBetRef.current) return;
+
+    const payload = queuedBetRef.current;
+    queuedBetRef.current = null;
+    setQueued(false);
+
+    const timer = window.setTimeout(() => placeBet(payload), 50);
+    return () => window.clearTimeout(timer);
+  }, [round.game.phase, placeBet]);
+
+  /* ---- render ---- */
   return (
-    <div className="w-full min-h-screen bg-background px-2 py-2 sm:px-3">
-      <div className="mx-auto w-full max-w-[520px] overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="min-h-screen w-full bg-[radial-gradient(ellipse_at_top,_#1b1330_0%,_#0a0714_60%,_#050308_100%)] px-2 py-2 sm:px-3">
+      <div className="mx-auto w-full max-w-[520px] overflow-hidden rounded-2xl border border-violet-500/20 bg-[#0f0a1e] shadow-[0_0_40px_-8px_rgba(168,85,247,0.35)]">
         <GameContainer
-          crashPoint={crashPoint}
-          multiplier={multiplier}
-          gameStarted={gameStarted}
-          gameEnded={gameEnded}
-          countDown={countDown}
+          crashPoint={round.crashPoint}
+          multiplier={round.multiplier}
+          gameStarted={round.gameStarted}
+          gameEnded={round.gameEnded}
+          countDown={round.countDown}
           up={up}
           idle={idle}
           falling={falling}
-          history={history}
+          history={round.history}
         />
+
         <SideMenu
           bet={bet}
           setBet={setBet}
           cashoutAt={cashoutAt}
           setCashoutAt={setCashoutAt}
           queued={queued}
-          multiplier={multiplier}
-          gameStarted={gameStarted}
+          multiplier={round.multiplier}
+          gameStarted={round.gameStarted}
           handleBet={handleBet}
           handleCashout={handleCashout}
-          isLogged={isLogged}
-          userGambled={userGambled}
-          userCashedOut={userCashedOut}
-          userData={user!}
-          userMultiplier={userMultiplier}
-          disableButton={disableButton}
+          isLogged={!!user}
+          userGambled={round.userGambled}
+          userCashedOut={round.userCashedOut}
+          userData={user}
+          userMultiplier={round.userMultiplier}
+          disableButton={round.disableButton}
           soundEnabled={soundEnabled}
           toggleSound={toggleSound}
         />
       </div>
+
       <div className="mx-auto w-full max-w-[520px]">
-        <LiveBets gameState={gameState} />
+        <LiveBets gameState={round.game} />
       </div>
     </div>
   );
-};
-
-export default CrashGame;
+}

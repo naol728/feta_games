@@ -616,7 +616,7 @@ export default function CrashGame() {
           isLogged={!!user}
           userGambled={round.userGambled}
           userCashedOut={round.userCashedOut}
-          userData={user}
+          userData={user!}
           userMultiplier={round.userMultiplier}
           disableButton={round.disableButton}
           soundEnabled={soundEnabled}

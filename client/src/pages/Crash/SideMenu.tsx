@@ -31,7 +31,7 @@ interface SideMenuProps {
   isLogged: boolean;
   userGambled: boolean;
   userCashedOut: boolean;
-  userData?: User ;
+  userData: User;
   userMultiplier: number;
   disableButton: boolean;
   soundEnabled: boolean;

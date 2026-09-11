@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabase";
+import { pointsService } from "./points.service";
 import { redis } from "../config/radis";
 import { io } from "../server";
 
@@ -165,6 +166,10 @@ export const walletService = {
       console.error("MARK PLAYED ERROR:", markError);
       // ❗ don't throw → not critical for match result
     }
+    await Promise.allSettled([
+      pointsService.addGameplayPoints(winnerId, betAmount),
+      pointsService.addGameplayPoints(loserId, betAmount),
+    ]);
     await Promise.allSettled([emitBalance(winnerId), emitBalance(loserId)]);
   },
   async checkBalance(playerId: string, bet: number) {

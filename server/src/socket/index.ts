@@ -6,6 +6,7 @@ import { SocketError } from "../utils/SocketError";
 import { verifyAccessToken } from "../services/token.service";
 import { safeConnection } from "./safeConnection";
 import Crash from "./crash/crash";
+import Slots from "./slot/Slot.socket";
 
 interface JwtPayload {
   userId: string;
@@ -57,6 +58,7 @@ export default function initSocket(io: Server) {
       connectFourSocket(io, s);
       CardDrawSocket(io, s);
       Crash(io, s);
+      Slots(io,s)
     }),
   );
 }

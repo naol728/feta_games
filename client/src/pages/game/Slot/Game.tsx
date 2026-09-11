@@ -1,6 +1,6 @@
 /* eslint-disable */
 
-import React from "react"
+import React, { useMemo } from "react"
 import SlotColumn from "./SlotColumn"
 import { type SlotProps } from "./Types"
 
@@ -16,6 +16,105 @@ interface SlotMachineProps {
     loadedImages: number
     setLoadedImages: (value: number) => void
 }
+
+/* ============================================================
+   REEL LINES, IN UNIT-GRID COORDS (3x3)
+   Each line's endpoints pass exactly through the center of every
+   cell it wins on -- see the derivation: a corner-to-corner
+   diagonal of a 3x3 unit grid crosses (0.5,0.5), (1.5,1.5),
+   (2.5,2.5) exactly, so no per-cell fudging is needed.
+   Hoisted outside the component: it's a constant, not per-render
+   data.
+============================================================ */
+
+const LINE_COORDS: Record<string, [number, number, number, number]> = {
+    "Horizontal 1": [0, 0.5, 3, 0.5],
+    "Horizontal 2": [0, 1.5, 3, 1.5],
+    "Horizontal 3": [0, 2.5, 3, 2.5],
+    "Diagonal 1": [0, 0, 3, 3],
+    "Diagonal 2": [3, 0, 0, 3],
+}
+
+/* ============================================================
+   WIN LINES OVERLAY
+   One SVG spanning the whole 3x3 reel area, drawing an actual
+   connecting line through the cells that won -- replaces the old
+   per-cell rotated-bar approach in SlotColumn, which fragmented
+   each line into disconnected segments and didn't handle the
+   diagonals cleanly.
+   Memoized: only re-renders when the set of winning lines
+   actually changes, not on every spin tick / unrelated re-render.
+============================================================ */
+
+const WinLinesOverlay = React.memo<{ winningLines: string[] }>(
+    ({ winningLines }) => {
+        if (!winningLines?.length) return null
+
+        return (
+            <svg
+                viewBox="0 0 3 3"
+                preserveAspectRatio="none"
+                className="pointer-events-none absolute inset-0 z-40 h-full w-full"
+            >
+                {winningLines.map((line) => {
+                    const coords = LINE_COORDS[line]
+                    if (!coords) return null
+
+                    const [x1, y1, x2, y2] = coords
+
+                    return (
+                        <g key={line}>
+                            {/* soft glow pass underneath */}
+                            <line
+                                x1={x1}
+                                y1={y1}
+                                x2={x2}
+                                y2={y2}
+                                stroke="#ffd34d"
+                                strokeWidth={0.14}
+                                strokeLinecap="round"
+                                opacity={0.35}
+                                pathLength={1}
+                                className="animate-payline-draw"
+                                style={{ filter: "blur(2px)" }}
+                            />
+                            {/* crisp line on top */}
+                            <line
+                                x1={x1}
+                                y1={y1}
+                                x2={x2}
+                                y2={y2}
+                                stroke="#fff2c2"
+                                strokeWidth={0.045}
+                                strokeLinecap="round"
+                                pathLength={1}
+                                className="animate-payline-draw"
+                            />
+                        </g>
+                    )
+                })}
+
+                <style>{`
+                    @keyframes payline-draw {
+                        from {
+                            stroke-dasharray: 1;
+                            stroke-dashoffset: 1;
+                        }
+                        to {
+                            stroke-dasharray: 1;
+                            stroke-dashoffset: 0;
+                        }
+                    }
+                    .animate-payline-draw {
+                        animation: payline-draw 0.35s ease-out forwards;
+                    }
+                `}</style>
+            </svg>
+        )
+    },
+)
+
+WinLinesOverlay.displayName = "WinLinesOverlay"
 
 const Game: React.FC<SlotMachineProps> = ({
     grid,
@@ -46,6 +145,17 @@ const Game: React.FC<SlotMachineProps> = ({
     const handleImageLoad = () => {
         setLoadedImages(loadedImages + 1)
     }
+
+    /*
+     * The overlay should only appear once the reels have actually
+     * stopped -- showing a payline mid-spin would be nonsensical
+     * (and the coordinates only correspond to real symbols once
+     * they're settled).
+     */
+    const visibleWinningLines = useMemo(
+        () => (isSpinning ? [] : winningLines),
+        [isSpinning, winningLines],
+    )
 
     /*
      * ============================================
@@ -203,7 +313,7 @@ const Game: React.FC<SlotMachineProps> = ({
                                 ]}
                                 isSpinning={isSpinning}
                                 position={index}
-                                winningLines={winningLines}
+                                winningLines={visibleWinningLines}
                             />
 
                             {/* REEL DIVIDER */}
@@ -229,6 +339,14 @@ const Game: React.FC<SlotMachineProps> = ({
 
                         </div>
                     ))}
+
+                    {/* ========================================
+              WIN PATTERN OVERLAY
+              A single overlay spanning all 3 columns, so the line
+              is drawn ONCE across the whole grid instead of being
+              stitched from fragments inside each column.
+          ======================================== */}
+                    <WinLinesOverlay winningLines={visibleWinningLines} />
 
                     {/* ========================================
               TOP / BOTTOM SHADING
@@ -325,4 +443,4 @@ const Game: React.FC<SlotMachineProps> = ({
     )
 }
 
-export default Game
+export default React.memo(Game)

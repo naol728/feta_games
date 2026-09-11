@@ -6,6 +6,7 @@ import { Server, Socket } from "socket.io";
 import { walletService } from "../../services/wallet.service";
 import { supabase } from "../../config/supabase";
 import { wageringService } from "../../services/waggering.service";
+import { pointsService } from "../../services/points.service";
 
 import {
   encodeSync,
@@ -208,6 +209,11 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
           multiplier,
         }),
       ]);
+      await pointsService
+        .addGameplayPoints(userId, betAmount)
+        .catch((error) => {
+          console.error("Failed to add crash gameplay points:", error);
+        });
 
       await state.finalizeCashout(playerId, userId, multiplier);
 
@@ -343,6 +349,14 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
                     roundId: snapshot.roundId,
                   }),
                 ]);
+                await pointsService
+                  .addGameplayPoints(player.userId, player.betAmount)
+                  .catch((error) => {
+                    console.error(
+                      "Failed to add crash gameplay points:",
+                      error,
+                    );
+                  });
 
                 const wallet = await walletService.getWallet(player.userId);
                 io.to(player.userId).emit("crash:wallet", wallet);

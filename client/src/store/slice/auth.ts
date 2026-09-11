@@ -23,28 +23,28 @@ export const initAuth = createAsyncThunk("auth/init", async () => {
   return data;
 });
 
-export const fetchWallet = createAsyncThunk(
-  "auth/fetchWallet",
-  async (_, { rejectWithValue }) => {
-    try {
-      const res = await apiClient.get("/wallet");
+// export const fetchWallet = createAsyncThunk(
+//   "auth/fetchWallet",
+//   async (_, { rejectWithValue }) => {
+//     try {
+//       const res = await apiClient.get("/wallet");
 
-      const data = res.data;
+//       const data = res.data;
 
-      if (!data) {
-        throw new Error("Wallet data not found");
-      }
+//       if (!data) {
+//         throw new Error("Wallet data not found");
+//       }
 
-      return data.wallet ?? data;
-    } catch (error: any) {
-      return rejectWithValue(
-        error?.response?.data?.message ||
-          error?.message ||
-          "Failed to fetch wallet",
-      );
-    }
-  },
-);
+//       return data.wallet ?? data;
+//     } catch (error: any) {
+//       return rejectWithValue(
+//         error?.response?.data?.message ||
+//           error?.message ||
+//           "Failed to fetch wallet",
+//       );
+//     }
+//   },
+// );
 interface Wallet {
   balance: number;
   locked_balance: number;
@@ -123,7 +123,7 @@ const authSlice = createSlice({
      */
     setUserWallet: (state, action: PayloadAction<Wallet>) => {
       if (!state.user) return;
-
+      console.log(action.payload);
       state.user.wallets = action.payload;
     },
 
@@ -152,31 +152,6 @@ const authSlice = createSlice({
 
       .addCase(initAuth.rejected, (state) => {
         state.loading = false;
-      })
-
-      // =========================
-      // FETCH WALLET
-      // =========================
-      .addCase(fetchWallet.pending, (state) => {
-        state.walletLoading = true;
-      })
-
-      .addCase(fetchWallet.fulfilled, (state, action) => {
-        state.walletLoading = false;
-
-        if (state.user) {
-          state.user.wallets = {
-            ...state.user.wallets,
-            ...action.payload,
-          };
-
-          // Keep localStorage synchronized
-          localStorage.setItem("user", JSON.stringify(state.user));
-        }
-      })
-
-      .addCase(fetchWallet.rejected, (state) => {
-        state.walletLoading = false;
       });
   },
 });

@@ -1,14 +1,14 @@
 /*eslint-disable*/
-import { useMemo } from "react"
+import React, { useMemo } from "react"
 
 interface SlotColumnProps {
     symbols: string[]
     isSpinning: boolean
     position: number
-    winningLines?: any[]
+    winningLines?: string[]
 }
 
-const options = [
+const SYMBOL_OPTIONS = [
     "red",
     "blue",
     "green",
@@ -18,11 +18,36 @@ const options = [
     "wild",
 ]
 
+// Hoisted outside the component -- this never changes, so there's no
+// reason to allocate a new object for it on every render.
+const SYMBOL_IMAGES: Record<string, string> = {
+    red: "/images/slot/red.webp",
+    blue: "/images/slot/shangai.webp",
+    green: "/images/slot/lily.webp",
+    yin_yang: "/images/slot/yin.webp",
+    hakkero: "/images/slot/hakkero.webp",
+    yellow: "/images/slot/green.webp",
+    wild: "/images/slot/wild.webp",
+}
+
+// Row-height duration + easing per column, tuned for a smoother,
+// slightly more "settled" stop than a plain linear-ish cubic-bezier.
+// ease-out-expo-ish curve: fast start, long smooth deceleration.
+const SPIN_TRANSITIONS = [
+    "transform 2s cubic-bezier(0.16, 1, 0.3, 1)",
+    "transform 2.4s cubic-bezier(0.16, 1, 0.3, 1)",
+    "transform 2.8s cubic-bezier(0.16, 1, 0.3, 1)",
+]
+
 const makeFillers = () =>
     Array.from(
         { length: 47 },
-        () => options[Math.floor(Math.random() * options.length)]
+        () => SYMBOL_OPTIONS[Math.floor(Math.random() * SYMBOL_OPTIONS.length)]
     )
+
+// Which of Horizontal 1/2/3 corresponds to this column's 3 final rows
+// (indices 47, 48, 49 in the roulette strip).
+const ROW_LINE_NAMES = ["Horizontal 1", "Horizontal 2", "Horizontal 3"]
 
 const SlotColumn: React.FC<SlotColumnProps> = ({
     symbols,
@@ -52,101 +77,42 @@ const SlotColumn: React.FC<SlotColumnProps> = ({
         [fillers, symbols]
     )
 
-    const getSymbolImage = (symbol: string) => {
-        const images: Record<string, string> = {
-            red: "/images/slot/red.webp",
-            blue: "/images/slot/shangai.webp",
-            green: "/images/slot/lily.webp",
-            yin_yang: "/images/slot/yin.webp",
-            hakkero: "/images/slot/hakkero.webp",
-            yellow: "/images/slot/green.webp",
-            wild: "/images/slot/wild.webp",
-        }
-
-        return images[symbol]
-    }
-
     /*
-     * Final symbols are indexes:
-     *
-     * 47 = row 1
-     * 48 = row 2
-     * 49 = row 3
-     *
-     * We move the reel by 47 rows.
-     *
-     * Using CSS variable instead of fixed pixels
-     * keeps it responsive on Telegram.
+     * Only 3 items (indices 47/48/49) can ever be "winning" -- compute
+     * that once per (winningLines, position) change instead of running
+     * a nested-loop function against all 50 rendered rows every render.
      */
-    const spinStyle = isSpinning
-        ? {
-            transform: "translateY(calc(-47 * var(--slot-row)))",
-            transition: `
-          transform
-          ${position === 0
-                    ? "2s"
-                    : position === 1
-                        ? "2.4s"
-                        : "2.8s"}
-          cubic-bezier(0.1, 0, 0.2, 1)
-        `,
-        }
-        : {
-            transform: "translateY(0)",
-            transition: "transform 0.3s ease-out",
-        }
+    const winningRows = useMemo<[boolean, boolean, boolean]>(() => {
+        const lines = winningLines ?? []
+        const hasDiagonal1 = lines.includes("Diagonal 1")
+        const hasDiagonal2 = lines.includes("Diagonal 2")
 
-    const isWinningSymbol = (index: number) => {
-        if (index < 47) return false
+        return [0, 1, 2].map((row) => {
+            if (lines.includes(ROW_LINE_NAMES[row])) return true
 
-        for (const line of winningLines ?? []) {
-            if (line.startsWith("Horizontal")) {
-                if (line.endsWith("1") && index === 47) return true
-                if (line.endsWith("2") && index === 48) return true
-                if (line.endsWith("3") && index === 49) return true
-            }
+            // Diagonal 1: top-left -> bottom-right (col0/row0, col1/row1, col2/row2)
+            if (hasDiagonal1 && position === row) return true
 
-            if (line.startsWith("Diagonal")) {
-                if (
-                    line.endsWith("1") &&
-                    position === 0 &&
-                    index === 47
-                ) {
-                    return true
+            // Diagonal 2: top-right -> bottom-left (col2/row0, col1/row1, col0/row2)
+            if (hasDiagonal2 && position === 2 - row) return true
+
+            return false
+        }) as [boolean, boolean, boolean]
+    }, [winningLines, position])
+
+    const spinStyle = useMemo(
+        () =>
+            isSpinning
+                ? {
+                    transform: "translateY(calc(-47 * var(--slot-row)))",
+                    transition: SPIN_TRANSITIONS[position] ?? SPIN_TRANSITIONS[0],
                 }
-
-                if (
-                    line.endsWith("1") &&
-                    position === 2 &&
-                    index === 49
-                ) {
-                    return true
-                }
-
-                if (position === 1 && index === 48) {
-                    return true
-                }
-
-                if (
-                    line.endsWith("2") &&
-                    position === 0 &&
-                    index === 49
-                ) {
-                    return true
-                }
-
-                if (
-                    line.endsWith("2") &&
-                    position === 2 &&
-                    index === 47
-                ) {
-                    return true
-                }
-            }
-        }
-
-        return false
-    }
+                : {
+                    transform: "translateY(0)",
+                    transition: "transform 0.3s ease-out",
+                },
+        [isSpinning, position],
+    )
 
     return (
         <div
@@ -171,7 +137,8 @@ const SlotColumn: React.FC<SlotColumnProps> = ({
                 style={spinStyle}
             >
                 {rouletteItems.map((symbol, index) => {
-                    const winning = isWinningSymbol(index)
+                    const finalRow = index - 47
+                    const winning = finalRow >= 0 && winningRows[finalRow]
 
                     return (
                         <div
@@ -201,9 +168,10 @@ const SlotColumn: React.FC<SlotColumnProps> = ({
                 `}
                             >
                                 <img
-                                    src={getSymbolImage(symbol)}
+                                    src={SYMBOL_IMAGES[symbol]}
                                     alt={symbol}
                                     draggable={false}
+                                    loading="eager"
                                     className="
                     relative
                     z-10
@@ -213,140 +181,38 @@ const SlotColumn: React.FC<SlotColumnProps> = ({
                   "
                                 />
 
-                                {/* WIN EFFECT */}
+                                {/* WIN TREATMENT -- the connecting line itself is
+                    drawn once at the Game level (WinLinesOverlay); this is
+                    what makes the individual symbol itself read as "the
+                    thing that won": a soft glow behind it, a gold ring
+                    frame around it, and a one-shot light sweep across it. */}
                                 {winning && !isSpinning && (
-                                    <div className="absolute inset-0 z-0 flex items-center justify-center">
-
-                                        {/* Glow */}
+                                    <>
+                                        {/* soft glow behind the symbol */}
                                         <div
-                                            className="
-                        absolute
-                        h-1
-                        w-1
-                        rounded-full
-                      "
+                                            className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"
                                             style={{
-                                                boxShadow:
-                                                    "0 0 30px 24px #FFCC00",
+                                                boxShadow: "0 0 24px 10px rgba(255, 204, 0, 0.35)",
+                                                borderRadius: "9999px",
                                             }}
                                         />
 
-                                        {/* Winning lines */}
-                                        {winningLines?.map(
-                                            (line, lineIndex) => {
-                                                const rotations: string[] = []
+                                        {/* gold ring frame directly around the image */}
+                                        <div
+                                            className="win-ring pointer-events-none absolute inset-[6%] z-20 rounded-xl"
+                                        />
 
-                                                /*
-                                                 * HORIZONTAL
-                                                 */
-                                                if (
-                                                    line.startsWith("Horizontal") &&
-                                                    (
-                                                        (line.endsWith("1") &&
-                                                            index === 47) ||
-                                                        (line.endsWith("2") &&
-                                                            index === 48) ||
-                                                        (line.endsWith("3") &&
-                                                            index === 49)
-                                                    )
-                                                ) {
-                                                    rotations.push("rotate(0deg)")
-                                                }
-
-                                                /*
-                                                 * DIAGONAL
-                                                 */
-                                                if (line.startsWith("Diagonal")) {
-                                                    if (
-                                                        (
-                                                            line.endsWith("1") &&
-                                                            position === 0 &&
-                                                            index === 47
-                                                        ) ||
-                                                        (
-                                                            line.endsWith("1") &&
-                                                            position === 2 &&
-                                                            index === 49
-                                                        )
-                                                    ) {
-                                                        rotations.push("rotate(45deg)")
-                                                    }
-
-                                                    else if (
-                                                        (
-                                                            line.endsWith("2") &&
-                                                            position === 0 &&
-                                                            index === 49
-                                                        ) ||
-                                                        (
-                                                            line.endsWith("2") &&
-                                                            position === 2 &&
-                                                            index === 47
-                                                        )
-                                                    ) {
-                                                        rotations.push("rotate(-45deg)")
-                                                    }
-
-                                                    else if (
-                                                        position === 1 &&
-                                                        index === 48
-                                                    ) {
-                                                        if (
-                                                            winningLines.includes(
-                                                                "Diagonal 1"
-                                                            ) &&
-                                                            winningLines.includes(
-                                                                "Diagonal 2"
-                                                            )
-                                                        ) {
-                                                            rotations.push(
-                                                                "rotate(45deg)",
-                                                                "rotate(-45deg)"
-                                                            )
-                                                        }
-
-                                                        else if (
-                                                            winningLines.includes(
-                                                                "Diagonal 1"
-                                                            )
-                                                        ) {
-                                                            rotations.push(
-                                                                "rotate(45deg)"
-                                                            )
-                                                        }
-
-                                                        else if (
-                                                            winningLines.includes(
-                                                                "Diagonal 2"
-                                                            )
-                                                        ) {
-                                                            rotations.push(
-                                                                "rotate(-45deg)"
-                                                            )
-                                                        }
-                                                    }
-                                                }
-
-                                                return rotations.map(
-                                                    (rotation, i) => (
-                                                        <div
-                                                            key={`${lineIndex}-${i}`}
-                                                            className="
-                                absolute
-                                z-0
-                                h-1
-                                w-[200%]
-                                bg-unique
-                              "
-                                                            style={{
-                                                                transform: rotation,
-                                                            }}
-                                                        />
-                                                    )
-                                                )
-                                            }
-                                        )}
-                                    </div>
+                                        {/* one-shot shine sweep -- keyed on "winning" so it
+                                            remounts (and replays) every time this cell
+                                            transitions into a win, instead of only once
+                                            ever per mount */}
+                                        <div
+                                            key={`shine-${symbol}-${index}`}
+                                            className="win-shine pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-xl"
+                                        >
+                                            <div className="win-shine-bar" />
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -372,9 +238,50 @@ const SlotColumn: React.FC<SlotColumnProps> = ({
             infinite
             alternate;
         }
+
+        .win-ring {
+          box-shadow:
+            0 0 0 2px rgba(255, 211, 77, 0.9),
+            0 0 14px 2px rgba(255, 211, 77, 0.55);
+          animation: win-ring-pulse 1s ease-in-out infinite alternate;
+        }
+
+        @keyframes win-ring-pulse {
+          0% {
+            opacity: 0.65;
+          }
+          100% {
+            opacity: 1;
+          }
+        }
+
+        .win-shine-bar {
+          position: absolute;
+          top: -40%;
+          left: -60%;
+          width: 40%;
+          height: 180%;
+          background: linear-gradient(
+            75deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.85) 50%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          transform: translateX(-20%) rotate(8deg);
+          animation: win-shine-sweep 1.1s ease-out 0.05s 1;
+        }
+
+        @keyframes win-shine-sweep {
+          from {
+            transform: translateX(-20%) rotate(8deg);
+          }
+          to {
+            transform: translateX(420%) rotate(8deg);
+          }
+        }
       `}</style>
         </div>
     )
 }
 
-export default SlotColumn
+export default React.memo(SlotColumn)

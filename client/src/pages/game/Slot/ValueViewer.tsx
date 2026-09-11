@@ -1,3 +1,5 @@
+import React from "react"
+import { motion } from "framer-motion"
 import { FaCoins } from "react-icons/fa"
 import { BiWallet } from "react-icons/bi"
 import { TbPigMoney } from "react-icons/tb"
@@ -9,36 +11,46 @@ interface ValueViewerProps {
     totalWins: number
 }
 
+// Hoisted outside the component: static per-type metadata, not
+// something that needs to be reallocated on every render.
+const VALUE_CONFIG = {
+    balance: {
+        label: "Balance",
+        icon: BiWallet,
+    },
+    bet: {
+        label: "Bet",
+        icon: FaCoins,
+    },
+    wins: {
+        label: "Win",
+        icon: TbPigMoney,
+    },
+} as const
+
+const numberFormatter = new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 2,
+})
+
 const ValueViewer: React.FC<ValueViewerProps> = ({
     type,
     betAmount,
     totalWins,
 }) => {
-    const user = useAppSelector((state) => state.auth.user)
+    const balance = useAppSelector(
+        (state) => state.auth.user?.wallets?.available_balance ?? 0,
+    )
 
-    const config = {
-        balance: {
-            label: "Balance",
-            icon: BiWallet,
-        },
-        bet: {
-            label: "Bet",
-            icon: FaCoins,
-        },
-        wins: {
-            label: "Win",
-            icon: TbPigMoney,
-        },
-    }
-
-    const { label, icon: Icon } = config[type]
+    const { label, icon: Icon } = VALUE_CONFIG[type]
 
     const value =
         type === "balance"
-            ? user?.wallets?.available_balance ?? 0
+            ? balance
             : type === "bet"
                 ? betAmount
                 : totalWins
+
+    const displayValue = numberFormatter.format(value)
 
     return (
         <div
@@ -91,7 +103,10 @@ const ValueViewer: React.FC<ValueViewerProps> = ({
                     {label}
                 </div>
 
-                {/* MONEY */}
+                {/* MONEY -- animated so a balance/win update reads as a
+                    smooth beat rather than an instant snap. Keyed on the
+                    formatted value so it only replays when the number
+                    actually changes, not on unrelated re-renders. */}
                 <div
                     className="
             mt-0.5
@@ -108,9 +123,15 @@ const ValueViewer: React.FC<ValueViewerProps> = ({
             text-foreground
           "
                 >
-                    <span className="min-w-0 truncate">
-                        {value}
-                    </span>
+                    <motion.span
+                        key={displayValue}
+                        initial={{ opacity: 0.4, y: -2 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.18, ease: "easeOut" }}
+                        className="min-w-0 truncate"
+                    >
+                        {displayValue}
+                    </motion.span>
 
                     <span
                         className="
@@ -129,4 +150,4 @@ const ValueViewer: React.FC<ValueViewerProps> = ({
     )
 }
 
-export default ValueViewer
+export default React.memo(ValueViewer)

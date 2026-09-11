@@ -1,11 +1,10 @@
 /* eslint-disable */
+
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 import { Volume2, VolumeX } from "lucide-react";
 
 import Game from "./Game";
-import { spinSlots } from "@/service/games/GamesServices";
 import { type SlotProps } from "./Types";
 import BigWinAlert from "./BigWinAlert";
 import RenderMike from "./RenderMike";
@@ -14,16 +13,71 @@ import ValueViewer from "./ValueViewer";
 import GameBar from "./../../../components/game/GameBar";
 import LiveStatsButton from "./../../../components/LiveStats/LiveStatsButton";
 import { useAppDispatch, useAppSelector } from "@/store/hook";
-import { fetchWallet, setUserWallet } from "@/store/slice/auth";
+import { setUserWallet } from "@/store/slice/auth";
+import { getSocket } from "@/lib/socket";
 
-// Import sound files
 import slotBackground from "/sounds/slotbackground.mp3";
 import slotSpin from "/sounds/slotspin.mp3";
 import slotWin from "/sounds/slotwin.mp3";
 import clickSound from "/sounds/click.mp3";
 
-const renderPlaceholder = () => {
-    const options = [
+/* ============================================================
+   TYPES
+============================================================ */
+
+type MikeStatus = "normal" | "win" | "losing" | "jackpot";
+
+type BetChangeType = "add" | "subtract";
+
+type ValueViewerType = "balance" | "bet" | "wins";
+
+/**
+ * The backend result for one winning line.
+ *
+ * Adjust the fields here if your backend SlotProps defines
+ * additional properties for a spin result.
+ */
+interface SlotSpinLineResult {
+    line: SlotProps["lastSpinResult"][number]["line"];
+}
+
+/**
+ * Socket acknowledgement returned by:
+ *
+ * socket.emit("slots:spin", payload, callback)
+ */
+interface SlotSpinResult extends SlotProps {
+    success: boolean;
+    message?: string;
+    wallet: any;
+}
+
+/**
+ * Socket payload sent to the backend.
+ */
+interface SlotSpinPayload {
+    betAmount: number;
+}
+
+/* ============================================================
+   CONSTANTS
+============================================================ */
+
+const MIN_BET = 1;
+const MAX_BET = 50_000;
+const AUTO_SPIN_DELAY = 800;
+const SPIN_ANIMATION_DURATION = 3_000;
+const BIG_WIN_MULTIPLIER = 8;
+
+/* ============================================================
+   HELPERS
+============================================================ */
+
+/**
+ * Generates a temporary grid while the slot game is loading.
+ */
+const renderPlaceholder = (): string[] => {
+    const options: readonly string[] = [
         "red",
         "blue",
         "green",
@@ -39,192 +93,344 @@ const renderPlaceholder = () => {
     );
 };
 
+/* ============================================================
+   COMPONENT
+============================================================ */
+
 const Slots = () => {
     const dispatch = useAppDispatch();
+    const socket = getSocket();
 
-    const [grid, setGrid] = useState<string[]>(renderPlaceholder());
-    const [response, setResponse] = useState<SlotProps | null>(null);
-    const [betAmount, setBetAmount] = useState<number>(10);
-    const [isSpinning, setIsSpinning] = useState<boolean>(false);
-    const [winningLines, setWinningLines] = useState<any[]>([]);
-    const [totalWins, setTotalWins] = useState<number>(0);
-    const [openBigWin, setOpenBigWin] = useState<boolean>(false);
-    const [lostCount, setLostCount] = useState<number>(0);
-    const [loadedImages, setLoadedImages] = useState<number>(0);
-    const [isAutoSpin, setIsAutoSpin] = useState<boolean>(false);
-    const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-
-    // ----- AUDIO REFS -----
-    const bgAudioRef = useRef<HTMLAudioElement | null>(null);
-    const spinAudioRef = useRef<HTMLAudioElement | null>(null);
-    const winAudioRef = useRef<HTMLAudioElement | null>(null);
-    const clickAudioRef = useRef<HTMLAudioElement | null>(null);
-    const bigWinAudioRef = useRef<HTMLAudioElement | null>(null);
-
-    const autoSpinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    /* --------------------------------------------------------
+       REDUX
+    -------------------------------------------------------- */
 
     const user = useAppSelector((state) => state.auth?.user);
 
-    // ----- INIT AUDIO -----
+    /* --------------------------------------------------------
+       GAME STATE
+    -------------------------------------------------------- */
+
+    const [grid, setGrid] = useState<string[]>(renderPlaceholder());
+
+    const [response, setResponse] = useState<SlotSpinResult | null>(null);
+
+    const [betAmount, setBetAmount] = useState<number>(10);
+
+    const [isSpinning, setIsSpinning] = useState<boolean>(false);
+
+    const [isSpinPending, setIsSpinPending] = useState<boolean>(false);
+
+    const [winningLines, setWinningLines] = useState<
+        SlotSpinLineResult["line"][]
+    >([]);
+
+    const [totalWins, setTotalWins] = useState<number>(0);
+
+    const [openBigWin, setOpenBigWin] = useState<boolean>(false);
+
+    const [lostCount, setLostCount] = useState<number>(0);
+
+    const [loadedImages, setLoadedImages] = useState<number>(0);
+
+    const [isAutoSpin, setIsAutoSpin] = useState<boolean>(false);
+
+    const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+
+    /* --------------------------------------------------------
+       AUDIO REFS
+    -------------------------------------------------------- */
+
+    const bgAudioRef = useRef<HTMLAudioElement | null>(null);
+
+    const spinAudioRef = useRef<HTMLAudioElement | null>(null);
+
+    const winAudioRef = useRef<HTMLAudioElement | null>(null);
+
+    const clickAudioRef = useRef<HTMLAudioElement | null>(null);
+
+    const bigWinAudioRef = useRef<HTMLAudioElement | null>(null);
+
+    const autoSpinTimeoutRef =
+        useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    /* ========================================================
+       AUDIO INITIALIZATION
+    ======================================================== */
+
     useEffect(() => {
-        // Background music
+        /* Background music */
         const bgAudio = new Audio(slotBackground);
+
         bgAudio.loop = true;
         bgAudio.volume = 0.3;
-        bgAudio.play().catch(() => { });
+
+        bgAudio.play().catch(() => {
+            // Browser may block autoplay until user interaction.
+        });
+
         bgAudioRef.current = bgAudio;
 
-        // Spin sound
+        /* Spin sound */
         const spinAudio = new Audio(slotSpin);
+
         spinAudio.volume = 0.5;
+
         spinAudioRef.current = spinAudio;
 
-        // Win sound
+        /* Win sound */
         const winAudio = new Audio(slotWin);
+
         winAudio.volume = 0.6;
+
         winAudioRef.current = winAudio;
 
-        // Click sound
+        /* Click sound */
         const clickAudio = new Audio(clickSound);
+
         clickAudio.volume = 0.4;
+
         clickAudioRef.current = clickAudio;
 
-        // Big win sound (already imported as bigwin)
+        /* Big win sound */
         const bigWinAudio = new Audio(bigwin);
+
         bigWinAudio.volume = 0.05;
+
         bigWinAudioRef.current = bigWinAudio;
 
+        /* Cleanup */
         return () => {
-            // Cleanup all audio
             bgAudio.pause();
             bgAudio.src = "";
+
             spinAudio.pause();
             spinAudio.src = "";
+
             winAudio.pause();
             winAudio.src = "";
+
             clickAudio.pause();
             clickAudio.src = "";
+
             bigWinAudio.pause();
             bigWinAudio.src = "";
+
+            bgAudioRef.current = null;
+            spinAudioRef.current = null;
+            winAudioRef.current = null;
+            clickAudioRef.current = null;
+            bigWinAudioRef.current = null;
         };
     }, []);
 
-    // ----- SOUND HELPERS -----
-    const playSound = (audioRef: React.RefObject<HTMLAudioElement | null>) => {
-        if (!soundEnabled) return;
+    /* ========================================================
+       SOUND HELPERS
+    ======================================================== */
+
+    const playSound = (
+        audioRef: React.RefObject<HTMLAudioElement | null>
+    ): void => {
+        if (!soundEnabled) {
+            return;
+        }
+
         const audio = audioRef.current;
-        if (audio) {
-            audio.currentTime = 0;
-            audio.play().catch(() => { });
+
+        if (!audio) {
+            return;
         }
+
+        audio.currentTime = 0;
+
+        audio.play().catch(() => {
+            // Browser may reject playback.
+        });
     };
 
-    const stopSpinSound = () => {
+    const stopSpinSound = (): void => {
         const audio = spinAudioRef.current;
-        if (audio) {
-            audio.pause();
-            audio.currentTime = 0;
+
+        if (!audio) {
+            return;
         }
+
+        audio.pause();
+        audio.currentTime = 0;
     };
 
-    const toggleSound = () => {
-        setSoundEnabled((prev) => {
-            const newState = !prev;
+    const toggleSound = (): void => {
+        setSoundEnabled((previousState) => {
+            const newState = !previousState;
+
             if (!newState) {
-                // Pause background music immediately
-                const bg = bgAudioRef.current;
-                if (bg) bg.pause();
-                // Also stop any spin sound
+                /* Disable sounds */
+                const bgAudio = bgAudioRef.current;
+
+                if (bgAudio) {
+                    bgAudio.pause();
+                }
+
                 stopSpinSound();
             } else {
-                // Resume background music
-                const bg = bgAudioRef.current;
-                if (bg) bg.play().catch(() => { });
+                /* Enable sounds */
+                const bgAudio = bgAudioRef.current;
+
+                if (bgAudio) {
+                    bgAudio.play().catch(() => {
+                        // Browser may reject playback.
+                    });
+                }
             }
+
             return newState;
         });
     };
 
-    // ----- SPIN MUTATION -----
-    const spinMutation = useMutation({
-        mutationFn: (amount: number) => spinSlots(amount),
+    /* ========================================================
+       SPIN
+    ======================================================== */
 
-        onSuccess: (data) => {
-            setResponse(data);
+    const emitSpin = (amount: number): void => {
+        setIsSpinPending(true);
 
-            setGrid(data.gridState);
+        const payload: SlotSpinPayload = {
+            betAmount: amount,
+        };
 
-            setWinningLines(
-                data?.lastSpinResult?.map(
-                    (result: { line: any }) => result.line
-                ) || []
-            );
+        socket.emit(
+            "slots:spin",
+            payload,
+            (data: SlotSpinResult): void => {
+                setIsSpinPending(false);
 
-            // IMPORTANT:
-            // Update only the wallet.
-            // Do NOT call initAuth() here.
-            if (data?.wallet) {
-                dispatch(setUserWallet(data.wallet));
+                /* --------------------------------------------
+                   ERROR
+                -------------------------------------------- */
+
+                if (!data || !data.success) {
+                    const errorMessage =
+                        data?.message ?? "Error spinning slots";
+
+                    console.error(errorMessage);
+
+                    toast.error(errorMessage);
+
+                    setIsSpinning(false);
+
+                    stopSpinSound();
+
+                    return;
+                }
+
+                /* --------------------------------------------
+                   GAME RESPONSE
+                -------------------------------------------- */
+
+                setResponse(data);
+
+                setGrid(data.gridState);
+
+                /* --------------------------------------------
+                   WINNING LINES
+                -------------------------------------------- */
+
+                const lines: SlotSpinLineResult["line"][] =
+                    data.lastSpinResult.map(
+                        (result: SlotSpinLineResult) => result.line
+                    );
+
+                setWinningLines(lines);
+
+                /* --------------------------------------------
+                   WALLET
+                -------------------------------------------- */
+
+                if (data.wallet) {
+                    dispatch(setUserWallet(data.wallet));
+                }
+
+                /* --------------------------------------------
+                   BIG WIN
+                -------------------------------------------- */
+
+                const totalPayout = data.totalPayout;
+
+                if (totalPayout >= amount * BIG_WIN_MULTIPLIER) {
+                    setOpenBigWin(true);
+
+                    playSound(bigWinAudioRef);
+                }
+
+                /* --------------------------------------------
+                   NORMAL WIN SOUND
+                -------------------------------------------- */
+
+                if (totalPayout > 0) {
+                    playSound(winAudioRef);
+                }
+
+                /* --------------------------------------------
+                   LOSING STREAK
+                -------------------------------------------- */
+
+                if (totalPayout === 0) {
+                    setLostCount((previousCount) => previousCount + 1);
+                } else {
+                    setLostCount(0);
+                }
+
+                /* --------------------------------------------
+                   STOP SPINNING
+                -------------------------------------------- */
+
+                setTimeout(() => {
+                    setIsSpinning(false);
+
+                    stopSpinSound();
+                }, SPIN_ANIMATION_DURATION);
             }
-
-            // Big win
-            if (data.totalPayout >= betAmount * 8) {
-                setOpenBigWin(true);
-                playSound(bigWinAudioRef);
-            }
-
-            // Win sound
-            if (data.totalPayout > 0) {
-                playSound(winAudioRef);
-            }
-
-            // Losing streak
-            if (data.totalPayout === 0) {
-                setLostCount((prev) => prev + 1);
-            } else {
-                setLostCount(0);
-            }
-
-            setTimeout(() => {
-                setIsSpinning(false);
-                stopSpinSound();
-            }, 3000);
-        },
-
-        onError: (error: any) => {
-            console.error(
-                error?.response?.data?.message ||
-                "Error spinning slots"
-            );
-
-            toast.error(
-                error?.response?.data?.message ||
-                "Error spinning slots"
-            );
-
-            setIsSpinning(false);
-            stopSpinSound();
-        },
-    });
-    // ----- BIG WIN CLICK -----
-    const handleClick = () => {
-        if (openBigWin) {
-            setOpenBigWin(false);
-            const audio = bigWinAudioRef.current;
-            if (audio) {
-                audio.pause();
-                audio.currentTime = 0;
-            }
-        }
+        );
     };
+
+    /* ========================================================
+       BIG WIN CLICK
+    ======================================================== */
+
+    const handleClick = (): void => {
+        if (!openBigWin) {
+            return;
+        }
+
+        setOpenBigWin(false);
+
+        const audio = bigWinAudioRef.current;
+
+        if (!audio) {
+            return;
+        }
+
+        audio.pause();
+        audio.currentTime = 0;
+    };
+
+    /* ========================================================
+       UPDATE TOTAL WIN
+    ======================================================== */
 
     useEffect(() => {
         const timer = setTimeout(() => {
-            setTotalWins(response?.totalPayout || 0);
-        }, 3000);
+            setTotalWins(response?.totalPayout ?? 0);
+        }, SPIN_ANIMATION_DURATION);
 
-        return () => clearTimeout(timer);
+        return () => {
+            clearTimeout(timer);
+        };
     }, [response]);
+
+    /* ========================================================
+       BIG WIN GLOBAL CLICK HANDLER
+    ======================================================== */
 
     useEffect(() => {
         window.addEventListener("click", handleClick);
@@ -234,111 +440,181 @@ const Slots = () => {
         };
     }, [openBigWin]);
 
-    // ----- SPIN -----
-    const handleSpin = () => {
+    /* ========================================================
+       SPIN HANDLER
+    ======================================================== */
+
+    const handleSpin = (): void => {
+        /* User must be authenticated */
         if (!user) {
             toast.error("Please login first.");
+
             return;
         }
 
-        if (Number(user.wallets.available_balance) < betAmount) {
+        /* Check available wallet balance */
+        const availableBalance = Number(
+            user.wallets.available_balance
+        );
+
+        if (!Number.isFinite(availableBalance)) {
+            toast.error("Unable to read wallet balance.");
+
+            return;
+        }
+
+        if (availableBalance < betAmount) {
             toast.error("Insufficient funds");
+
             return;
         }
 
-        if (spinMutation.isPending) {
+        /* Prevent duplicate requests */
+        if (isSpinPending || isSpinning) {
             return;
         }
 
+        /* Sound */
         stopSpinSound();
+
         playSound(clickAudioRef);
+
         playSound(spinAudioRef);
 
+        /* Game state */
         setIsSpinning(true);
+
         setOpenBigWin(false);
+
         setTotalWins(0);
 
-        spinMutation.mutate(betAmount);
+        /* Send spin */
+        emitSpin(betAmount);
     };
 
-    // Auto-spin
+    /* ========================================================
+       AUTO SPIN
+    ======================================================== */
+
     useEffect(() => {
-        if (!isAutoSpin || !user || spinMutation.isPending || isSpinning) {
+        if (
+            !isAutoSpin ||
+            !user ||
+            isSpinPending ||
+            isSpinning
+        ) {
             return;
         }
 
         autoSpinTimeoutRef.current = setTimeout(() => {
             handleSpin();
-        }, 800);
+        }, AUTO_SPIN_DELAY);
 
         return () => {
             if (autoSpinTimeoutRef.current) {
                 clearTimeout(autoSpinTimeoutRef.current);
+
                 autoSpinTimeoutRef.current = null;
             }
         };
-    }, [isAutoSpin, user, isSpinning, spinMutation.isPending, betAmount]);
+    }, [
+        isAutoSpin,
+        user,
+        isSpinning,
+        isSpinPending,
+        betAmount,
+    ]);
+
+    /* ========================================================
+       AUTO SPIN CLEANUP
+    ======================================================== */
 
     useEffect(() => {
         return () => {
             if (autoSpinTimeoutRef.current) {
                 clearTimeout(autoSpinTimeoutRef.current);
+
+                autoSpinTimeoutRef.current = null;
             }
         };
     }, []);
 
-    // ----- BET CHANGE -----
-    const handleChangeBet = (type: "add" | "subtract") => {
+    /* ========================================================
+       BET CHANGE
+    ======================================================== */
+
+    const handleChangeBet = (
+        type: BetChangeType
+    ): void => {
         const newBetAmount =
             type === "subtract"
                 ? Math.floor(betAmount / 2)
                 : betAmount * 2;
 
-        if (newBetAmount >= 1 && newBetAmount <= 50000) {
+        if (
+            newBetAmount >= MIN_BET &&
+            newBetAmount <= MAX_BET
+        ) {
             setBetAmount(newBetAmount);
         }
     };
 
-    // ----- MIKE STATUS -----
-    const getCurrentMike = () => {
-        if (response) {
-            if (openBigWin) {
-                return "jackpot";
-            }
+    /* ========================================================
+       MIKE STATUS
+    ======================================================== */
 
-            if (response.totalPayout > 0) {
-                return "win";
-            }
-
-            if (lostCount >= 3) {
-                return "losing";
-            }
-
+    const getCurrentMike = (): MikeStatus => {
+        if (!response) {
             return "normal";
+        }
+
+        if (openBigWin) {
+            return "jackpot";
+        }
+
+        if (response.totalPayout > 0) {
+            return "win";
+        }
+
+        if (lostCount >= 3) {
+            return "losing";
         }
 
         return "normal";
     };
 
-    // ----- RENDER -----
+    /* ========================================================
+       RENDER
+    ======================================================== */
+
     return (
         <div className="w-full flex justify-center px-2 pb-2 pt-1">
+            {/* --------------------------------------------
+                BIG WIN
+            --------------------------------------------- */}
+
             {openBigWin && (
-                <BigWinAlert value={response?.totalPayout || 0} />
+                <BigWinAlert
+                    value={response?.totalPayout ?? 0}
+                />
             )}
+
+            {/* --------------------------------------------
+                SLOT MACHINE
+            --------------------------------------------- */}
 
             <div
                 className="
-          w-full
-          max-w-[600px]
-          min-w-[300px]
-          rounded-3xl
-          border
-          border-[#f4d778]/40
-          bg-[#210905]
-          p-2
-          shadow-[inset_0_0_35px_rgba(0,0,0,0.7)]
-        "
+                    w-full
+                    max-w-[600px]
+                    min-w-[300px]
+                    rounded-3xl
+                    border
+                    border-[#f4d778]/40
+                    bg-[#210905]
+                    p-2
+                    shadow-[inset_0_0_35px_rgba(0,0,0,0.7)]
+                "
                 style={{
                     backgroundImage:
                         "linear-gradient(rgba(0,0,0,0.28), rgba(0,0,0,0.28)), url('/images/slot/chicken/mainBgMobile.png')",
@@ -347,28 +623,51 @@ const Slots = () => {
                     backgroundRepeat: "no-repeat",
                 }}
             >
-                {/* Header with sound toggle */}
+                {/* ----------------------------------------
+                    HEADER
+                ----------------------------------------- */}
+
                 <div className="flex items-center justify-between px-1 py-1">
-                    <span className="text-xs font-semibold text-white/80">Slots</span>
+                    <span className="text-xs font-semibold text-white/80">
+                        Slots
+                    </span>
+
                     <button
                         type="button"
                         onClick={toggleSound}
-                        className="rounded-md p-1 text-white/60 hover:bg-white/10 hover:text-white transition-colors"
-                        aria-label="Toggle sound"
+                        className="
+                            rounded-md
+                            p-1
+                            text-white/60
+                            hover:bg-white/10
+                            hover:text-white
+                            transition-colors
+                        "
+                        aria-label={
+                            soundEnabled
+                                ? "Disable sound"
+                                : "Enable sound"
+                        }
                     >
-                        {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                        {soundEnabled ? (
+                            <Volume2 size={16} />
+                        ) : (
+                            <VolumeX size={16} />
+                        )}
                     </button>
                 </div>
 
+                {/* ----------------------------------------
+                    MIKE
+                ----------------------------------------- */}
+
                 <RenderMike
-                    status={
-                        getCurrentMike() as
-                        | "normal"
-                        | "win"
-                        | "losing"
-                        | "jackpot"
-                    }
+                    status={getCurrentMike()}
                 />
+
+                {/* ----------------------------------------
+                    GAME
+                ----------------------------------------- */}
 
                 <Game
                     grid={grid}
@@ -379,60 +678,100 @@ const Slots = () => {
                     setLoadedImages={setLoadedImages}
                 />
 
+                {/* ----------------------------------------
+                    CONTROLS
+                ----------------------------------------- */}
+
                 <div
                     className="
-            flex
-            flex-col
-            justify-center
-            p-3
-            bg-[#B52D26]
-            border-t-4
-            border-red-800
-            gap-3
-            rounded-b-2xl
-          "
+                        flex
+                        flex-col
+                        justify-center
+                        p-3
+                        bg-[#B52D26]
+                        border-t-4
+                        border-red-800
+                        gap-3
+                        rounded-b-2xl
+                    "
                     style={{
-                        boxShadow: "inset 0px 0px 60px 4px #000",
+                        boxShadow:
+                            "inset 0px 0px 60px 4px #000",
                     }}
                 >
+                    {/* ------------------------------------
+                        VALUE VIEWERS
+                    ------------------------------------- */}
+
                     <div className="flex w-full items-center justify-center gap-2">
-                        {["balance", "bet", "wins"].map((type) => (
-                            <ValueViewer
-                                key={type}
-                                type={type as "balance" | "bet" | "wins"}
-                                betAmount={betAmount}
-                                totalWins={totalWins}
-                            />
-                        ))}
+                        {(
+                            [
+                                "balance",
+                                "bet",
+                                "wins",
+                            ] as const
+                        ).map(
+                            (
+                                type: ValueViewerType
+                            ) => (
+                                <ValueViewer
+                                    key={type}
+                                    type={type}
+                                    betAmount={betAmount}
+                                    totalWins={totalWins}
+                                />
+                            )
+                        )}
                     </div>
 
+                    {/* ------------------------------------
+                        BET / SPIN CONTROLS
+                    ------------------------------------- */}
+
                     <div className="flex items-center justify-center gap-3 sm:gap-6">
+                        {/* DECREASE BET */}
+
                         <button
-                            onClick={() => handleChangeBet("subtract")}
-                            disabled={spinMutation.isPending}
+                            type="button"
+                            onClick={() =>
+                                handleChangeBet(
+                                    "subtract"
+                                )
+                            }
+                            disabled={isSpinPending}
+                            aria-label="Decrease bet"
                             className="
-                w-6
-                h-10
-                bg-transparent
-                text-white
-                font-bold
-                rounded-full
-                border-4
-                border-[#ECA823]
-                flex
-                items-center
-                justify-center
-                hover:bg-[#ECA823]/20
-                transition
-                disabled:opacity-40
-              "
+                                w-6
+                                h-10
+                                bg-transparent
+                                text-white
+                                font-bold
+                                rounded-full
+                                border-4
+                                border-[#ECA823]
+                                flex
+                                items-center
+                                justify-center
+                                hover:bg-[#ECA823]/20
+                                transition
+                                disabled:opacity-40
+                            "
                         >
                             -
                         </button>
 
+                        {/* AUTO SPIN */}
+
                         <button
-                            onClick={() => setIsAutoSpin((prev) => !prev)}
-                            disabled={spinMutation.isPending}
+                            type="button"
+                            onClick={() =>
+                                setIsAutoSpin(
+                                    (previous) =>
+                                        !previous
+                                )
+                            }
+                            disabled={isSpinPending}
+                            aria-pressed={isAutoSpin}
                             className={
                                 "h-10 rounded-full border-2 px-3 text-[10px] font-bold uppercase tracking-wide transition " +
                                 (isAutoSpin
@@ -440,63 +779,87 @@ const Slots = () => {
                                     : "border-[#ECA823] bg-[#35170A] text-[#F8E7B1]")
                             }
                         >
-                            {isAutoSpin ? "Auto On" : "Auto"}
+                            {isAutoSpin
+                                ? "Auto On"
+                                : "Auto"}
                         </button>
 
+                        {/* SPIN */}
+
                         <button
+                            type="button"
                             onClick={handleSpin}
-                            disabled={spinMutation.isPending || isSpinning}
+                            disabled={
+                                isSpinPending ||
+                                isSpinning
+                            }
+                            aria-label="Spin"
                             className="
-                bg-[#25D160]
-                w-14
-                h-14
-                sm:w-16
-                sm:h-16
-                text-white
-                font-bold
-                rounded-full
-                border-4
-                border-[#ECA823]
-                flex
-                items-center
-                justify-center
-                disabled:opacity-50
-                disabled:cursor-not-allowed
-                hover:scale-105
-                transition-transform
-                active:scale-95
-              "
+                                bg-[#25D160]
+                                w-14
+                                h-14
+                                sm:w-16
+                                sm:h-16
+                                text-white
+                                font-bold
+                                rounded-full
+                                border-4
+                                border-[#ECA823]
+                                flex
+                                items-center
+                                justify-center
+                                disabled:opacity-50
+                                disabled:cursor-not-allowed
+                                hover:scale-105
+                                transition-transform
+                                active:scale-95
+                            "
                             style={{
-                                boxShadow: "inset 0px 0px 14px 1px #000",
+                                boxShadow:
+                                    "inset 0px 0px 14px 1px #000",
                             }}
                         >
-                            {spinMutation.isPending ? "..." : "Spin"}
+                            {isSpinPending
+                                ? "..."
+                                : "Spin"}
                         </button>
 
+                        {/* INCREASE BET */}
+
                         <button
-                            onClick={() => handleChangeBet("add")}
-                            disabled={spinMutation.isPending}
+                            type="button"
+                            onClick={() =>
+                                handleChangeBet(
+                                    "add"
+                                )
+                            }
+                            disabled={isSpinPending}
+                            aria-label="Increase bet"
                             className="
-                w-6
-                h-10
-                bg-transparent
-                text-white
-                font-bold
-                rounded-full
-                border-4
-                border-[#ECA823]
-                flex
-                items-center
-                justify-center
-                hover:bg-[#ECA823]/20
-                transition
-                disabled:opacity-40
-              "
+                                w-6
+                                h-10
+                                bg-transparent
+                                text-white
+                                font-bold
+                                rounded-full
+                                border-4
+                                border-[#ECA823]
+                                flex
+                                items-center
+                                justify-center
+                                hover:bg-[#ECA823]/20
+                                transition
+                                disabled:opacity-40
+                            "
                         >
                             +
                         </button>
                     </div>
                 </div>
+
+                {/* ----------------------------------------
+                    GAME BAR
+                ----------------------------------------- */}
 
                 <GameBar>
                     <LiveStatsButton />
@@ -507,3 +870,4 @@ const Slots = () => {
 };
 
 export default Slots;
+

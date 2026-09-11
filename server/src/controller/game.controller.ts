@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import { catchAsync } from "../utils/catchAsync";
 import { supabase } from "../config/supabase";
 import { wageringService } from "../services/waggering.service";
+import { pointsService } from "../services/points.service";
 import { AppError } from "../utils/AppError";
 import { walletService } from "../services/wallet.service";
 
@@ -269,6 +270,7 @@ const recordSlotActivity = async ({
 
     // Wagering
     wageringService.recordWager(userId, betAmount, "Slot"),
+    pointsService.addGameplayPoints(userId, betAmount),
 
     // Daily activity
     supabase.rpc("record_daily_activity", {

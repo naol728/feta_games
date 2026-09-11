@@ -486,7 +486,7 @@ export class SimulationEngine {
     return { symbols: res, multiplier };
   }
 
-  public generateMinesGrid(r: number, minesCount: number): boolean[] {
+  public generateMinesGrid(minesCount: number): boolean[] {
     const grid = Array(25).fill(false);
     let placed = 0;
     while (placed < minesCount) {

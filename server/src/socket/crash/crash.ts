@@ -16,7 +16,7 @@ import {
   encodeMultiplierTick,
   BetBatchEntry,
   CashoutBatchEntry,
-} from "./protocol";
+} from "./Protocols";
 
 import * as state from "./state";
 

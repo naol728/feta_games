@@ -123,7 +123,7 @@ const authSlice = createSlice({
      */
     setUserWallet: (state, action: PayloadAction<Wallet>) => {
       if (!state.user) return;
-      console.log(action.payload);
+      if (action.payload.available_balance == undefined) return;
       state.user.wallets = action.payload;
     },
 

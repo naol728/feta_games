@@ -24,6 +24,7 @@ import {
     Star,
     Trophy,
     MessageCircle,
+    AlertTriangle,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -182,6 +183,23 @@ export default function Support() {
                             Learn about wagering requirements, loyalty levels,
                             and available benefits.
                         </p>
+                    </div>
+
+                    {/* First Deposit Notice */}
+                    {/* First Deposit Notice */}
+                    <div className="flex items-start gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 sm:px-4 sm:py-3">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-[11px] sm:text-xs font-semibold">
+                                Minimum 100 ETB first deposit required
+                            </p>
+                            <p className="mt-0.5 text-[9px] sm:text-[10px] leading-relaxed text-muted-foreground">
+                                You must make a first deposit of at least 100 ETB before you can
+                                withdraw for the first time.
+                            </p>
+                        </div>
                     </div>
 
                     {/* Wagering Rules */}
@@ -409,4 +427,4 @@ export default function Support() {
             </div>
         </div>
     );
-}
+}   

@@ -1,5 +1,5 @@
 /* eslint-disable */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { toast } from "react-toastify";
 import { audio } from "./../../../service/audio";
 import { Button } from "@/components/ui/button";
@@ -71,93 +71,20 @@ const MAX_PICKS = 10;
 // component may also render outside Telegram (e.g. a browser preview)
 // where `window.Telegram` won't exist.
 const haptic = {
-    /**
-     * HapticFeedback was added after Telegram Web Apps 6.0.
-     * Calling it on 6.0 (or older) can produce:
-     * "HapticFeedback is not supported in version 6.0".
-     *
-     * Keep haptics optional so the game also works in normal browsers
-     * and in older Telegram WebViews.
-     */
-    isSupported: () => {
-        try {
-            const webApp = (window as any)?.Telegram?.WebApp;
-
-            if (!webApp) return false;
-
-            // Telegram exposes this helper on supported WebApp versions.
-            if (typeof webApp.isVersionAtLeast === "function") {
-                if (!webApp.isVersionAtLeast("6.1")) return false;
-            } else {
-                // If the helper is unavailable, do not call HapticFeedback.
-                // This avoids triggering Telegram's unsupported-version warning.
-                return false;
-            }
-
-            return Boolean(webApp.HapticFeedback);
-        } catch {
-            return false;
-        }
-    },
-
     tap: () => {
         try {
-            const webApp = (window as any)?.Telegram?.WebApp;
-
-            if (
-                !webApp ||
-                typeof webApp.isVersionAtLeast !== "function" ||
-                !webApp.isVersionAtLeast("6.1") ||
-                !webApp.HapticFeedback ||
-                typeof webApp.HapticFeedback.impactOccurred !== "function"
-            ) {
-                return;
-            }
-
-            webApp.HapticFeedback.impactOccurred("light");
-        } catch {
-            // Haptics are optional; never let them break gameplay.
-        }
+            (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred("light");
+        } catch { }
     },
-
     success: () => {
         try {
-            const webApp = (window as any)?.Telegram?.WebApp;
-
-            if (
-                !webApp ||
-                typeof webApp.isVersionAtLeast !== "function" ||
-                !webApp.isVersionAtLeast("6.1") ||
-                !webApp.HapticFeedback ||
-                typeof webApp.HapticFeedback.notificationOccurred !== "function"
-            ) {
-                return;
-            }
-
-            webApp.HapticFeedback.notificationOccurred("success");
-        } catch {
-            // Haptics are optional; never let them break gameplay.
-        }
+            (window as any)?.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("success");
+        } catch { }
     },
-
     error: () => {
         try {
-            const webApp = (window as any)?.Telegram?.WebApp;
-
-            if (
-                !webApp ||
-                typeof webApp.isVersionAtLeast !== "function" ||
-                !webApp.isVersionAtLeast("6.1") ||
-                !webApp.HapticFeedback ||
-                typeof webApp.HapticFeedback.notificationOccurred !== "function"
-            ) {
-                return;
-            }
-
-            webApp.HapticFeedback.notificationOccurred("error");
-        } catch {
-            // Haptics are optional; never let them break gameplay.
-        }
+            (window as any)?.Telegram?.WebApp?.HapticFeedback?.notificationOccurred("error");
+        } catch { }
     },
 };
 
@@ -216,6 +143,17 @@ interface KenoBetAck {
     error?: string;
 }
 
+// How long the payout line stays in its "calculating" state before
+// revealing, measured from the moment the RESULT phase starts (i.e.
+// from the public "keno:result" broadcast, not from when the private
+// per-user payout happens to arrive). Hits are known to everyone the
+// instant the draw finishes (they're just "my numbers ∩ drawn
+// numbers", computable client-side) -- the payout needs the server's
+// settlement, which is normally fast, but pinning the reveal to a
+// fixed 1s beat means it never flashes instantly for some users and
+// visibly lags for others depending on network jitter.
+const RESULT_REVEAL_DELAY_MS = 1000;
+
 export default function Keno() {
     const dispatch = useAppDispatch();
     const socket = getSocket();
@@ -245,6 +183,11 @@ export default function Keno() {
     const betAmountRef = useRef(betAmount);
     const myEntryRef = useRef<KenoEntry | null>(null);
     const countdownRAF = useRef<number | null>(null);
+    // Timestamp of when the current RESULT phase began, and the pending
+    // timeout that delays applying the server's payout until the fixed
+    // reveal beat -- see RESULT_REVEAL_DELAY_MS above.
+    const resultStartRef = useRef<number | null>(null);
+    const revealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         autoRef.current = { active: autoActive, count: autoBetCount, remaining: autoBetsRemaining };
@@ -261,6 +204,13 @@ export default function Keno() {
     useEffect(() => {
         myEntryRef.current = myEntry;
     }, [myEntry]);
+
+    // Cancel any pending payout reveal if the component unmounts mid-flight.
+    useEffect(() => {
+        return () => {
+            if (revealTimeoutRef.current) clearTimeout(revealTimeoutRef.current);
+        };
+    }, []);
 
     // Open popup during drawing/result only
     useEffect(() => {
@@ -332,6 +282,12 @@ export default function Keno() {
     // =====================================================
     useEffect(() => {
         const handleRoundStart = (payload: KenoRoundStartPayload) => {
+            if (revealTimeoutRef.current) {
+                clearTimeout(revealTimeoutRef.current);
+                revealTimeoutRef.current = null;
+            }
+            resultStartRef.current = null;
+
             setPhase("BETTING");
             setRoundId(payload.roundNumber);
             setPhaseEndsAt(payload.phaseEndsAt);
@@ -383,6 +339,11 @@ export default function Keno() {
     // =====================================================
     useEffect(() => {
         const handleResult = (payload: KenoResultPayload) => {
+            // Marks "now" as the start of the reveal countdown -- hits
+            // are visible immediately (computed client-side below from
+            // myEntry + drawn), the payout waits for this beat.
+            resultStartRef.current = Date.now();
+
             setPhase("RESULT");
             setPhaseEndsAt(payload.phaseEndsAt);
             setDrawn(payload.drawn);
@@ -399,18 +360,39 @@ export default function Keno() {
     // =====================================================
     useEffect(() => {
         const handleMyResult = (payload: KenoMyResultPayload) => {
-            setRoundResult({ hits: payload.hits, payout: payload.payout });
-
-            if (payload.hits > 0) {
-                audio.playWin();
-                haptic.success();
-            } else {
-                audio.playLoss();
-                haptic.error();
+            if (revealTimeoutRef.current) {
+                clearTimeout(revealTimeoutRef.current);
+                revealTimeoutRef.current = null;
             }
 
-            if (payload.wallet) {
-                dispatch(setUserWallet(payload.wallet));
+            const reveal = () => {
+                setRoundResult({ hits: payload.hits, payout: payload.payout });
+
+                if (payload.hits > 0) {
+                    audio.playWin();
+                    haptic.success();
+                } else {
+                    audio.playLoss();
+                    haptic.error();
+                }
+
+                if (payload.wallet) {
+                    dispatch(setUserWallet(payload.wallet));
+                }
+            };
+
+            // Balance and payout are revealed together, deliberately --
+            // if the wallet number jumped the instant the socket event
+            // arrived while the payout line still said "Calculating...",
+            // the UI would look inconsistent with itself.
+            const startedAt = resultStartRef.current ?? Date.now();
+            const elapsed = Date.now() - startedAt;
+            const remaining = Math.max(0, RESULT_REVEAL_DELAY_MS - elapsed);
+
+            if (remaining === 0) {
+                reveal();
+            } else {
+                revealTimeoutRef.current = setTimeout(reveal, remaining);
             }
         };
 
@@ -523,8 +505,21 @@ export default function Keno() {
     };
 
     const isBetted = myEntry !== null;
-    const hits = roundResult?.hits ?? 0;
+
+    // Hits don't need the server: they're just "which of my numbers
+    // are in the drawn list", and both are already known to this
+    // client (myEntry from when the bet was placed, drawn from the
+    // public draw broadcast) well before the server finishes
+    // settling everyone's payout. So this updates live, number by
+    // number, as the draw happens -- only the payout amount waits.
+    const localHits = useMemo(() => {
+        if (!myEntry) return 0;
+        const drawnSet = new Set(drawn);
+        return myEntry.numbers.filter((n) => drawnSet.has(n)).length;
+    }, [myEntry, drawn]);
+
     const payout = roundResult?.payout ?? 0;
+    const payoutRevealed = roundResult !== null;
     const odds = (selected.length * 1.5).toFixed(1);
     const balance = Number(user?.wallets?.available_balance ?? 0);
 
@@ -623,7 +618,7 @@ export default function Keno() {
                             </span>
                         </div>
                         <p className="mt-0.5 text-[11px] font-bold leading-none">
-                            {hits}
+                            {localHits}
                         </p>
                     </div>
 
@@ -900,7 +895,7 @@ export default function Keno() {
                     {/* Result panel */}
                     {phase === "RESULT" && (
                         <div
-                            className={`mt-1.5 rounded-lg p-2.5 text-center ${hits > 0
+                            className={`mt-1.5 rounded-lg p-2.5 text-center ${localHits > 0
                                 ? "bg-gradient-to-r from-green-500/15 to-green-500/5"
                                 : "bg-muted/40"
                                 }`}
@@ -909,23 +904,47 @@ export default function Keno() {
                                 Outcome
                             </p>
                             <p
-                                className={`mt-0.5 text-lg font-black italic tracking-tight ${hits > 0
+                                className={`mt-0.5 text-lg font-black italic tracking-tight ${localHits > 0
                                     ? "text-green-500"
                                     : "text-muted-foreground"
                                     }`}
                             >
                                 {myEntry
-                                    ? hits > 0
-                                        ? `${hits} HITS!`
+                                    ? localHits > 0
+                                        ? `${localHits} HITS!`
                                         : "ZERO HITS"
                                     : "--"}
                             </p>
-                            {payout > 0 && (
-                                <p className="mt-1 text-[10px] font-medium text-green-600 dark:text-green-400">
+
+                            {/* Payout -- hits above already reveal instantly;
+                                this line waits on the server's settlement,
+                                shown as a brief "calculating" beat instead
+                                of leaving a blank gap or flashing in whenever
+                                the socket event happens to land. */}
+                            {myEntry && !payoutRevealed && (
+                                <p className="mt-1 flex items-center justify-center gap-1 text-[10px] font-medium text-muted-foreground">
+                                    <span className="flex gap-0.5">
+                                        <span className="h-1 w-1 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.2s]" />
+                                        <span className="h-1 w-1 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.1s]" />
+                                        <span className="h-1 w-1 animate-bounce rounded-full bg-muted-foreground" />
+                                    </span>
+                                    Calculating payout
+                                </p>
+                            )}
+
+                            {myEntry && payoutRevealed && payout > 0 && (
+                                <p className="mt-1 text-[10px] font-medium text-green-600 dark:text-green-400 animate-in fade-in zoom-in-95">
                                     <Trophy className="mr-1 inline h-3 w-3" />
                                     Payout: {payout.toFixed(2)} ETB
                                 </p>
                             )}
+
+                            {myEntry && payoutRevealed && payout === 0 && (
+                                <p className="mt-1 text-[10px] font-medium text-muted-foreground animate-in fade-in">
+                                    No payout this round
+                                </p>
+                            )}
+
                             {!myEntry && (
                                 <p className="mt-1 text-[9px] text-muted-foreground">
                                     No bet placed this round

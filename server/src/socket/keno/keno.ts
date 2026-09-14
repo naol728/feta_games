@@ -8,9 +8,6 @@ import { supabase } from "../../config/supabase";
 import { wageringService } from "../../services/waggering.service";
 import { pointsService } from "../../services/points.service";
 
-import * as state from "./states";
-import type { KenoEntry } from "./states";
-
 interface JwtPayload {
   userId: string;
   telegramId: number;
@@ -18,6 +15,12 @@ interface JwtPayload {
 
 interface CustomSocket extends Socket {
   user: JwtPayload;
+}
+
+interface KenoEntry {
+  userId: string;
+  numbers: number[];
+  amount: number;
 }
 
 // ============================================================
@@ -32,12 +35,121 @@ const MAX_PICKS = 10;
 const MIN_BET = 1;
 const MAX_BET = 50_000;
 
-const BETTING_DURATION_MS = 15_000;
-const RESULT_DURATION_MS = 4_000;
+const BETTING_DURATION_MS = 30_000;
+const RESULT_DURATION_MS = 10_000;
 // Small buffer after the 10th reveal before moving to RESULT, so the
 // last number's animation has time to land before the phase flips.
 const DRAWING_BUFFER_MS = 400;
 const DRAWING_DURATION_MS = DRAW_COUNT * DRAW_INTERVAL_MS + DRAWING_BUFFER_MS;
+
+// ============================================================
+// IN-MEMORY STATE
+// ============================================================
+//
+// This replaces the previous Redis-backed ./states module. All round
+// state (phase, drawn numbers, per-user entries, leadership) now lives
+// in plain process memory instead of a shared external store.
+//
+// IMPORTANT: this means state is NOT shared across multiple server
+// instances/processes. Each process keeps its own independent Keno
+// clock and entry list. This is fine for a single-instance deployment,
+// but if you run more than one instance behind a load balancer,
+// players on different instances will be in different, unsynchronized
+// rounds. The leader-election plumbing below is left in place but is
+// now a no-op (a process is always its own leader), since there's no
+// longer any shared coordination point to elect a leader over.
+
+type KenoPhase = 0 | 1 | 2; // 0 = betting, 1 = drawing, 2 = result
+
+interface KenoMemState {
+  phase: KenoPhase;
+  roundNumber: number;
+  roundId: string | null;
+  phaseEndsAt: number;
+  drawn: number[];
+  entries: Map<string, KenoEntry>;
+}
+
+const memState: KenoMemState = {
+  phase: 0,
+  roundNumber: 0,
+  roundId: null,
+  phaseEndsAt: 0,
+  drawn: [],
+  entries: new Map(),
+};
+
+type ClaimBetResult =
+  | { ok: true }
+  | { ok: false; error: "PHASE_CLOSED" | "ALREADY_BET" };
+
+const state = {
+  async getState() {
+    return {
+      phase: memState.phase,
+      roundNumber: memState.roundNumber,
+      roundId: memState.roundId,
+      phaseEndsAt: memState.phaseEndsAt,
+      drawn: memState.drawn,
+    };
+  },
+
+  async getEntry(userId: string): Promise<KenoEntry | null> {
+    return memState.entries.get(userId) ?? null;
+  },
+
+  async resetRound(): Promise<{ roundNumber: number }> {
+    memState.roundNumber += 1;
+    memState.roundId = randomUUID();
+    memState.drawn = [];
+    memState.entries = new Map();
+    return { roundNumber: memState.roundNumber };
+  },
+
+  async setPhase(phase: KenoPhase, phaseEndsAt: number): Promise<void> {
+    memState.phase = phase;
+    memState.phaseEndsAt = phaseEndsAt;
+  },
+
+  async setDrawn(drawn: number[]): Promise<void> {
+    memState.drawn = drawn;
+  },
+
+  async claimBet(entry: KenoEntry): Promise<ClaimBetResult> {
+    if (memState.phase !== 0) {
+      return { ok: false, error: "PHASE_CLOSED" };
+    }
+    if (memState.entries.has(entry.userId)) {
+      return { ok: false, error: "ALREADY_BET" };
+    }
+    memState.entries.set(entry.userId, entry);
+    return { ok: true };
+  },
+
+  async *iterateAllEntries(): AsyncGenerator<KenoEntry> {
+    for (const entry of memState.entries.values()) {
+      yield entry;
+    }
+  },
+
+  // Leadership is meaningless with per-process in-memory state: a
+  // process only ever coordinates with itself, so it's always "the
+  // leader" of its own state.
+  async tryAcquireLeadership(
+    _instanceId: string,
+    _ttlMs: number,
+  ): Promise<boolean> {
+    return true;
+  },
+
+  async renewLeadership(_instanceId: string, _ttlMs: number): Promise<boolean> {
+    return true;
+  },
+
+  async releaseLeadership(_instanceId: string): Promise<void> {
+    // no-op
+  },
+};
 
 // ============================================================
 // PAYTABLE -- SOLVED FOR 90% RTP
@@ -121,7 +233,7 @@ const recordKenoTransaction = async ({
   roundId: string | null;
   hits: number;
   picks: number;
-}): Promise<void> => {
+}): Promise<boolean> => {
   const { error } = await supabase.from("transactions").insert({
     user_id: userId,
     type,
@@ -132,8 +244,20 @@ const recordKenoTransaction = async ({
   });
 
   if (error) {
+    if (error.code === "23505") {
+      // Unique violation on reference_id -- this entry was already
+      // settled by a previous call. Not a real error; just tell the
+      // caller to skip the wallet mutation.
+      console.warn(
+        `[keno] duplicate settlement suppressed for ${userId} round ${roundId} (${type})`,
+      );
+      return false;
+    }
     console.error("Failed to record keno transaction:", error);
+    return false; // fail closed: if we can't confirm the log wrote, don't touch the wallet
   }
+
+  return true;
 };
 
 // ============================================================
@@ -238,8 +362,7 @@ const kenoGame = (io: Server) => {
     io.emit("keno:result", { drawn, roundId, phaseEndsAt });
 
     // ------------------------------------------------------
-    // SETTLE EVERY ENTRY -- streamed so a 10k-entry round
-    // doesn't require one giant in-memory array.
+    // SETTLE EVERY ENTRY
     // ------------------------------------------------------
 
     const settlements: Promise<void>[] = [];
@@ -265,26 +388,30 @@ const kenoGame = (io: Server) => {
     );
 
     try {
-      if (payout > 0) {
+      const isWin = payout > 0;
+
+      // Insert the ledger row FIRST. The unique constraint on
+      // reference_id (keno_<roundId>_<userId>_<type>) makes this our
+      // idempotency lock: if it fails because the row already exists,
+      // this exact settlement already happened and we must not move
+      // any wallet balance again.
+      const inserted = await recordKenoTransaction({
+        userId: entry.userId,
+        type: isWin ? "win" : "lose",
+        amount: isWin ? payout : entry.amount,
+        roundId,
+        hits,
+        picks: entry.numbers.length,
+      });
+
+      if (!inserted) {
+        return; // already settled elsewhere -- do nothing further
+      }
+
+      if (isWin) {
         await walletService.settleCrashWin(entry.userId, payout, entry.amount);
-        await recordKenoTransaction({
-          userId: entry.userId,
-          type: "win",
-          amount: payout,
-          roundId,
-          hits,
-          picks: entry.numbers.length,
-        });
       } else {
         await walletService.consumeLockedBalance(entry.userId, entry.amount);
-        await recordKenoTransaction({
-          userId: entry.userId,
-          type: "lose",
-          amount: entry.amount,
-          roundId,
-          hits,
-          picks: entry.numbers.length,
-        });
       }
 
       await supabase.rpc("record_daily_activity", {
@@ -305,10 +432,6 @@ const kenoGame = (io: Server) => {
       console.error("Keno settlement error:", entry.userId, error);
     }
   };
-
-  // ==========================================================
-  // SOCKET REGISTRATION (every instance)
-  // ==========================================================
 
   const registerSocket = (socket: CustomSocket) => {
     const userId = socket.user.userId;
@@ -396,7 +519,7 @@ const kenoGame = (io: Server) => {
   };
 
   // ==========================================================
-  // LEADER ELECTION
+  // LEADER ELECTION (no-op with in-memory state -- kept for shape)
   // ==========================================================
 
   const becomeLeader = async () => {
@@ -443,9 +566,7 @@ const kenoGame = (io: Server) => {
 };
 
 // ============================================================
-// SINGLETON PER PROCESS (leader election decides which process
-// actually drives the round clock -- see crash's game.ts for the
-// same pattern)
+// SINGLETON PER PROCESS
 // ============================================================
 
 let kenoGameInstance: ReturnType<typeof kenoGame> | null = null;

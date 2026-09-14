@@ -23,28 +23,7 @@ export const initAuth = createAsyncThunk("auth/init", async () => {
   return data;
 });
 
-// export const fetchWallet = createAsyncThunk(
-//   "auth/fetchWallet",
-//   async (_, { rejectWithValue }) => {
-//     try {
-//       const res = await apiClient.get("/wallet");
 
-//       const data = res.data;
-
-//       if (!data) {
-//         throw new Error("Wallet data not found");
-//       }
-
-//       return data.wallet ?? data;
-//     } catch (error: any) {
-//       return rejectWithValue(
-//         error?.response?.data?.message ||
-//           error?.message ||
-//           "Failed to fetch wallet",
-//       );
-//     }
-//   },
-// );
 interface Wallet {
   balance: number;
   locked_balance: number;
@@ -70,13 +49,13 @@ interface UserProgress {
 }
 interface WageringItem {
   id: string;
-  type: string; // e.g., "deposit"
+  type: string; 
   source_amount: number;
   wagering_multiplier: number;
   required_amount: number;
   wagered_amount: number;
   remaining_amount: number;
-  status: string; // "active", "completed", etc.
+  status: string; 
   reference_id: string;
   created_at: string;
   completed_at: string | null;

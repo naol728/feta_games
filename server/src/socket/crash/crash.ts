@@ -19,35 +19,31 @@ import {
   CashoutBatchEntry,
 } from "./Protocols";
 
-import * as state from "./state";
-
 // ============================================================
-// NOTES ON RUNNING THIS AT 10,000 CONCURRENT USERS
+// NOTES -- IN-MEMORY STATE (no longer Redis-backed)
 // ============================================================
 //
-// 1. This file assumes your Socket.IO server is created with the Redis
-//    adapter attached (in your main server bootstrap, not here):
+// This used to rely on Redis for two things: (1) sharing round state
+// across multiple Node processes, and (2) atomic Lua-script claims
+// (claimBet/claimCashout/popDueAutoCashouts) so two processes could
+// never both settle the same bet.
 //
-//      import { createAdapter } from "@socket.io/redis-adapter";
-//      const pubClient = redis.duplicate();
-//      const subClient = redis.duplicate();
-//      io.adapter(createAdapter(pubClient, subClient));
+// With in-memory state, NEITHER of those guarantees hold across
+// processes anymore -- there is nothing shared to coordinate on. This
+// file must now run as a SINGLE Node process. Do not run this behind
+// multiple replicas/dynos or in PM2 cluster mode: every instance would
+// independently believe it's the round leader and run its own
+// separate round clock, and bets placed against one instance would be
+// invisible to the others.
 //
-//    Without that, io.emit()/io.to(room).emit() only reaches sockets on the
-//    SAME process. With it, every process's io.emit() fans out to every
-//    connected socket cluster-wide, which is what lets you run several
-//    Node instances behind a load balancer instead of one process holding
-//    10,000 open sockets.
+// The atomicity that Lua scripts gave us across processes is replaced
+// here by plain JS single-threadedness: as long as claim functions
+// (claimBet, claimCashout, popDueAutoCashouts) don't `await` before
+// mutating in-memory state, two "concurrent" calls can't interleave
+// mid-mutation within one process. That's preserved below.
 //
-// 2. Only one process should run the round clock (betting countdown, tick
-//    loop, crash resolution). Every process still handles "crash:bet" and
-//    "crash:cashout" locally -- those are now safe to run anywhere because
-//    all shared state lives in Redis (see state.ts) and is claimed
-//    atomically via Lua scripts.
-//
-// 3. Per-bet/per-cashout events are no longer emitted one at a time --
-//    they're buffered for ~150ms and flushed as a single binary batch
-//    packet. See protocol.ts for why that matters at this scale.
+// Per-bet/per-cashout batching (~150ms flush) is still worthwhile even
+// single-process, since it's just reducing socket emit volume.
 // ============================================================
 
 interface JwtPayload {
@@ -59,12 +55,217 @@ interface CustomSocket extends Socket {
   user: JwtPayload;
 }
 
+// ============================================================
+// IN-MEMORY STATE
+// ============================================================
+
+type CrashPhase = 0 | 1 | 2; // 0 = betting, 1 = running, 2 = crashed
+
+interface InternalPlayer {
+  playerId: number;
+  userId: string;
+  username: string;
+  betAmount: number;
+  autoCashoutAt: number | null;
+  payout: number | null; // null until a win is finalized; stays null for losers
+  cashoutInProgress: boolean; // claim lock so a player can't be settled twice
+}
+
+interface CrashMemState {
+  phase: CrashPhase;
+  roundNumber: number;
+  roundId: string | null;
+  crashPoint: number | null;
+  gameStartTime: number | null;
+  players: Map<number, InternalPlayer>;
+  userToPlayer: Map<string, number>;
+  nextPlayerId: number;
+  pendingBetLocks: Set<string>;
+}
+
+const mem: CrashMemState = {
+  phase: 0,
+  roundNumber: 0,
+  roundId: null,
+  crashPoint: null,
+  gameStartTime: null,
+  players: new Map(),
+  userToPlayer: new Map(),
+  nextPlayerId: 1,
+  pendingBetLocks: new Set(),
+};
+
+type ClaimBetResult =
+  | { ok: true; playerId: number }
+  | { ok: false; error: "PHASE_CLOSED" | "DUPLICATE" };
+
+type ClaimCashoutResult =
+  | { ok: true; playerId: number; betAmount: number }
+  | { ok: false };
+
+const state = {
+  async getState() {
+    return {
+      phase: mem.phase,
+      roundNumber: mem.roundNumber,
+      roundId: mem.roundId,
+      crashPoint: mem.crashPoint,
+      gameStartTime: mem.gameStartTime,
+    };
+  },
+
+  async resetRound(crashPoint: number): Promise<{ roundNumber: number }> {
+    mem.roundNumber += 1;
+    mem.roundId = randomUUID();
+    mem.crashPoint = crashPoint;
+    mem.gameStartTime = null;
+    mem.phase = 0;
+    mem.players = new Map();
+    mem.userToPlayer = new Map();
+    mem.nextPlayerId = 1;
+    return { roundNumber: mem.roundNumber };
+  },
+
+  async setPhaseRunning(gameStartTime: number): Promise<void> {
+    mem.phase = 1;
+    mem.gameStartTime = gameStartTime;
+  },
+
+  async setPhaseCrashed(): Promise<void> {
+    mem.phase = 2;
+  },
+
+  async tryLockPendingBet(userId: string): Promise<boolean> {
+    if (mem.pendingBetLocks.has(userId)) return false;
+    mem.pendingBetLocks.add(userId);
+    return true;
+  },
+
+  async unlockPendingBet(userId: string): Promise<void> {
+    mem.pendingBetLocks.delete(userId);
+  },
+
+  async claimBet(entry: {
+    userId: string;
+    username: string;
+    betAmount: number;
+    autoCashoutAt: number | null;
+  }): Promise<ClaimBetResult> {
+    if (mem.phase !== 0) {
+      return { ok: false, error: "PHASE_CLOSED" };
+    }
+    if (mem.userToPlayer.has(entry.userId)) {
+      return { ok: false, error: "DUPLICATE" };
+    }
+
+    const playerId = mem.nextPlayerId++;
+    mem.players.set(playerId, {
+      playerId,
+      userId: entry.userId,
+      username: entry.username,
+      betAmount: entry.betAmount,
+      autoCashoutAt: entry.autoCashoutAt,
+      payout: null,
+      cashoutInProgress: false,
+    });
+    mem.userToPlayer.set(entry.userId, playerId);
+
+    return { ok: true, playerId };
+  },
+
+  async claimCashout(userId: string): Promise<ClaimCashoutResult> {
+    const playerId = mem.userToPlayer.get(userId);
+    if (playerId === undefined) return { ok: false };
+
+    const player = mem.players.get(playerId);
+    if (!player || player.payout !== null || player.cashoutInProgress) {
+      return { ok: false };
+    }
+
+    player.cashoutInProgress = true; // synchronous -- no await above, so this is atomic
+    return { ok: true, playerId, betAmount: player.betAmount };
+  },
+
+  async finalizeCashout(
+    playerId: number,
+    _userId: string,
+    multiplier: number,
+  ): Promise<void> {
+    const player = mem.players.get(playerId);
+    if (!player) return;
+    player.payout = player.betAmount * multiplier;
+    player.cashoutInProgress = false;
+  },
+
+  async releaseCashoutLock(userId: string): Promise<void> {
+    const playerId = mem.userToPlayer.get(userId);
+    if (playerId === undefined) return;
+    const player = mem.players.get(playerId);
+    if (player) player.cashoutInProgress = false;
+  },
+
+  async popDueAutoCashouts(currentMultiplier: number): Promise<number[]> {
+    const due: number[] = [];
+    for (const player of mem.players.values()) {
+      if (
+        player.payout === null &&
+        !player.cashoutInProgress &&
+        player.autoCashoutAt !== null &&
+        player.autoCashoutAt <= currentMultiplier
+      ) {
+        player.cashoutInProgress = true; // claim immediately, atomic within this sync loop
+        due.push(player.playerId);
+      }
+    }
+    return due;
+  },
+
+  async getPlayer(playerId: number): Promise<InternalPlayer | null> {
+    return mem.players.get(playerId) ?? null;
+  },
+
+  async *iterateAllPlayers(): AsyncGenerator<InternalPlayer> {
+    for (const player of mem.players.values()) {
+      yield player;
+    }
+  },
+
+  // Leadership is meaningless with per-process in-memory state -- a
+  // single process only ever coordinates with itself.
+  async tryAcquireLeadership(
+    _instanceId: string,
+    _ttlMs: number,
+  ): Promise<boolean> {
+    return true;
+  },
+
+  async renewLeadership(_instanceId: string, _ttlMs: number): Promise<boolean> {
+    return true;
+  },
+
+  async releaseLeadership(_instanceId: string): Promise<void> {
+    // no-op
+  },
+};
+
+// ============================================================
+// CONSTANTS
+// ============================================================
+
 const INSTANCE_ID = randomUUID();
 const LEADER_TTL_MS = 8_000;
 const LEADER_RENEW_MS = 3_000;
 const BATCH_INTERVAL_MS = 150;
 const MAX_BATCH_SIZE = 1000; // flush early if a batch gets this big
 
+// ============================================================
+// TRANSACTION RECORDING
+// ============================================================
+//
+// Returns true only if this call actually inserted the row -- i.e.
+// this is the first time this entry+round+outcome has been settled.
+// The unique constraint on reference_id doubles as our idempotency
+// lock: callers must not touch the wallet unless this returns true.
 const recordCrashTransaction = async ({
   userId,
   type,
@@ -77,7 +278,7 @@ const recordCrashTransaction = async ({
   amount: number;
   roundId: string | null;
   multiplier?: number;
-}): Promise<void> => {
+}): Promise<boolean> => {
   const { error } = await supabase.from("transactions").insert({
     user_id: userId,
     type,
@@ -92,8 +293,17 @@ const recordCrashTransaction = async ({
   });
 
   if (error) {
+    if (error.code === "23505") {
+      console.warn(
+        `[crash] duplicate settlement suppressed for ${userId} round ${roundId} (${type})`,
+      );
+      return false;
+    }
     console.error("Failed to record crash transaction:", error);
+    return false; // fail closed: don't move wallet balance if we can't confirm the log wrote
   }
+
+  return true;
 };
 
 function generateCrashPoint(): number {
@@ -121,9 +331,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
   let roundTimer: NodeJS.Timeout | null = null;
   let ticker: NodeJS.Timeout | null = null;
 
-  // Local (per-process) buffers -- purely a broadcast optimization, not
-  // shared state. Whichever process handled a given socket's request
-  // buffers it and flushes on its own timer.
   let betBuffer: BetBatchEntry[] = [];
   let cashoutBuffer: CashoutBatchEntry[] = [];
   let batchFlushTimer: NodeJS.Timeout | null = null;
@@ -193,6 +400,26 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
       const roundId = (await state.getState()).roundId;
       const payout = betAmount * multiplier;
 
+      // Insert the ledger row FIRST. Its unique reference_id acts as
+      // the idempotency lock -- only move the wallet if this is the
+      // first time this cashout has actually been recorded.
+      const inserted = await recordCrashTransaction({
+        userId,
+        type: "win",
+        amount: payout,
+        roundId,
+        multiplier,
+      });
+
+      if (!inserted) {
+        // Release the claim without ever touching the wallet. This
+        // leaves the player's payout as null, so if the round crashes
+        // they'll correctly fall through to the loss path instead --
+        // same fallback behavior as any other cashout failure.
+        await state.releaseCashoutLock(userId);
+        return { ok: false };
+      }
+
       await walletService.settleCrashWin(userId, payout, betAmount);
       const wallet = await walletService.getWallet(userId);
 
@@ -200,13 +427,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
         supabase.rpc("record_daily_activity", {
           p_user_id: userId,
           p_activity_type: "played",
-        }),
-        recordCrashTransaction({
-          userId,
-          type: "win",
-          amount: payout,
-          roundId,
-          multiplier,
         }),
       ]);
       await pointsService
@@ -296,7 +516,7 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
 
       const duePlayerIds = await state.popDueAutoCashouts(currentMultiplier);
 
-      if (duePlayerIds.length && currentMultiplier < snapshot.crashPoint) {
+      if (duePlayerIds.length && currentMultiplier < snapshot.crashPoint!) {
         await Promise.all(
           duePlayerIds.map(async (playerId) => {
             const player = await state.getPlayer(playerId);
@@ -310,14 +530,14 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
       // CRASH
       // ------------------------------------------------------
 
-      if (currentMultiplier >= snapshot.crashPoint) {
+      if (currentMultiplier >= snapshot.crashPoint!) {
         if (ticker) clearInterval(ticker);
         ticker = null;
 
         await state.setPhaseCrashed();
         flushBatches(); // make sure every bet/cashout lands before the crash frame
 
-        io.emit("crash:crash", encodeCrash(snapshot.crashPoint));
+        io.emit("crash:crash", encodeCrash(snapshot.crashPoint!));
 
         // ----------------------------------------------------
         // LOSSES -- stream players in batches, never one giant
@@ -332,6 +552,18 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
           lossPromises.push(
             (async () => {
               try {
+                // Insert first -- same idempotency-lock pattern as the
+                // win path. If this player was somehow already
+                // recorded as a loss, skip the wallet mutation.
+                const inserted = await recordCrashTransaction({
+                  userId: player.userId,
+                  type: "lose",
+                  amount: player.betAmount,
+                  roundId: snapshot.roundId,
+                });
+
+                if (!inserted) return;
+
                 await walletService.consumeLockedBalance(
                   player.userId,
                   player.betAmount,
@@ -341,12 +573,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
                   supabase.rpc("record_daily_activity", {
                     p_user_id: player.userId,
                     p_activity_type: "played",
-                  }),
-                  recordCrashTransaction({
-                    userId: player.userId,
-                    type: "lose",
-                    amount: player.betAmount,
-                    roundId: snapshot.roundId,
                   }),
                 ]);
                 await pointsService
@@ -379,7 +605,7 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
   };
 
   // ==========================================================
-  // SOCKET REGISTRATION (runs on every instance)
+  // SOCKET REGISTRATION
   // ==========================================================
 
   const registerSocket = (socket: CustomSocket) => {
@@ -462,7 +688,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
             });
 
             if (!claim.ok) {
-              // Round closed or duplicate bet slipped through -- refund the lock.
               await walletService.unlockBalance(userId);
               return reply({
                 error:
@@ -509,7 +734,7 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
           Date.now() - snapshot.gameStartTime,
         );
 
-        if (currentMultiplier >= snapshot.crashPoint) {
+        if (currentMultiplier >= snapshot.crashPoint!) {
           return done({ error: "Too late" });
         }
 
@@ -541,12 +766,8 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
   };
 
   // ==========================================================
-  // LEADER ELECTION
+  // LEADER ELECTION (no-op with in-memory state -- kept for shape)
   // ==========================================================
-  // Every instance keeps trying to become leader. Whichever one holds the
-  // lock runs the round clock; the others idle on this and just serve
-  // sockets. If the leader dies, its lease expires (LEADER_TTL_MS) and
-  // another instance picks it up on its next poll.
 
   const becomeLeader = async () => {
     isLeader = true;
@@ -601,9 +822,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
 // ============================================================
 // SINGLETON PER PROCESS
 // ============================================================
-// Note: this is a singleton per Node PROCESS, not cluster-wide -- that's
-// intentional. Each process runs its own crashGame() instance; leader
-// election (above) decides which one actually drives the clock.
 
 let crashGameInstance: ReturnType<typeof crashGame> | null = null;
 

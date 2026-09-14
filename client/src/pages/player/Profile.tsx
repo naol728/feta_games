@@ -125,7 +125,7 @@ export default function Profile() {
     const [amount, setAmount] = useState("");
     const [withdrawamount, setWithdrawAmount] = useState("");
     const [accountNumber, setAccountNumber] = useState("");
-    const [bankName, setBankName] = useState("CBE");
+    const [bankName, setBankName] = useState("TELE BIRR");
     const [accountName, setAccountName] = useState("");
     const [page, setPage] = useState(1);
     const [showWageringDialog, setShowWageringDialog] = useState(false); // <-- new state
@@ -151,7 +151,7 @@ export default function Profile() {
     const totalBalance = Number(wallet?.available_balance ?? 0);
     const withdrawable = Number(wallet?.withdrawable_balance ?? 0);
     const locked = Number(wallet?.locked_balance ?? 0);
-    const available = Number(wallet?.balance ?? 0);
+    const available = Number(wallet?.withdrawable_balance ?? 0);
     // ========== Wagering ==========
     const wageringItems = user?.wagering ?? [];
     const activeWagering = useMemo(
@@ -203,13 +203,14 @@ export default function Profile() {
         onError: (error: any) => toast.error(error.message),
         onSuccess: (data) => {
             toast.success(data.message);
+            console.log(data)
             queryclient.invalidateQueries({ queryKey: ["getwithDrawRequest"] });
             dispatch(
                 setUserWallet({
                     balance: data.withdrawalId.balance,
                     withdrawable_balance: data.withdrawalId.withdrawable_balance,
                     locked_balance: data.withdrawalId.locked_balance,
-                    available_balance: data.withdrawalId.available_balance,
+                    available_balance: data.withdrawalId.withdrawable_balance + data.withdrawalId.balance,
                 })
             );
             setWithdrawAmount("");
@@ -276,7 +277,7 @@ export default function Profile() {
             toast.error("Insufficient available balance");
             return;
         }
-        if (accountNumber.length !== 13) {
+        if (accountNumber.length !== 10) {
             toast.error("Account number must be 13 digits");
             return;
         }
@@ -532,7 +533,7 @@ export default function Profile() {
                                                 withdrawalreqpending ||
                                                 !withdrawamount ||
                                                 Number(withdrawamount) < 50 ||
-                                                accountNumber.length !== 13 ||
+                                                accountNumber.length !== 10 ||
                                                 !accountName
                                             }
                                             onClick={handleWithdraw}

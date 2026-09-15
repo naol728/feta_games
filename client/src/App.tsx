@@ -28,6 +28,7 @@ import PhoneNumberSetup from "./components/PhoneNumberSetup";
 import Deposit from "./pages/player/Deposit";
 import Support from "./pages/player/Support";
 import Keno from "./pages/game/keno/Keno";
+import Mines from "./pages/game/mines/Mines";
 
 
 export default function App() {
@@ -97,8 +98,7 @@ export default function App() {
               <Route path="/slot" element={<Slots />} />
               <Route path="/aviator" element={<CrashGame />} />
               <Route path="/keno" element={<Keno />} />
-              <Route path="/keno" element={<Slots />} />
-              <Route path="/wheel" element={<Slots />} />
+              <Route path="/mines" element={<Mines />} />
               <Route path="/chicken-road" element={<Slots />} />
               <Route path="/joker-x" element={<Slots />} />
               <Route path="/plinko" element={<Slots />} />

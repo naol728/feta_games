@@ -7,7 +7,7 @@ import {
   type Transaction,
   type LeaderboardEntry,
   type GameStats,
-} from "./../pages/game/keno/type";
+} from "../pages/game/type";
 
 const DAILY_ALLOWANCE = 100000;
 const STORAGE_KEY = "satking_pro_v2";

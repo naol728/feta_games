@@ -8,6 +8,7 @@ import { safeConnection } from "./safeConnection";
 import Crash from "./crash/crash";
 import Slots from "./slot/Slot.socket";
 import Keno from "./keno/keno";
+import Mines from "./mines/mines";
 
 interface JwtPayload {
   userId: string;
@@ -61,6 +62,7 @@ export default function initSocket(io: Server) {
       Crash(io, s);
       Slots(io, s);
       Keno(io, s);
+      Mines(io, s);
     }),
   );
 }

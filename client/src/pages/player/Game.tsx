@@ -27,7 +27,7 @@ const games = [
   },
   {
     name: "Mines",
-    path: "/wheel",
+    path: "/mines",
     image: "https://vfair.games/games/mines.webp",
     isNew: false,
     underdevelopment: false,

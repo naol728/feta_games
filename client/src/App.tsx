@@ -120,6 +120,18 @@ export default function App() {
             draggable={false}
             pauseOnHover={false}
             theme="dark"
+            toastStyle={{
+              background: "linear-gradient(135deg, #17130d 0%, #0d0d0d 100%)",
+              color: "#ffffff",
+              border: "1px solid rgba(212, 175, 55, 0.6)",
+              borderRadius: "14px",
+              boxShadow:
+                "0 8px 30px rgba(0, 0, 0, 0.5), 0 0 18px rgba(212, 175, 55, 0.15)",
+              fontSize: "13px",
+              fontWeight: 600,
+              minHeight: "52px",
+              width: "min(360px, calc(100vw - 24px))",
+            }}
           />
         </BrowserRouter>
       </SessionStatsProvider>

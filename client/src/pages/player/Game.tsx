@@ -44,7 +44,7 @@ const games = [
     path: "/chicken-road",
     image: "/chicken-road.jpg",
     isNew: true,
-    underdevelopment: false,
+    underdevelopment: true,
   },
   {
     name: "Dice",

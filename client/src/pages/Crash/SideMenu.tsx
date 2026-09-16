@@ -153,6 +153,17 @@ const SideMenu: React.FC<SideMenuProps> = React.memo(
         };
       }
 
+      // NEW: bet accepted, round hasn't launched yet -- this was falling
+      // through to the "Place Bet" branch below before.
+      if (userGambled && !gameStarted) {
+        return {
+          type: "queued",
+          disabled: true,
+          title: "Bet Placed",
+          subtitle: bet ? `${bet.toFixed(2)} ETB` : "Waiting for round",
+        };
+      }
+
       if (userGambled && gameStarted) {
         return {
           type: "cashout",

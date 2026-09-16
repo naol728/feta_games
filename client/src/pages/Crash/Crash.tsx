@@ -321,7 +321,6 @@ export default function CrashGame() {
     const autoCashoutAt = Number.isFinite(target) && target >= 1.01 ? Math.round(target * 100) / 100 : null;
     return { amount: Math.round(bet * 100) / 100, autoCashoutAt };
   }, [bet, cashoutAt]);
-
   const placeBet = useCallback(
     (payload: BetPayload) => {
       if (!user) {
@@ -329,11 +328,27 @@ export default function CrashGame() {
         return;
       }
 
+      // Optimistic: flip the button state AND the balance immediately,
+      // don't wait on the network round-trip for either.
+      const prevWallet = user.wallets;
       roundDispatch({ type: "PLACE_BET_START" });
+
+      if (prevWallet) {
+        dispatch(
+          setUserWallet({
+            ...prevWallet,
+            available_balance: (prevWallet.available_balance ?? 0) - payload.amount,
+          })
+        );
+      }
+
+      playSound("click"); // fire immediately, don't wait for ack to feel responsive
 
       socket.emit("crash:bet", payload, (result: any) => {
         if (!result || result.error) {
+          // Roll back both the bet state and the balance
           roundDispatch({ type: "PLACE_BET_FAILED" });
+          if (prevWallet) dispatch(setUserWallet(prevWallet));
           toast.error(result?.error ?? "Could not place bet.");
           return;
         }
@@ -353,8 +368,9 @@ export default function CrashGame() {
           });
         }
 
+        // Server wallet is authoritative -- reconcile in case locked
+        // balance, bonuses, etc. differ from our naive optimistic subtract.
         if (result.wallet) dispatch(setUserWallet(result.wallet));
-        playSound("click");
       });
     },
     [socket, user, dispatch, playSound]
@@ -403,7 +419,7 @@ export default function CrashGame() {
 
     roundDispatch({ type: "CASHOUT_START" });
 
-    socket.emit("crash:cashout", (result:any) => {
+    socket.emit("crash:cashout", (result: any) => {
       if (!result || result.error) {
         roundDispatch({ type: "CASHOUT_FAILED" });
         toast.error(result?.error ?? "Cashout failed.");

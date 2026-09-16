@@ -29,6 +29,9 @@ import Deposit from "./pages/player/Deposit";
 import Support from "./pages/player/Support";
 import Keno from "./pages/game/keno/Keno";
 import Mines from "./pages/game/mines/Mines";
+import Plinko from "./pages/game/plinko/Plinko";
+import ChickenRoad from "./pages/game/chickenroad/ChickenRoad";
+import Dice from "./pages/game/dice/Dice";
 
 
 export default function App() {
@@ -99,9 +102,9 @@ export default function App() {
               <Route path="/aviator" element={<CrashGame />} />
               <Route path="/keno" element={<Keno />} />
               <Route path="/mines" element={<Mines />} />
-              <Route path="/chicken-road" element={<Slots />} />
-              <Route path="/joker-x" element={<Slots />} />
-              <Route path="/plinko" element={<Slots />} />
+              <Route path="/chicken-road" element={<ChickenRoad />} />
+              <Route path="/joker-x" element={<Dice />} />
+              <Route path="/plinko" element={<Plinko />} />
             </Route>
 
             <Route element={<MinimalLayout />}>

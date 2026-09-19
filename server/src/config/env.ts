@@ -15,6 +15,8 @@ export const env = {
   JWT_SECRET: process.env.JWT_SECRET as string,
   VERITASAPIKEY: process.env.VERITAS_API_KEY as string,
   VERITASAPIURL: process.env.VERITAS_API_URL as string,
+  VERIFY_ET_API_KEY: process.env.VERIFY_ET_API_KEY as string,
+  VERIFY_ET_API_URL: process.env.VERIFY_ET_API_URL as string,
 };
 
 if (!env.BOT_TOKEN || !env.ADMIN_CHAT_ID) {

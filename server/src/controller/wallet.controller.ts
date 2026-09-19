@@ -5,7 +5,7 @@ import { supabase } from "../config/supabase";
 import { walletService } from "../services/wallet.service";
 import {
   paymentVerify,
-  veritas,
+  verifyPayment,
 } from "../services/payment/paymentvarify.service";
 import { wageringService } from "../services/waggering.service";
 
@@ -18,20 +18,34 @@ interface WalletRequest extends Request {
 
 export const deposit = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
+    // ========================================================
+    // 1. GET REQUEST DATA
+    // ========================================================
+
     const { transactioID, trxno } = req.body;
+
+    if (!transactioID || !trxno) {
+      return next(
+        new AppError("Transaction ID and transaction number are required", 400),
+      );
+    }
+
+    // ========================================================
+    // 2. FIND INTERNAL TRANSACTION
+    // ========================================================
 
     const { data: trx, error: trxerr } = await supabase
       .from("transactions")
       .select(
         `
-        *,
-        payment_methods (
-          id,
-          account_number,
-          account_name,
-          type
-        )
-      `,
+          *,
+          payment_methods (
+            id,
+            account_number,
+            account_name,
+            type
+          )
+        `,
       )
       .eq("id", trxno)
       .single();
@@ -40,91 +54,268 @@ export const deposit = catchAsync(
       return next(new AppError("Transaction not found", 404));
     }
 
+    // ========================================================
+    // 3. MAKE SURE THIS IS A DEPOSIT
+    // ========================================================
+
+    if (trx.type && trx.type !== "deposit") {
+      return next(new AppError("Invalid transaction type", 400));
+    }
+
+    // ========================================================
+    // 4. ALREADY COMPLETED?
+    // ========================================================
+
     if (trx.status === "completed") {
       return next(new AppError("Transaction already completed", 400));
     }
 
-    const { data: existingRef } = await supabase
+    // ========================================================
+    // 5. CHECK TRANSACTION USER
+    // ========================================================
+
+    if (!trx.user_id) {
+      return next(new AppError("Transaction has no user", 400));
+    }
+
+    // ========================================================
+    // 6. CHECK PAYMENT METHOD
+    // ========================================================
+
+    if (!trx.payment_methods) {
+      return next(new AppError("Payment method not found", 400));
+    }
+
+    const paymentMethod = trx.payment_methods;
+
+    if (!paymentMethod.account_name) {
+      return next(new AppError("Payment account name is not configured", 400));
+    }
+
+    if (!paymentMethod.account_number) {
+      return next(
+        new AppError("Payment account number is not configured", 400),
+      );
+    }
+
+    // ========================================================
+    // 7. CHECK DUPLICATE REFERENCE
+    // ========================================================
+
+    const { data: existingRef, error: existingRefError } = await supabase
       .from("transactions")
-      .select("id")
+      .select("id, user_id, status")
       .eq("reference_id", transactioID)
       .maybeSingle();
+
+    if (existingRefError) {
+      return next(new AppError("Unable to check transaction reference", 500));
+    }
 
     if (existingRef) {
       return next(new AppError("Transaction already used", 400));
     }
-    const result = await veritas<{
-      success: boolean;
-      data?: {
-        payerName?: string;
-        payerTelebirrNo?: string;
-        creditedPartyName?: string;
-        creditedPartyAccountNo?: string;
-        transactionStatus?: string;
-        receiptNo?: string;
-        paymentDate?: string;
-        settledAmount?: string;
-        serviceFee?: string;
-        serviceFeeVAT?: string;
-        totalPaidAmount?: string;
-        bankName?: string;
-        customerNote?: string;
-      };
-    }>("/verify-telebirr", {
-      method: "POST",
-      body: JSON.stringify({ reference: transactioID }),
-    });
 
-    if (!result) {
-      return next(new AppError("INVALID Transactio Id", 400));
+    // ========================================================
+    // 8. VERIFY WITH VERIFY.ET
+    // ========================================================
+
+    let verifyResult;
+
+    try {
+      verifyResult = await verifyPayment(
+        transactioID,
+        paymentMethod.account_number,
+      );
+    } catch (error) {
+      console.error("Verify.ET error:", error);
+
+      return next(
+        new AppError(
+          error instanceof Error
+            ? error.message
+            : "Payment verification service unavailable",
+          502,
+        ),
+      );
     }
 
+    // ========================================================
+    // 9. VALIDATE PAYMENT
+    // ========================================================
+
     const verification = paymentVerify(
-      result,
+      verifyResult,
       Number(trx.amount),
-      trx.payment_methods.account_name,
+      paymentMethod.account_name,
+      paymentMethod.account_number,
     );
+
+    // ========================================================
+    // 10. PAYMENT STILL PROCESSING
+    // ========================================================
+
+    if (verification.pending) {
+      return res.status(202).json({
+        success: false,
+        pending: true,
+        message: verification.message,
+      });
+    }
+
+    // ========================================================
+    // 11. PAYMENT INVALID
+    // ========================================================
 
     if (!verification.valid) {
       return next(new AppError(verification.message, 400));
     }
 
-    const { error: depositError } = await supabase.from("deposits").upsert({
-      transaction_id: trx.id,
-      payment_method_id: trx.payment_method_id,
-      bank_reference: transactioID,
-      verified: true,
-    });
+    // ========================================================
+    // 12. EXTRA SAFETY CHECK
+    // ========================================================
+
+    if (
+      verification.settledAmount !== undefined &&
+      Number(verification.settledAmount) !== Number(trx.amount)
+    ) {
+      return next(
+        new AppError(
+          "Verified payment amount does not match transaction amount",
+          400,
+        ),
+      );
+    }
+
+    // ========================================================
+    // 13. INSERT DEPOSIT
+    // ========================================================
+
+    const { data: depositRecord, error: depositError } = await supabase
+      .from("deposits")
+      .upsert(
+        {
+          transaction_id: trx.id,
+          payment_method_id: trx.payment_method_id,
+          bank_reference: transactioID,
+          verified: true,
+        },
+        {
+          onConflict: "transaction_id",
+        },
+      )
+      .select()
+      .single();
 
     if (depositError) {
+      console.error("Deposit insert error:", depositError);
+
       return next(new AppError(depositError.message, 500));
     }
 
-    const { error: updateError } = await supabase
+    // ========================================================
+    // 14. UPDATE TRANSACTION
+    // ========================================================
+
+    const { data: updatedTransaction, error: updateError } = await supabase
       .from("transactions")
       .update({
         status: "completed",
         reference_id: transactioID,
       })
-      .eq("id", trx.id);
+      .eq("id", trx.id)
+      .neq("status", "completed")
+      .select()
+      .single();
 
-    if (updateError) {
-      return next(new AppError(updateError.message, 500));
+    if (updateError || !updatedTransaction) {
+      console.error("Transaction update error:", updateError);
+
+      // Important:
+      // Don't continue to wallet credit if the transaction
+      // wasn't successfully marked completed.
+      return next(
+        new AppError(
+          updateError?.message || "Unable to complete transaction",
+          500,
+        ),
+      );
     }
 
-    await walletService.addBalance(trx.user_id, trx.amount);
-    await wageringService.addDepositRequirement(
-      trx.user_id,
-      trx.amount,
-      1,
-      trx.id,
+    // ========================================================
+    // 15. ADD WALLET BALANCE
+    // ========================================================
+
+    try {
+      await walletService.addBalance(trx.user_id, trx.amount);
+    } catch (error) {
+      console.error("Wallet credit error:", error);
+
+      return next(
+        new AppError(
+          "Deposit was verified but wallet credit failed. Please contact support.",
+          500,
+        ),
+      );
+    }
+
+    // ========================================================
+    // 16. CREATE DEPOSIT WAGERING REQUIREMENT
+    // ========================================================
+
+    try {
+      await wageringService.addDepositRequirement(
+        trx.user_id,
+        trx.amount,
+        1,
+        trx.id,
+      );
+    } catch (error) {
+      console.error("Wagering requirement error:", error);
+
+      // Deposit is already credited.
+      // Don't tell the user that the payment failed.
+      // Log this for reconciliation/support.
+    }
+
+    // ========================================================
+    // 17. RECORD DAILY ACTIVITY
+    // ========================================================
+
+    const { error: activityError } = await supabase.rpc(
+      "record_daily_activity",
+      {
+        p_user_id: trx.user_id,
+        p_activity_type: "deposited",
+      },
     );
-    await supabase.rpc("record_daily_activity", {
-      p_user_id: trx.user_id,
-      p_activity_type: "deposited",
-    });
+
+    if (activityError) {
+      console.error("Daily activity error:", activityError);
+    }
+
+    // ========================================================
+    // 18. SUCCESS RESPONSE
+    // ========================================================
+
     return res.status(200).json({
+      success: true,
       message: "Deposit successful",
+
+      data: {
+        transactionId: trx.id,
+        amount: Number(trx.amount),
+
+        reference: transactioID,
+
+        receiptNo: verification.receiptNo || verification.referenceNumber,
+
+        payerName: verification.payerName,
+
+        receiverName: verification.creditedPartyName,
+
+        verified: true,
+      },
     });
   },
 );

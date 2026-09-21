@@ -1,5 +1,5 @@
 /*eslint-disable*/
-import React, { useMemo } from "react"
+import React, { useMemo, useState, useLayoutEffect } from "react"
 
 interface SlotColumnProps {
     symbols: string[]
@@ -34,9 +34,9 @@ const SYMBOL_IMAGES: Record<string, string> = {
 // slightly more "settled" stop than a plain linear-ish cubic-bezier.
 // ease-out-expo-ish curve: fast start, long smooth deceleration.
 const SPIN_TRANSITIONS = [
-    "transform 2s cubic-bezier(0.16, 1, 0.3, 1)",
-    "transform 2.4s cubic-bezier(0.16, 1, 0.3, 1)",
-    "transform 2.8s cubic-bezier(0.16, 1, 0.3, 1)",
+    "transform 1.8s cubic-bezier(0.16, 1, 0.3, 1) 0s",
+    "transform 2.1s cubic-bezier(0.16, 1, 0.3, 1) 0.15s",
+    "transform 2.4s cubic-bezier(0.16, 1, 0.3, 1) 0.3s",
 ]
 
 const makeFillers = () =>
@@ -65,7 +65,13 @@ const SlotColumn: React.FC<SlotColumnProps> = ({
      */
     const rowSize = "clamp(58px, 19vw, 78px)"
 
-    const fillers = useMemo(() => makeFillers(), [])
+    const [fillers, setFillers] = useState<string[]>(() => makeFillers())
+
+    useLayoutEffect(() => {
+        if (isSpinning) {
+            setFillers(makeFillers())
+        }
+    }, [isSpinning])
 
     const rouletteItems = useMemo(
         () => [

@@ -498,8 +498,8 @@ export default function Mines() {
                 <CardContent className="p-1">
                     <div className="grid grid-cols-5 gap-1">
                         {Array.from({ length: BOARD_SIZE }, (_, i) => {
-                            const isRevealed = revealed.includes(i);
-                            const isMineTile = mineIndices.includes(i);
+                            const isRevealed = revealed && revealed?.includes(i);
+                            const isMineTile = mineIndices && mineIndices?.includes(i);
                             const dimmed = !isPlaying && !gameOver;
 
                             let stateClass = "";

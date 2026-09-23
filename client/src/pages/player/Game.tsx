@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import Banner from "@/components/Banner";
 import { Star, ChevronRight, Lock, Gamepad2 } from "lucide-react";
+import FeaturedMatch from "../game/prediction/FeaturedMatch";
 
 const games = [
   {
@@ -83,6 +84,8 @@ export default function Game() {
       <section className="pt-2">
         <Banner />
       </section>
+      
+      <FeaturedMatch />
 
       {/* ================================
           SECTION HEADER

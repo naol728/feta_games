@@ -10,6 +10,7 @@ import statRoute from "./routes/stats.route";
 
 import { globalErrorHandler } from "./middleware/globalErrorHandler";
 import { AppError } from "./utils/AppError";
+import FeatureMatch from "./routes/featuredmatch.route";
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use("/games", GameRoute);
 app.use("/invites", inviteRoute);
 app.use("/stats", statRoute);
 app.use("/coupon", couponRoute);
+app.use("/feature", FeatureMatch);
 
 app.all("*", (req, res, next) => {
   next(new AppError(`Can't find ${req.originalUrl}`, 404));

@@ -41,15 +41,20 @@ export const gettransaction = async ({
 
 export const varifytransaction = async (data: {
   trxno: string | undefined;
-  transactionUrl: string;
+  transactioID: string;
+  couponCode?: string;
 }) => {
-  const { trxno, transactionUrl } = data;
-  const res = await apiClient.post(`/${BASE}/deposit`, {
+  const { trxno, transactioID, couponCode } = data;
+
+  const res = await apiClient.post(`${BASE}/deposit`, {
     trxno,
-    transactioID: transactionUrl,
+    transactioID,
+    couponCode: couponCode?.trim() || undefined,
   });
+
   return res.data;
 };
+
 export const gettransactionhistory = async (page = 1, limit = 10) => {
   const response = await apiClient.get(
     `/wallet/transactions?page=${page}&limit=${limit}`,

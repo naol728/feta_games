@@ -22,19 +22,34 @@ export const deposit = catchAsync(
     // 1. GET REQUEST DATA
     // ========================================================
 
-    const { transactioID, trxno } = req.body;
+    const {
+      transactioID,
+      trxno,
+      couponCode,
+    } = req.body;
 
     if (!transactioID || !trxno) {
       return next(
-        new AppError("Transaction ID and transaction number are required", 400),
+        new AppError(
+          "Transaction ID and transaction number are required",
+          400,
+        ),
       );
     }
+
+    // Normalize coupon code
+    const normalizedCouponCode = couponCode
+      ? String(couponCode).trim().toUpperCase()
+      : null;
 
     // ========================================================
     // 2. FIND INTERNAL TRANSACTION
     // ========================================================
 
-    const { data: trx, error: trxerr } = await supabase
+    const {
+      data: trx,
+      error: trxerr,
+    } = await supabase
       .from("transactions")
       .select(
         `
@@ -51,7 +66,9 @@ export const deposit = catchAsync(
       .single();
 
     if (trxerr || !trx) {
-      return next(new AppError("Transaction not found", 404));
+      return next(
+        new AppError("Transaction not found", 404),
+      );
     }
 
     // ========================================================
@@ -59,7 +76,9 @@ export const deposit = catchAsync(
     // ========================================================
 
     if (trx.type && trx.type !== "deposit") {
-      return next(new AppError("Invalid transaction type", 400));
+      return next(
+        new AppError("Invalid transaction type", 400),
+      );
     }
 
     // ========================================================
@@ -67,7 +86,12 @@ export const deposit = catchAsync(
     // ========================================================
 
     if (trx.status === "completed") {
-      return next(new AppError("Transaction already completed", 400));
+      return next(
+        new AppError(
+          "Transaction already completed",
+          400,
+        ),
+      );
     }
 
     // ========================================================
@@ -75,7 +99,12 @@ export const deposit = catchAsync(
     // ========================================================
 
     if (!trx.user_id) {
-      return next(new AppError("Transaction has no user", 400));
+      return next(
+        new AppError(
+          "Transaction has no user",
+          400,
+        ),
+      );
     }
 
     // ========================================================
@@ -83,18 +112,31 @@ export const deposit = catchAsync(
     // ========================================================
 
     if (!trx.payment_methods) {
-      return next(new AppError("Payment method not found", 400));
+      return next(
+        new AppError(
+          "Payment method not found",
+          400,
+        ),
+      );
     }
 
     const paymentMethod = trx.payment_methods;
 
     if (!paymentMethod.account_name) {
-      return next(new AppError("Payment account name is not configured", 400));
+      return next(
+        new AppError(
+          "Payment account name is not configured",
+          400,
+        ),
+      );
     }
 
     if (!paymentMethod.account_number) {
       return next(
-        new AppError("Payment account number is not configured", 400),
+        new AppError(
+          "Payment account number is not configured",
+          400,
+        ),
       );
     }
 
@@ -102,18 +144,31 @@ export const deposit = catchAsync(
     // 7. CHECK DUPLICATE REFERENCE
     // ========================================================
 
-    const { data: existingRef, error: existingRefError } = await supabase
+    const {
+      data: existingRef,
+      error: existingRefError,
+    } = await supabase
       .from("transactions")
       .select("id, user_id, status")
       .eq("reference_id", transactioID)
       .maybeSingle();
 
     if (existingRefError) {
-      return next(new AppError("Unable to check transaction reference", 500));
+      return next(
+        new AppError(
+          "Unable to check transaction reference",
+          500,
+        ),
+      );
     }
 
     if (existingRef) {
-      return next(new AppError("Transaction already used", 400));
+      return next(
+        new AppError(
+          "Transaction already used",
+          400,
+        ),
+      );
     }
 
     // ========================================================
@@ -128,7 +183,10 @@ export const deposit = catchAsync(
         paymentMethod.account_number,
       );
     } catch (error) {
-      console.error("Verify.ET error:", error);
+      console.error(
+        "Verify.ET error:",
+        error,
+      );
 
       return next(
         new AppError(
@@ -168,7 +226,12 @@ export const deposit = catchAsync(
     // ========================================================
 
     if (!verification.valid) {
-      return next(new AppError(verification.message, 400));
+      return next(
+        new AppError(
+          verification.message,
+          400,
+        ),
+      );
     }
 
     // ========================================================
@@ -177,7 +240,8 @@ export const deposit = catchAsync(
 
     if (
       verification.settledAmount !== undefined &&
-      Number(verification.settledAmount) !== Number(trx.amount)
+      Number(verification.settledAmount) !==
+        Number(trx.amount)
     ) {
       return next(
         new AppError(
@@ -191,12 +255,16 @@ export const deposit = catchAsync(
     // 13. INSERT DEPOSIT
     // ========================================================
 
-    const { data: depositRecord, error: depositError } = await supabase
+    const {
+      data: depositRecord,
+      error: depositError,
+    } = await supabase
       .from("deposits")
       .upsert(
         {
           transaction_id: trx.id,
-          payment_method_id: trx.payment_method_id,
+          payment_method_id:
+            trx.payment_method_id,
           bank_reference: transactioID,
           verified: true,
         },
@@ -208,16 +276,27 @@ export const deposit = catchAsync(
       .single();
 
     if (depositError) {
-      console.error("Deposit insert error:", depositError);
+      console.error(
+        "Deposit insert error:",
+        depositError,
+      );
 
-      return next(new AppError(depositError.message, 500));
+      return next(
+        new AppError(
+          depositError.message,
+          500,
+        ),
+      );
     }
 
     // ========================================================
     // 14. UPDATE TRANSACTION
     // ========================================================
 
-    const { data: updatedTransaction, error: updateError } = await supabase
+    const {
+      data: updatedTransaction,
+      error: updateError,
+    } = await supabase
       .from("transactions")
       .update({
         status: "completed",
@@ -229,27 +308,34 @@ export const deposit = catchAsync(
       .single();
 
     if (updateError || !updatedTransaction) {
-      console.error("Transaction update error:", updateError);
+      console.error(
+        "Transaction update error:",
+        updateError,
+      );
 
-      // Important:
-      // Don't continue to wallet credit if the transaction
-      // wasn't successfully marked completed.
       return next(
         new AppError(
-          updateError?.message || "Unable to complete transaction",
+          updateError?.message ||
+            "Unable to complete transaction",
           500,
         ),
       );
     }
 
     // ========================================================
-    // 15. ADD WALLET BALANCE
+    // 15. ADD NORMAL DEPOSIT BALANCE
     // ========================================================
 
     try {
-      await walletService.addBalance(trx.user_id, trx.amount);
+      await walletService.addBalance(
+        trx.user_id,
+        trx.amount,
+      );
     } catch (error) {
-      console.error("Wallet credit error:", error);
+      console.error(
+        "Wallet credit error:",
+        error,
+      );
 
       return next(
         new AppError(
@@ -260,7 +346,12 @@ export const deposit = catchAsync(
     }
 
     // ========================================================
-    // 16. CREATE DEPOSIT WAGERING REQUIREMENT
+    // 16. CREATE NORMAL DEPOSIT WAGERING
+    // ========================================================
+    //
+    // Deposit:
+    // 100 ETB × 1 = 100 ETB wagering requirement
+    //
     // ========================================================
 
     try {
@@ -271,18 +362,336 @@ export const deposit = catchAsync(
         trx.id,
       );
     } catch (error) {
-      console.error("Wagering requirement error:", error);
+      console.error(
+        "Deposit wagering requirement error:",
+        error,
+      );
 
-      // Deposit is already credited.
-      // Don't tell the user that the payment failed.
-      // Log this for reconciliation/support.
+      // Deposit has already been credited.
+      // Keep the deposit successful.
+      // Log for reconciliation/support.
     }
 
     // ========================================================
-    // 17. RECORD DAILY ACTIVITY
+    // 17. APPLY COUPON
     // ========================================================
 
-    const { error: activityError } = await supabase.rpc(
+    let couponBonus = 0;
+    let appliedCouponCode: string | null = null;
+    let couponWageringRequirement = 0;
+
+    if (normalizedCouponCode) {
+      try {
+        // ----------------------------------------------------
+        // 17.1 FIND COUPON
+        // ----------------------------------------------------
+
+        const {
+          data: coupon,
+          error: couponError,
+        } = await supabase
+          .from("coupons")
+          .select(`
+            id,
+            code,
+            bonus_multiplier,
+            max_uses,
+            used_count,
+            is_active,
+            expires_at,
+            bonus_amount
+          `)
+          .eq("code", normalizedCouponCode)
+          .maybeSingle();
+
+        if (couponError) {
+          console.error(
+            "Coupon lookup error:",
+            couponError,
+          );
+
+          return next(
+            new AppError(
+              "Unable to validate coupon",
+              500,
+            ),
+          );
+        }
+
+        // ----------------------------------------------------
+        // 17.2 COUPON DOES NOT EXIST
+        // ----------------------------------------------------
+
+        if (!coupon) {
+          return next(
+            new AppError(
+              "Invalid coupon code",
+              400,
+            ),
+          );
+        }
+
+        // ----------------------------------------------------
+        // 17.3 CHECK ACTIVE
+        // ----------------------------------------------------
+
+        if (!coupon.is_active) {
+          return next(
+            new AppError(
+              "This coupon is no longer active",
+              400,
+            ),
+          );
+        }
+
+        // ----------------------------------------------------
+        // 17.4 CHECK EXPIRATION
+        // ----------------------------------------------------
+
+        if (
+          coupon.expires_at &&
+          new Date(coupon.expires_at) <= new Date()
+        ) {
+          return next(
+            new AppError(
+              "This coupon has expired",
+              400,
+            ),
+          );
+        }
+
+        // ----------------------------------------------------
+        // 17.5 CHECK MAX USES
+        // ----------------------------------------------------
+
+        if (
+          coupon.max_uses !== null &&
+          Number(coupon.used_count || 0) >=
+            Number(coupon.max_uses)
+        ) {
+          return next(
+            new AppError(
+              "This coupon has reached its maximum usage limit",
+              400,
+            ),
+          );
+        }
+
+        // ----------------------------------------------------
+        // 17.6 CHECK MINIMUM DEPOSIT
+        // ----------------------------------------------------
+        //
+        // WIN100:
+        //
+        // Minimum deposit = 100 ETB
+        //
+        // If you have not added min_deposit_amount yet,
+        // this block can be removed.
+        //
+        // ----------------------------------------------------
+
+        const minDeposit =
+          Number(
+            (coupon as any).min_deposit_amount || 0,
+          );
+
+        if (
+          minDeposit > 0 &&
+          Number(trx.amount) < minDeposit
+        ) {
+          return next(
+            new AppError(
+              `Minimum deposit for this coupon is ${minDeposit} ETB`,
+              400,
+            ),
+          );
+        }
+
+        // ----------------------------------------------------
+        // 17.7 CHECK IF USER ALREADY USED COUPON
+        // ----------------------------------------------------
+
+        const {
+          data: existingUserCoupon,
+          error: existingUserCouponError,
+        } = await supabase
+          .from("user_coupons")
+          .select("id")
+          .eq("user_id", trx.user_id)
+          .eq("coupon_id", coupon.id)
+          .maybeSingle();
+
+        if (existingUserCouponError) {
+          console.error(
+            "User coupon lookup error:",
+            existingUserCouponError,
+          );
+
+          return next(
+            new AppError(
+              "Unable to check coupon usage",
+              500,
+            ),
+          );
+        }
+
+        if (existingUserCoupon) {
+          return next(
+            new AppError(
+              "You have already used this coupon",
+              400,
+            ),
+          );
+        }
+
+        // ----------------------------------------------------
+        // 17.8 CALCULATE BONUS
+        // ----------------------------------------------------
+
+        couponBonus = Number(
+          coupon.bonus_amount || 0,
+        );
+
+        if (couponBonus <= 0) {
+          return next(
+            new AppError(
+              "This coupon does not have a valid bonus",
+              400,
+            ),
+          );
+        }
+
+        // ----------------------------------------------------
+        // 17.9 ADD BONUS TO WALLET
+        // ----------------------------------------------------
+
+        await walletService.addBalance(
+          trx.user_id,
+          couponBonus,
+        );
+
+        // ----------------------------------------------------
+        // 17.10 RECORD USER COUPON
+        // ----------------------------------------------------
+
+        const {
+          error: userCouponError,
+        } = await supabase
+          .from("user_coupons")
+          .insert({
+            user_id: trx.user_id,
+            coupon_id: coupon.id,
+          });
+
+        if (userCouponError) {
+          console.error(
+            "User coupon insert error:",
+            userCouponError,
+          );
+
+          // IMPORTANT:
+          // The bonus was already credited.
+          // We need to handle this carefully.
+          //
+          // Because the wallet and coupon record are separate
+          // operations, an RPC is safer for production.
+          //
+
+          return next(
+            new AppError(
+              "Coupon was applied but could not be recorded. Please contact support.",
+              500,
+            ),
+          );
+        }
+
+        // ----------------------------------------------------
+        // 17.11 INCREMENT COUPON USED COUNT
+        // ----------------------------------------------------
+
+        const {
+          error: updateCouponError,
+        } = await supabase
+          .from("coupons")
+          .update({
+            used_count:
+              Number(coupon.used_count || 0) + 1,
+          })
+          .eq("id", coupon.id);
+
+        if (updateCouponError) {
+          console.error(
+            "Coupon usage update error:",
+            updateCouponError,
+          );
+
+          // Coupon was already credited.
+          // Log for reconciliation.
+        }
+
+        // ----------------------------------------------------
+        // 17.12 CREATE 20× BONUS WAGERING
+        // ----------------------------------------------------
+        //
+        // Example:
+        //
+        // Bonus = 100 ETB
+        // Multiplier = 20
+        //
+        // 100 × 20 = 2,000 ETB
+        //
+        // ----------------------------------------------------
+
+        const bonusWageringMultiplier = 10;
+
+        couponWageringRequirement =
+          couponBonus *
+          bonusWageringMultiplier;
+
+        try {
+          await wageringService.addDepositRequirement(
+            trx.user_id,
+            couponBonus,
+            bonusWageringMultiplier,
+            trx.id,
+          );
+        } catch (error) {
+          console.error(
+            "Coupon wagering requirement error:",
+            error,
+          );
+
+          // Bonus has already been credited.
+          // Log for reconciliation/support.
+        }
+
+        appliedCouponCode =
+          coupon.code;
+
+      } catch (error) {
+        console.error(
+          "Coupon processing error:",
+          error,
+        );
+
+        return next(
+          new AppError(
+            error instanceof Error
+              ? error.message
+              : "Unable to apply coupon",
+            400,
+          ),
+        );
+      }
+    }
+
+    // ========================================================
+    // 18. RECORD DAILY ACTIVITY
+    // ========================================================
+
+    const {
+      error: activityError,
+    } = await supabase.rpc(
       "record_daily_activity",
       {
         p_user_id: trx.user_id,
@@ -291,28 +700,73 @@ export const deposit = catchAsync(
     );
 
     if (activityError) {
-      console.error("Daily activity error:", activityError);
+      console.error(
+        "Daily activity error:",
+        activityError,
+      );
     }
 
     // ========================================================
-    // 18. SUCCESS RESPONSE
+    // 19. CALCULATE TOTAL CREDIT
+    // ========================================================
+
+    const depositAmount =
+      Number(trx.amount);
+
+    const totalCredited =
+      depositAmount + couponBonus;
+
+    // ========================================================
+    // 20. SUCCESS RESPONSE
     // ========================================================
 
     return res.status(200).json({
       success: true,
-      message: "Deposit successful",
+
+      message: couponBonus > 0
+        ? "Deposit successful and coupon bonus applied"
+        : "Deposit successful",
 
       data: {
         transactionId: trx.id,
-        amount: Number(trx.amount),
+
+        // Original deposit
+        amount: depositAmount,
+
+        // Coupon
+        coupon: appliedCouponCode
+          ? {
+              code: appliedCouponCode,
+              bonus: couponBonus,
+              wageringMultiplier: 20,
+              wageringRequirement:
+                couponWageringRequirement,
+            }
+          : null,
+
+        // Final amount added to wallet
+        totalCredited,
+
+        // Normal deposit wagering
+        depositWageringRequirement:
+          depositAmount,
+
+        // Total wagering generated
+        totalWageringRequirement:
+          depositAmount +
+          couponWageringRequirement,
 
         reference: transactioID,
 
-        receiptNo: verification.receiptNo || verification.referenceNumber,
+        receiptNo:
+          verification.receiptNo ||
+          verification.referenceNumber,
 
-        payerName: verification.payerName,
+        payerName:
+          verification.payerName,
 
-        receiverName: verification.creditedPartyName,
+        receiverName:
+          verification.creditedPartyName,
 
         verified: true,
       },

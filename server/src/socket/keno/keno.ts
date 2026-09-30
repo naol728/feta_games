@@ -510,10 +510,7 @@ const kenoGame = (io: Server) => {
 
           const wallet = await walletService.getWallet(userId);
           reply({ ok: true, numbers, amount, wallet });
-        } catch (error) {
-          console.error("Keno bet error:", error);
-          reply({ error: "Could not place the bet" });
-        }
+      
       },
     );
   };

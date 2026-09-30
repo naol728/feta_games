@@ -431,9 +431,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
       ]);
       await pointsService
         .addGameplayPoints(userId, betAmount)
-        .catch((error) => {
-          console.error("Failed to add crash gameplay points:", error);
-        });
 
       await state.finalizeCashout(playerId, userId, multiplier);
 

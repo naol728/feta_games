@@ -268,6 +268,7 @@ const kenoGame = (io: Server) => {
   const INSTANCE_ID = randomUUID();
   const LEADER_TTL_MS = 8_000;
   const LEADER_RENEW_MS = 3_000;
+  const RECOVERY_DELAY_MS = 2_000;
 
   let isLeader = false;
   let stopped = false;
@@ -277,124 +278,168 @@ const kenoGame = (io: Server) => {
   let drawTimer: NodeJS.Timeout | null = null;
 
   // ==========================================================
+  // SAFETY HELPERS -- nothing async may ever reject unhandled
+  // ==========================================================
+
+  const fireAndForget = (
+    label: string,
+    fn: () => Promise<unknown> | unknown,
+  ) => {
+    Promise.resolve()
+      .then(fn)
+      .catch((err) => console.error(`[keno] ${label} failed:`, err));
+  };
+
+  const scheduleNext = (fn: () => Promise<void>, ms: number, label: string) => {
+    if (stopped) return;
+    if (phaseTimer) clearTimeout(phaseTimer);
+    phaseTimer = setTimeout(() => {
+      fn().catch((err) => {
+        console.error(`[keno] ${label} crashed:`, err);
+      });
+    }, ms);
+  };
+
+  // ==========================================================
   // SYNC
   // ==========================================================
 
   const sendState = async (socket: CustomSocket) => {
-    const snapshot = await state.getState();
-    const userId = socket.user.userId;
+    try {
+      const snapshot = await state.getState();
+      const userId = socket.user?.userId;
+      const yourEntry = userId ? await state.getEntry(userId) : null;
 
-    const yourEntry = userId ? await state.getEntry(userId) : null;
-
-    socket.emit("keno:sync", {
-      phase: snapshot.phase,
-      roundNumber: snapshot.roundNumber,
-      phaseEndsAt: snapshot.phaseEndsAt,
-      drawn: snapshot.drawn,
-      yourEntry,
-    });
+      socket.emit("keno:sync", {
+        phase: snapshot.phase,
+        roundNumber: snapshot.roundNumber,
+        phaseEndsAt: snapshot.phaseEndsAt,
+        drawn: snapshot.drawn,
+        yourEntry,
+      });
+    } catch (error) {
+      console.error("[keno] sendState error:", error);
+    }
   };
 
   // ==========================================================
   // ROUND LIFECYCLE (leader only)
   // ==========================================================
 
-  const runBettingPhase = async () => {
+  const runBettingPhase = async (): Promise<void> => {
     if (stopped || !isLeader) return;
 
-    const { roundNumber } = await state.resetRound();
-    const phaseEndsAt = Date.now() + BETTING_DURATION_MS;
-    await state.setPhase(0, phaseEndsAt);
+    try {
+      const { roundNumber } = await state.resetRound();
+      const phaseEndsAt = Date.now() + BETTING_DURATION_MS;
+      await state.setPhase(0, phaseEndsAt);
 
-    io.emit("keno:round-start", { roundNumber, phaseEndsAt });
+      io.emit("keno:round-start", { roundNumber, phaseEndsAt });
 
-    phaseTimer = setTimeout(runDrawingPhase, BETTING_DURATION_MS);
-  };
-
-  const runDrawingPhase = async () => {
-    if (stopped || !isLeader) return;
-
-    const phaseEndsAt = Date.now() + DRAWING_DURATION_MS;
-    await state.setPhase(1, phaseEndsAt);
-
-    io.emit("keno:drawing-start", { phaseEndsAt });
-
-    const drawn: number[] = [];
-    const numbers = drawNumbers();
-    let index = 0;
-
-    drawTimer = setInterval(async () => {
-      if (stopped || !isLeader) {
-        if (drawTimer) clearInterval(drawTimer);
-        drawTimer = null;
-        return;
-      }
-
-      drawn.push(numbers[index]);
-      await state.setDrawn(drawn);
-      io.emit("keno:number-drawn", {
-        number: numbers[index],
-        drawn: [...drawn],
-      });
-
-      index++;
-
-      if (index >= DRAW_COUNT) {
-        if (drawTimer) clearInterval(drawTimer);
-        drawTimer = null;
-
-        phaseTimer = setTimeout(() => runResultPhase(drawn), DRAWING_BUFFER_MS);
-      }
-    }, DRAW_INTERVAL_MS);
-  };
-
-  const runResultPhase = async (drawn: number[]) => {
-    if (stopped || !isLeader) return;
-
-    const phaseEndsAt = Date.now() + RESULT_DURATION_MS;
-    await state.setPhase(2, phaseEndsAt);
-
-    const roundId = (await state.getState()).roundId;
-
-    // phaseEndsAt is included here (not just in the sync/round-start
-    // events) so that spectators who never placed a bet still get a
-    // correct RESULT-phase countdown, not just bettors.
-    io.emit("keno:result", { drawn, roundId, phaseEndsAt });
-
-    // ------------------------------------------------------
-    // SETTLE EVERY ENTRY
-    // ------------------------------------------------------
-
-    const settlements: Promise<void>[] = [];
-
-    for await (const entry of state.iterateAllEntries()) {
-      settlements.push(settleEntry(entry, drawn, roundId));
+      scheduleNext(runDrawingPhase, BETTING_DURATION_MS, "drawing phase");
+    } catch (error) {
+      console.error("[keno] betting phase error, retrying:", error);
+      scheduleNext(runBettingPhase, RECOVERY_DELAY_MS, "betting phase");
     }
+  };
 
-    await Promise.all(settlements);
+  const runDrawingPhase = async (): Promise<void> => {
+    if (stopped || !isLeader) return;
 
-    phaseTimer = setTimeout(runBettingPhase, RESULT_DURATION_MS);
+    try {
+      const phaseEndsAt = Date.now() + DRAWING_DURATION_MS;
+      await state.setPhase(1, phaseEndsAt);
+
+      io.emit("keno:drawing-start", { phaseEndsAt });
+
+      const drawn: number[] = [];
+      const numbers = drawNumbers();
+      let index = 0;
+      let ticking = false;
+
+      drawTimer = setInterval(() => {
+        if (ticking) return; // never overlap ticks
+        ticking = true;
+
+        (async () => {
+          if (stopped || !isLeader) {
+            if (drawTimer) clearInterval(drawTimer);
+            drawTimer = null;
+            return;
+          }
+
+          drawn.push(numbers[index]);
+          await state.setDrawn(drawn);
+          io.emit("keno:number-drawn", {
+            number: numbers[index],
+            drawn: [...drawn],
+          });
+
+          index++;
+
+          if (index >= DRAW_COUNT) {
+            if (drawTimer) clearInterval(drawTimer);
+            drawTimer = null;
+            scheduleNext(
+              () => runResultPhase(drawn),
+              DRAWING_BUFFER_MS,
+              "result phase",
+            );
+          }
+        })()
+          .catch((error) => {
+            console.error("[keno] draw tick error:", error);
+          })
+          .finally(() => {
+            ticking = false;
+          });
+      }, DRAW_INTERVAL_MS);
+    } catch (error) {
+      console.error("[keno] drawing phase error, restarting round:", error);
+      if (drawTimer) clearInterval(drawTimer);
+      drawTimer = null;
+      scheduleNext(runBettingPhase, RECOVERY_DELAY_MS, "betting phase");
+    }
+  };
+
+  const runResultPhase = async (drawn: number[]): Promise<void> => {
+    if (stopped || !isLeader) return;
+
+    try {
+      const phaseEndsAt = Date.now() + RESULT_DURATION_MS;
+      await state.setPhase(2, phaseEndsAt);
+
+      const roundId = (await state.getState()).roundId;
+
+      io.emit("keno:result", { drawn, roundId, phaseEndsAt });
+
+      const settlements: Promise<void>[] = [];
+      for await (const entry of state.iterateAllEntries()) {
+        settlements.push(settleEntry(entry, drawn, roundId));
+      }
+      await Promise.all(settlements);
+    } catch (error) {
+      console.error("[keno] result phase error:", error);
+    } finally {
+      // Always keep the game loop alive, even if settlement blew up.
+      scheduleNext(runBettingPhase, RESULT_DURATION_MS, "betting phase");
+    }
   };
 
   const settleEntry = async (
     entry: KenoEntry,
     drawn: number[],
     roundId: string | null,
-  ) => {
-    const { hits, multiplier, payout } = computeHitsAndPayout(
-      entry.numbers,
-      drawn,
-      entry.amount,
-    );
-
+  ): Promise<void> => {
     try {
+      const { hits, multiplier, payout } = computeHitsAndPayout(
+        entry.numbers,
+        drawn,
+        entry.amount,
+      );
       const isWin = payout > 0;
 
-      // Insert the ledger row FIRST. The unique constraint on
-      // reference_id (keno_<roundId>_<userId>_<type>) makes this our
-      // idempotency lock: if it fails because the row already exists,
-      // this exact settlement already happened and we must not move
-      // any wallet balance again.
+      // Ledger row first: the unique reference_id is our idempotency lock.
       const inserted = await recordKenoTransaction({
         userId: entry.userId,
         type: isWin ? "win" : "lose",
@@ -404,9 +449,7 @@ const kenoGame = (io: Server) => {
         picks: entry.numbers.length,
       });
 
-      if (!inserted) {
-        return; // already settled elsewhere -- do nothing further
-      }
+      if (!inserted) return;
 
       if (isWin) {
         await walletService.settleCrashWin(entry.userId, payout, entry.amount);
@@ -414,10 +457,12 @@ const kenoGame = (io: Server) => {
         await walletService.consumeLockedBalance(entry.userId, entry.amount);
       }
 
-      await supabase.rpc("record_daily_activity", {
-        p_user_id: entry.userId,
-        p_activity_type: "played",
-      });
+      fireAndForget("record_daily_activity", () =>
+        supabase.rpc("record_daily_activity", {
+          p_user_id: entry.userId,
+          p_activity_type: "played",
+        }),
+      );
 
       const wallet = await walletService.getWallet(entry.userId);
 
@@ -429,24 +474,37 @@ const kenoGame = (io: Server) => {
       });
       io.to(entry.userId).emit("keno:wallet", wallet);
     } catch (error) {
-      console.error("Keno settlement error:", entry.userId, error);
+      console.error("[keno] settlement error:", entry.userId, error);
     }
   };
 
+  // ==========================================================
+  // SOCKET HANDLERS
+  // ==========================================================
+
   const registerSocket = (socket: CustomSocket) => {
-    const userId = socket.user.userId;
+    const userId = socket.user?.userId;
 
-    socket.join(userId);
-    sendState(socket);
+    if (userId) socket.join(userId);
+    void sendState(socket);
 
-    socket.on("keno:requestState", () => sendState(socket));
+    socket.on("keno:requestState", () => {
+      void sendState(socket);
+    });
 
     socket.on(
       "keno:bet",
       async (payload: unknown, callback?: (result: any) => void) => {
         const reply = (result: any) => {
-          if (typeof callback === "function") callback(result);
+          try {
+            if (typeof callback === "function") callback(result);
+          } catch (err) {
+            console.error("[keno] bet callback error:", err);
+          }
         };
+
+        let locked = false;
+        let claimed = false;
 
         try {
           if (!userId) return reply({ error: "You must be logged in" });
@@ -481,17 +539,19 @@ const kenoGame = (io: Server) => {
             });
           }
 
-          const locked = await walletService.lockandchcekBalance(
+          const lockedOk = await walletService.lockandchcekBalance(
             userId,
             amount,
           );
-          if (!locked) return reply({ error: "Insufficient funds" });
+          if (!lockedOk) return reply({ error: "Insufficient funds" });
+          locked = true;
 
           const entry: KenoEntry = { userId, numbers, amount };
           const claim = await state.claimBet(entry);
 
           if (!claim.ok) {
             await walletService.unlockBalance(userId);
+            locked = false;
             return reply({
               error:
                 claim.error === "PHASE_CLOSED"
@@ -499,18 +559,41 @@ const kenoGame = (io: Server) => {
                   : "You already have a bet this round",
             });
           }
+          claimed = true; // bet is now live; never unlock past this point
 
-          void wageringService.recordWager(
-            userId,
-            amount,
-            "Keno",
-            (await state.getState()).roundId,
+          const roundId = (await state.getState()).roundId;
+          fireAndForget("recordWager", () =>
+            wageringService.recordWager(userId, amount, "Keno", roundId),
           );
-          void pointsService.addGameplayPoints(userId, amount);
+          fireAndForget("addGameplayPoints", () =>
+            pointsService.addGameplayPoints(userId, amount),
+          );
 
-          const wallet = await walletService.getWallet(userId);
-          reply({ ok: true, numbers, amount, wallet });
-      
+          let wallet: unknown = null;
+          try {
+            wallet = await walletService.getWallet(userId);
+          } catch (err) {
+            console.error("[keno] getWallet after bet failed:", err);
+          }
+
+          return reply({ ok: true, numbers, amount, wallet });
+        } catch (error) {
+          console.error("[keno] bet error:", userId, error);
+
+          // Bet failed before it was registered: give the money back.
+          if (locked && !claimed && userId) {
+            try {
+              await walletService.unlockBalance(userId);
+            } catch (unlockErr) {
+              console.error(
+                "[keno] unlock after failed bet failed:",
+                unlockErr,
+              );
+            }
+          }
+
+          reply({ error: "Something went wrong, please try again" });
+        }
       },
     );
   };
@@ -523,32 +606,42 @@ const kenoGame = (io: Server) => {
     isLeader = true;
     console.log(`[keno] instance ${INSTANCE_ID} is now the round leader`);
 
-    leaderRenewTimer = setInterval(async () => {
-      const renewed = await state.renewLeadership(INSTANCE_ID, LEADER_TTL_MS);
-      if (!renewed) {
-        console.warn(`[keno] instance ${INSTANCE_ID} lost leadership`);
-        isLeader = false;
-        if (leaderRenewTimer) clearInterval(leaderRenewTimer);
-        leaderRenewTimer = null;
-        if (phaseTimer) clearTimeout(phaseTimer);
-        if (drawTimer) clearInterval(drawTimer);
-      }
+    leaderRenewTimer = setInterval(() => {
+      state
+        .renewLeadership(INSTANCE_ID, LEADER_TTL_MS)
+        .then((renewed) => {
+          if (!renewed) {
+            console.warn(`[keno] instance ${INSTANCE_ID} lost leadership`);
+            isLeader = false;
+            if (leaderRenewTimer) clearInterval(leaderRenewTimer);
+            leaderRenewTimer = null;
+            if (phaseTimer) clearTimeout(phaseTimer);
+            if (drawTimer) clearInterval(drawTimer);
+          }
+        })
+        .catch((err) => console.error("[keno] renewLeadership error:", err));
     }, LEADER_RENEW_MS);
 
     await runBettingPhase();
   };
 
   const pollForLeadership = async () => {
-    if (stopped || isLeader) return;
-    const acquired = await state.tryAcquireLeadership(
-      INSTANCE_ID,
-      LEADER_TTL_MS,
-    );
-    if (acquired) await becomeLeader();
+    try {
+      if (stopped || isLeader) return;
+      const acquired = await state.tryAcquireLeadership(
+        INSTANCE_ID,
+        LEADER_TTL_MS,
+      );
+      if (acquired) await becomeLeader();
+    } catch (error) {
+      console.error("[keno] pollForLeadership error:", error);
+    }
   };
 
-  leaderAcquireTimer = setInterval(pollForLeadership, LEADER_RENEW_MS);
-  pollForLeadership();
+  leaderAcquireTimer = setInterval(() => {
+    void pollForLeadership();
+  }, LEADER_RENEW_MS);
+  void pollForLeadership();
 
   const stop = async () => {
     stopped = true;
@@ -556,7 +649,11 @@ const kenoGame = (io: Server) => {
     if (drawTimer) clearInterval(drawTimer);
     if (leaderRenewTimer) clearInterval(leaderRenewTimer);
     if (leaderAcquireTimer) clearInterval(leaderAcquireTimer);
-    if (isLeader) await state.releaseLeadership(INSTANCE_ID);
+    try {
+      if (isLeader) await state.releaseLeadership(INSTANCE_ID);
+    } catch (error) {
+      console.error("[keno] releaseLeadership error:", error);
+    }
   };
 
   return { registerSocket, stop };

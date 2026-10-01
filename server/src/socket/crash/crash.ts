@@ -429,8 +429,7 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
           p_activity_type: "played",
         }),
       ]);
-      await pointsService
-        .addGameplayPoints(userId, betAmount)
+      await pointsService.addGameplayPoints(userId, betAmount);
 
       await state.finalizeCashout(playerId, userId, multiplier);
 
@@ -768,8 +767,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
 
   const becomeLeader = async () => {
     isLeader = true;
-    console.log(`[crash] instance ${INSTANCE_ID} is now the round leader`);
-
     leaderRenewTimer = setInterval(async () => {
       const renewed = await state.renewLeadership(INSTANCE_ID, LEADER_TTL_MS);
       if (!renewed) {

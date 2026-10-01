@@ -64,7 +64,6 @@ export default function initSocket(io: Server) {
     "connection",
     safeConnection(async (socket: Socket) => {
       const s = socket as CustomSocket;
-      console.log("user connected:", s.user.userId);
 
       try {
         await redis.set(presenceKey(s.user.userId), s.id);

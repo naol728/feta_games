@@ -642,7 +642,7 @@ export const deposit = catchAsync(
         //
         // ----------------------------------------------------
 
-        const bonusWageringMultiplier = 10;
+        const bonusWageringMultiplier = 20;
 
         couponWageringRequirement =
           couponBonus *

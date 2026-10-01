@@ -29,13 +29,13 @@ const games = [
     underdevelopment: false,
   },
 
-  {
-    name: "Mines",
-    path: "/mines",
-    image: "https://vfair.games/games/mines.webp",
-    isNew: false,
-    underdevelopment: false,
-  },
+  // {
+  //   name: "Mines",
+  //   path: "/mines",
+  //   image: "https://vfair.games/games/mines.webp",
+  //   isNew: false,
+  //   underdevelopment: false,
+  // },
   {
     name: "Plinko",
     path: "/plinko",

@@ -23,7 +23,6 @@ export const pointsService = {
 
     if (error) {
       console.error("Failed to add gameplay points:", error);
-      throw error;
     }
 
     return data?.[0] ?? null;

@@ -604,7 +604,6 @@ const kenoGame = (io: Server) => {
 
   const becomeLeader = async () => {
     isLeader = true;
-    console.log(`[keno] instance ${INSTANCE_ID} is now the round leader`);
 
     leaderRenewTimer = setInterval(() => {
       state

@@ -68,7 +68,7 @@ export default function TopBar({
   }, [amount]);
 
   const isValid =
-    numericAmount >= 50 &&
+    numericAmount >= 10 &&
     numericAmount <= 5000;
 
   const { mutate, isPending } = useMutation({
@@ -131,7 +131,7 @@ export default function TopBar({
     if (
       Number.isFinite(number) &&
       number >= 0 &&
-      number <= 5000
+      number <= 50000
     ) {
       setAmount(value);
     }
@@ -341,7 +341,7 @@ export default function TopBar({
                       </DrawerTitle>
 
                       <DrawerDescription className="mt-0.5 text-xs">
-                        Deposit between 50 and 50,000 ETB
+                        Deposit between 10 and 50,000 ETB
                       </DrawerDescription>
                     </div>
 
@@ -438,7 +438,7 @@ export default function TopBar({
 
                   {amount && !isValid && (
                     <p className="text-center text-[11px] font-medium text-destructive">
-                      Amount must be between 50 and 50,000 ETB
+                      Amount must be between 10 and 50,000 ETB
                     </p>
                   )}
 

@@ -358,7 +358,7 @@ export const deposit = catchAsync(
       await wageringService.addDepositRequirement(
         trx.user_id,
         trx.amount,
-        1,
+        3,
         trx.id,
       );
     } catch (error) {

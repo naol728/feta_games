@@ -4,20 +4,21 @@ import { Server, Socket } from "socket.io";
 import { randomUUID } from "crypto";
 
 import { supabase } from "../../config/supabase";
-import { wageringService } from "../../services/waggering.service";
-import { pointsService } from "../../services/points.service";
-import { walletService } from "../../services/wallet.service";
-
+import { lockBet, settleOne } from "../../services/game-settlement.service";
 // ============================================================
-// WHY THIS IS A SOCKET NOW, NOT AN HTTP ROUTE
+// FLOW
 // ============================================================
-// Unlike crash, a slot spin has no shared/round state between players --
-// each spin is a fully self-contained request. So there's no Redis here
-// and no cross-instance coordination needed: the atomic `settle_slot_spin`
-// Postgres RPC is still what actually checks-and-deducts balance, exactly
-// as it did behind the REST endpoint. Moving it onto the socket just
-// means the client doesn't need a second transport alongside the crash
-// game, and you get a request/ack round trip without HTTP overhead.
+// Each spin is self-contained (no shared round state, no Redis).
+//   1. lockBet      -> checks balance, moves bet into locked_balance
+//   2. generateGrid -> roll ONLY after the bet is locked
+//   3. settleOne    -> settle_game RPC, atomically:
+//        - writes the transactions ledger row (idempotency lock)
+//        - updates wagering progress
+//        - releases locked bet, credits payout (balance or withdrawable)
+//        - adds gameplay points + daily activity
+//      and returns the fresh wallet.
+// So wagering / points / transactions / daily activity are NOT done here
+// anymore. Only game_history is still written from this file.
 // ============================================================
 
 interface JwtPayload {
@@ -70,70 +71,15 @@ const WIN_LINES = [
 ] as const;
 
 // ============================================================
-// RTP-CALIBRATED SYMBOL WEIGHTS -- TARGET: 95% RTP
-// ============================================================
-//
-// The old code picked each of the 9 cells uniformly at random across
-// 7 symbols. That's not "95% RTP" or any other chosen number -- it's
-// just whatever expected value happens to fall out of the payout table
-// with equal odds, and nobody had actually calculated what that was.
-//
-// To hit a real, chosen RTP you need to control the probability of
-// each symbol landing, not just its payout. Here's how these weights
-// were derived (and you can re-derive/re-tune them the same way if the
-// payout table ever changes):
-//
-// 1. Expectation is linear: E[total payout] = sum of E[payout per line]
-//    across the 5 paylines, REGARDLESS of how much those lines overlap
-//    or correlate (they share cells, e.g. all 5 lines touch the center
-//    cell). So solving for one line's expected value and multiplying
-//    by 5 gives the exact overall RTP -- no need to enumerate the full
-//    3^9-ish joint outcome space.
-//
-// 2. For one line of 3 i.i.d. cells with symbol probabilities p_s
-//    (s over the 6 non-wild symbols) and p_wild, the winning events are
-//    mutually exclusive:
-//      - all 3 = s (non-wild):        p_s^3            * mult[s]
-//      - all 3 = wild:                p_wild^3         * 5
-//      - exactly 2 wild + 1 s:        3*p_wild^2*p_s   * mult[s]
-//      - exactly 1 wild + 2 s:        3*p_wild*p_s^2   * mult[s]
-//    Sum those over all 6 non-wild symbols plus the all-wild case to
-//    get E[line]. We want 5 * E[line] = 0.95, i.e. E[line] = 0.19.
-//
-// 3. Non-wild symbols were given relative frequencies inversely tied
-//    to their payout (cheaper symbols land more often -- standard
-//    reel-strip design: red 30 : blue 24 : green 18 : yin_yang 12 :
-//    hakkero 8 : yellow 5), then p_wild was solved numerically
-//    (bisection on the equation above) so the total hits exactly 0.19
-//    per line. Solved value: p_wild ≈ 0.13428.
-//
-// 4. Verified independently with a 3,000,000-spin Monte Carlo
-//    simulation of this exact weight table plus the exact win-line
-//    logic below: simulated RTP came back at 95.03%, matching the
-//    analytic solve. That simulation is not shipped here (it's a
-//    one-time derivation step) -- these weights are the output of it.
-//
-// Values are basis points out of 1,000,000 for integer-only arithmetic
-// (floating point weights would drift slightly on re-normalization).
-// ============================================================
 // RTP-CALIBRATED SYMBOL WEIGHTS -- TARGET: 75% RTP
 // ============================================================
-//
-// Same derivation as before, with the target changed:
-// 5 paylines * E[line] = 0.75, so E[line] = 0.15.
-//
-// For one line of 3 i.i.d. cells (p_s for the 6 non-wild symbols, p_wild):
+// 5 paylines * E[line] = 0.75, so E[line] = 0.15, where for one line of
+// 3 i.i.d. cells (p_s for the 6 non-wild symbols, p_wild):
 //   E[line] = sum_s mult[s] * (p_s^3 + 3*p_wild^2*p_s + 3*p_wild*p_s^2)
 //             + 5 * p_wild^3
-//
-// Non-wild relative frequencies are unchanged
-// (red 30 : blue 24 : green 18 : yin_yang 12 : hakkero 8 : yellow 5).
-// p_wild was solved by bisection so the total is exactly 0.15 per line:
-//   p_wild ≈ 0.10202 (was 0.13428 for 95%).
-//
-// Exact RTP with the rounded weights below: 75.00%.
-// A 300,000-spin Monte Carlo of this table gave 74.79% (within sampling noise).
-//
+// Non-wild relative frequencies: red 30 : blue 24 : green 18 :
+// yin_yang 12 : hakkero 8 : yellow 5. p_wild solved by bisection
+// (~0.10202). Exact RTP with these weights: 75.00%.
 // Values are basis points out of 1,000,000.
 const SYMBOL_WEIGHTS_BP: Record<SymbolName, number> = {
   wild: 73_654,
@@ -144,9 +90,6 @@ const SYMBOL_WEIGHTS_BP: Record<SymbolName, number> = {
   hakkero: 76_400,
   yellow: 47_750,
 };
-// sum === 1_000_000 (checked at module load)
-// sum === 1_000_000 -- verified below at module load, fails fast if
-// someone edits one weight without updating the others.
 
 const CUMULATIVE_WEIGHTS: { symbol: SymbolName; upperBound: number }[] =
   (() => {
@@ -173,7 +116,6 @@ function pickWeightedSymbol(): SymbolName {
     if (roll <= upperBound) return symbol;
   }
 
-  // Unreachable given the sum check above; satisfies the type checker.
   return CUMULATIVE_WEIGHTS[CUMULATIVE_WEIGHTS.length - 1].symbol;
 }
 
@@ -182,8 +124,11 @@ function generateGrid(): SymbolName[] {
 }
 
 // ============================================================
-// CALCULATE WINS (unchanged from the original controller)
+// CALCULATE WINS
 // ============================================================
+
+// Avoids float noise like 3.3000000000000003 reaching the wallet.
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 function calculateWins(grid: SymbolName[], betAmount: number) {
   const wins: SlotWin[] = [];
@@ -210,7 +155,7 @@ function calculateWins(grid: SymbolName[], betAmount: number) {
     if (!winningSymbol) continue;
 
     const multiplier = PAYOUTS[winningSymbol];
-    const payout = betAmount * multiplier;
+    const payout = round2(betAmount * multiplier);
 
     totalPayout += payout;
 
@@ -222,54 +167,23 @@ function calculateWins(grid: SymbolName[], betAmount: number) {
     });
   }
 
-  return { wins, totalPayout };
+  return { wins, totalPayout: round2(totalPayout) };
 }
 
 // ============================================================
-// BACKGROUND RECORDING (unchanged logic, reuses your existing services)
+// BACKGROUND RECORDING (history only; everything else is in settle_game)
 // ============================================================
-
-const recordSlotTransaction = async ({
-  userId,
-  type,
-  amount,
-  betAmount,
-}: {
-  userId: string;
-  type: "win" | "lose";
-  amount: number;
-  betAmount: number;
-}) => {
-  try {
-    const { error } = await supabase.from("transactions").insert({
-      user_id: userId,
-      type,
-      amount,
-      status: "completed",
-      reference_id: `slots_${userId}_${randomUUID()}`,
-      metadata: {
-        game: "slots",
-        bet_amount: betAmount,
-        payout: type === "win" ? amount : 0,
-      },
-    });
-
-    if (error) {
-      console.error("Failed to record slot transaction:", error);
-    }
-  } catch (error) {
-    console.error("Slot transaction error:", error);
-  }
-};
 
 const saveSlotHistory = async ({
   userId,
+  roundId,
   betAmount,
   gridState,
   wins,
   totalPayout,
 }: {
   userId: string;
+  roundId: string;
   betAmount: number;
   gridState: SymbolName[];
   wins: SlotWin[];
@@ -283,6 +197,8 @@ const saveSlotHistory = async ({
       grid_state: gridState,
       spin_result: wins,
       total_payout: totalPayout,
+      // Uncomment if game_history has a round/reference column:
+      // round_id: roundId,
     });
 
     if (error) {
@@ -293,53 +209,15 @@ const saveSlotHistory = async ({
   }
 };
 
-const recordSlotActivity = async ({
-  userId,
-  betAmount,
-  gridState,
-  wins,
-  totalPayout,
-}: {
-  userId: string;
-  betAmount: number;
-  gridState: SymbolName[];
-  wins: SlotWin[];
-  totalPayout: number;
-}) => {
-  await Promise.allSettled([
-    saveSlotHistory({ userId, betAmount, gridState, wins, totalPayout }),
-    recordSlotTransaction({
-      userId,
-      type: totalPayout > 0 ? "win" : "lose",
-      amount: totalPayout > 0 ? totalPayout : betAmount,
-      betAmount,
-    }),
-    wageringService.recordWager(userId, betAmount, "Slot"),
-    pointsService.addGameplayPoints(userId, betAmount),
-    supabase.rpc("record_daily_activity", {
-      p_user_id: userId,
-      p_activity_type: "played",
-    }),
-  ]);
-};
-
 // ============================================================
 // SOCKET HANDLER
 // ============================================================
-// No singleton/shared game object needed (unlike crash) -- every spin
-// is independent, so this just wires a listener directly onto each
-// connecting socket.
 
 export default function Slots(io: Server, socket: CustomSocket) {
   const userId = socket.user.userId;
 
-  // Per-socket-connection guard against a client accidentally double-
-  // firing (double click, re-emit on reconnect race, etc). This is
-  // NOT a correctness mechanism for the wallet -- settle_slot_spin
-  // atomically checks real balance in Postgres regardless, so two
-  // genuinely separate spins (e.g. from two tabs) are just two valid
-  // spins, not a race to exploit. This purely avoids doing duplicate
-  // work for the same accidental double-emit.
+  // Guards against accidental double-emits on this connection. Wallet
+  // correctness is enforced in Postgres (lock_bet / settle_game).
   let spinInFlight = false;
 
   socket.on(
@@ -379,32 +257,22 @@ export default function Slots(io: Server, socket: CustomSocket) {
 
       spinInFlight = true;
 
+      // Unique per spin, created before any DB call so retries stay
+      // idempotent on (game, round, user).
+      const roundId = randomUUID();
+
       try {
-        const gridState = generateGrid();
-        const { wins, totalPayout } = calculateWins(gridState, betAmount);
-
-        // ================================================
-        // SETTLE WALLET -- same atomic RPC as before. It must:
-        // 1. Check balance, 2. deduct bet, 3. add payout,
-        // 4. return the resulting wallet, all atomically.
-        // ================================================
-
-        const { data: settledWallet, error: settleError } = await supabase.rpc(
-          "settle_slot_spin",
-          {
-            user_id_input: userId,
-            bet_amount_input: betAmount,
-            payout_input: totalPayout,
-          },
-        );
-
-        if (settleError) {
-          console.error("Slot wallet settlement error:", settleError);
-
-          const insufficient = settleError.message
-            ?.toLowerCase()
-            .includes("insufficient funds");
-
+        // 1. Lock the bet (checks balance + moves it to locked_balance)
+        try {
+          const locked = await lockBet(userId, betAmount);
+          if (!locked) {
+            return reply({ success: false, message: "Failed to process spin" });
+          }
+        } catch (lockError: any) {
+          const insufficient = String(lockError?.message ?? "")
+            .toLowerCase()
+            .includes("insufficient");
+          if (!insufficient) console.error("Slot lockBet error:", lockError);
           return reply({
             success: false,
             message: insufficient
@@ -413,22 +281,40 @@ export default function Slots(io: Server, socket: CustomSocket) {
           });
         }
 
-        if (!settledWallet || settledWallet.length === 0) {
-          console.error("settle_slot_spin returned no wallet");
-          return reply({ success: false, message: "Failed to settle wallet" });
+        // 2. Roll only after the bet is safely locked
+        const gridState = generateGrid();
+        const { wins, totalPayout } = calculateWins(gridState, betAmount);
+
+        // 3. Settle: payout = TOTAL payout (0 = loss), not profit
+        const result = await settleOne("slots", roundId, {
+          userId,
+          bet: betAmount,
+          payout: totalPayout,
+          metadata: { bet_amount: betAmount, grid_state: gridState, wins },
+        });
+
+        if (result.status === "duplicate") {
+          // Same roundId settled twice; already applied once.
+          return reply({ success: false, message: "Spin already settled" });
         }
 
-        const finalWallet = settledWallet[0];
-        const newBalance = Number(finalWallet.balance ?? 0);
-        const newWithdrawableBalance = Number(
-          finalWallet.withdrawable_balance ?? 0,
-        );
+        if (result.status !== "ok" || !result.wallet) {
+          // Bet stays safely locked; roundId lets you re-run settlement.
+          console.error(
+            `[slots] settlement ${result.status} for round ${roundId} user ${userId}:`,
+            result.message,
+          );
+          return reply({ success: false, message: "Failed to settle spin" });
+        }
 
-        const wallet = await walletService.getWallet(userId);
+        const wallet = result.wallet;
+        const newBalance = Number(wallet.balance ?? 0);
+        const newWithdrawableBalance = Number(wallet.withdrawable_balance ?? 0);
 
         reply({
           success: true,
           userId,
+          roundId,
           balance: newBalance,
           walletBalance: newBalance,
           withdrawable_balance: newWithdrawableBalance,
@@ -441,10 +327,10 @@ export default function Slots(io: Server, socket: CustomSocket) {
           processingTime: Date.now() - startTime,
         });
 
-        // Fire-and-forget: history/transactions/wagering/points don't
-        // determine whether the spin itself succeeded.
-        void recordSlotActivity({
+        // Fire-and-forget: history only.
+        void saveSlotHistory({
           userId,
+          roundId,
           betAmount,
           gridState,
           wins,

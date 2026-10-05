@@ -4,9 +4,11 @@ import { randomUUID } from "crypto";
 import { Server, Socket } from "socket.io";
 
 import { walletService } from "../../services/wallet.service";
-import { supabase } from "../../config/supabase";
-import { wageringService } from "../../services/waggering.service";
-import { pointsService } from "../../services/points.service";
+import {
+  lockBet,
+  settleGameBatch,
+  SettleEntry,
+} from "../../services/game-settlement.service";
 
 interface JwtPayload {
   userId: string;
@@ -27,6 +29,7 @@ interface KenoEntry {
 // BOARD / DRAW CONFIG
 // ============================================================
 
+const GAME_NAME = "keno";
 const BOARD_SIZE = 40; // numbers 1..40
 const DRAW_COUNT = 10; // numbers drawn per round
 const DRAW_INTERVAL_MS = 200; // matches the original reveal pacing
@@ -46,18 +49,11 @@ const DRAWING_DURATION_MS = DRAW_COUNT * DRAW_INTERVAL_MS + DRAWING_BUFFER_MS;
 // IN-MEMORY STATE
 // ============================================================
 //
-// This replaces the previous Redis-backed ./states module. All round
-// state (phase, drawn numbers, per-user entries, leadership) now lives
-// in plain process memory instead of a shared external store.
-//
-// IMPORTANT: this means state is NOT shared across multiple server
-// instances/processes. Each process keeps its own independent Keno
-// clock and entry list. This is fine for a single-instance deployment,
-// but if you run more than one instance behind a load balancer,
-// players on different instances will be in different, unsynchronized
-// rounds. The leader-election plumbing below is left in place but is
-// now a no-op (a process is always its own leader), since there's no
-// longer any shared coordination point to elect a leader over.
+// All round state (phase, drawn numbers, per-user entries) lives in
+// plain process memory. It is NOT shared across multiple server
+// instances: run a single instance, or players on different instances
+// will be in different, unsynchronized rounds. The leader-election
+// plumbing below is a no-op kept for shape.
 
 type KenoPhase = 0 | 1 | 2; // 0 = betting, 1 = drawing, 2 = result
 
@@ -132,9 +128,6 @@ const state = {
     }
   },
 
-  // Leadership is meaningless with per-process in-memory state: a
-  // process only ever coordinates with itself, so it's always "the
-  // leader" of its own state.
   async tryAcquireLeadership(
     _instanceId: string,
     _ttlMs: number,
@@ -152,38 +145,13 @@ const state = {
 };
 
 // ============================================================
-// PAYTABLE -- SOLVED FOR 90% RTP
-// ============================================================
-//
-// Keno's payout depends on (numbers picked, numbers matched). The
-// probability of matching k out of n picks, when 10 numbers are drawn
-// out of 40, is the exact hypergeometric distribution:
-//
-//   P(k) = C(n,k) * C(40-n, 10-k) / C(40,10)
-//
-// For each pick count n, only matches at or above a threshold pay out
-// (threshold = ceil(n/2) -- you need roughly half your picks right
-// before it's worth anything), with the multiplier growing
-// quadratically above that threshold so a near-miss pays little and a
-// near-perfect match pays a lot. For each n, all the nonzero
-// multipliers were scaled by a single constant so that:
-//
-//   sum over k of P(k) * multiplier(k) == 0.90
-//
-// solved exactly (no simulation needed -- the distribution is exact
-// and tractable at this size), then rounded to cents. Realized RTP
-// after rounding is 89.90%-90.02% for every pick count -- see the
-// comment after each row.
-// ============================================================
-// PAYTABLE -- SOLVED FOR 75% RTP
+// PAYTABLE
 // ============================================================
 //
 // P(k hits | n picks) = C(n,k) * C(40-n, 10-k) / C(40,10)
 //
-// Only hits at or above a threshold pay. Multipliers grow gently
-// (~(k - threshold + 1)^1.5) above it, then are scaled by one constant
-// per row so sum(P(k) * multiplier(k)) = 0.75, rounded to cents.
-// Realized RTP after rounding is 74.97%-75.06% for every pick count.
+// Only hits at or above a threshold pay. The RTP noted on each row is
+// the realized return for that pick count.
 const PAYTABLE: Record<number, Record<number, number>> = {
   1: { 1: 2.4 }, // RTP 0.6000
   2: { 2: 10.4 }, // RTP 0.6000
@@ -226,51 +194,6 @@ function drawNumbers(): number[] {
 }
 
 // ============================================================
-// TRANSACTION RECORDING
-// ============================================================
-
-const recordKenoTransaction = async ({
-  userId,
-  type,
-  amount,
-  roundId,
-  hits,
-  picks,
-}: {
-  userId: string;
-  type: "win" | "lose";
-  amount: number;
-  roundId: string | null;
-  hits: number;
-  picks: number;
-}): Promise<boolean> => {
-  const { error } = await supabase.from("transactions").insert({
-    user_id: userId,
-    type,
-    amount,
-    status: "completed",
-    reference_id: `keno_${roundId ?? "unknown"}_${userId}_${type}`,
-    metadata: { game: "keno", round_id: roundId, hits, picks },
-  });
-
-  if (error) {
-    if (error.code === "23505") {
-      // Unique violation on reference_id -- this entry was already
-      // settled by a previous call. Not a real error; just tell the
-      // caller to skip the wallet mutation.
-      console.warn(
-        `[keno] duplicate settlement suppressed for ${userId} round ${roundId} (${type})`,
-      );
-      return false;
-    }
-    console.error("Failed to record keno transaction:", error);
-    return false; // fail closed: if we can't confirm the log wrote, don't touch the wallet
-  }
-
-  return true;
-};
-
-// ============================================================
 // GAME ENGINE
 // ============================================================
 
@@ -286,19 +209,6 @@ const kenoGame = (io: Server) => {
   let leaderAcquireTimer: NodeJS.Timeout | null = null;
   let phaseTimer: NodeJS.Timeout | null = null;
   let drawTimer: NodeJS.Timeout | null = null;
-
-  // ==========================================================
-  // SAFETY HELPERS -- nothing async may ever reject unhandled
-  // ==========================================================
-
-  const fireAndForget = (
-    label: string,
-    fn: () => Promise<unknown> | unknown,
-  ) => {
-    Promise.resolve()
-      .then(fn)
-      .catch((err) => console.error(`[keno] ${label} failed:`, err));
-  };
 
   const scheduleNext = (fn: () => Promise<void>, ms: number, label: string) => {
     if (stopped) return;
@@ -419,72 +329,55 @@ const kenoGame = (io: Server) => {
       const phaseEndsAt = Date.now() + RESULT_DURATION_MS;
       await state.setPhase(2, phaseEndsAt);
 
-      const roundId = (await state.getState()).roundId;
+      const roundId = (await state.getState()).roundId ?? "unknown";
 
       io.emit("keno:result", { drawn, roundId, phaseEndsAt });
 
-      const settlements: Promise<void>[] = [];
+      // Compute every outcome in memory first...
+      const outcomes = new Map<
+        string,
+        { hits: number; multiplier: number; payout: number }
+      >();
+      const entries: SettleEntry[] = [];
+
       for await (const entry of state.iterateAllEntries()) {
-        settlements.push(settleEntry(entry, drawn, roundId));
+        const outcome = computeHitsAndPayout(
+          entry.numbers,
+          drawn,
+          entry.amount,
+        );
+        outcomes.set(entry.userId, outcome);
+        entries.push({
+          userId: entry.userId,
+          bet: entry.amount,
+          payout: outcome.payout,
+          metadata: { hits: outcome.hits, picks: entry.numbers.length },
+        });
       }
-      await Promise.all(settlements);
+
+      if (entries.length === 0) return;
+
+      // ...then settle the whole round in a few batched DB calls.
+      const results = await settleGameBatch(GAME_NAME, roundId, entries);
+
+      for (const res of results) {
+        if (res.status !== "ok" || !res.wallet) continue; // duplicate/error: money stays safe, see logs
+        const outcome = outcomes.get(res.user_id);
+        if (!outcome) continue;
+
+        io.to(res.user_id).emit("keno:my-result", {
+          hits: outcome.hits,
+          multiplier: outcome.multiplier,
+          payout: outcome.payout,
+          wallet: res.wallet,
+        });
+        io.to(res.user_id).emit("keno:wallet", res.wallet);
+      }
     } catch (error) {
       console.error("[keno] result phase error:", error);
     } finally {
       // Always keep the game loop alive, even if settlement blew up.
       scheduleNext(runBettingPhase, RESULT_DURATION_MS, "betting phase");
-    }
-  };
-
-  const settleEntry = async (
-    entry: KenoEntry,
-    drawn: number[],
-    roundId: string | null,
-  ): Promise<void> => {
-    try {
-      const { hits, multiplier, payout } = computeHitsAndPayout(
-        entry.numbers,
-        drawn,
-        entry.amount,
-      );
-      const isWin = payout > 0;
-
-      // Ledger row first: the unique reference_id is our idempotency lock.
-      const inserted = await recordKenoTransaction({
-        userId: entry.userId,
-        type: isWin ? "win" : "lose",
-        amount: isWin ? payout : entry.amount,
-        roundId,
-        hits,
-        picks: entry.numbers.length,
-      });
-
-      if (!inserted) return;
-
-      if (isWin) {
-        await walletService.settleCrashWin(entry.userId, payout, entry.amount);
-      } else {
-        await walletService.consumeLockedBalance(entry.userId, entry.amount);
-      }
-
-      fireAndForget("record_daily_activity", () =>
-        supabase.rpc("record_daily_activity", {
-          p_user_id: entry.userId,
-          p_activity_type: "played",
-        }),
-      );
-
-      const wallet = await walletService.getWallet(entry.userId);
-
-      io.to(entry.userId).emit("keno:my-result", {
-        hits,
-        multiplier,
-        payout,
-        wallet,
-      });
-      io.to(entry.userId).emit("keno:wallet", wallet);
-    } catch (error) {
-      console.error("[keno] settlement error:", entry.userId, error);
     }
   };
 
@@ -549,17 +442,26 @@ const kenoGame = (io: Server) => {
             });
           }
 
-          const lockedOk = await walletService.lockandchcekBalance(
-            userId,
-            amount,
-          );
-          if (!lockedOk) return reply({ error: "Insufficient funds" });
+          // Cheap in-memory pre-checks first, so a closed round or a
+          // duplicate bet never costs a database write.
+          const snapshot = await state.getState();
+          if (snapshot.phase !== 0) {
+            return reply({ error: "Betting is closed" });
+          }
+          if (await state.getEntry(userId)) {
+            return reply({ error: "You already have a bet this round" });
+          }
+
+          // One DB call: lock funds and get the fresh wallet back.
+          const wallet = await lockBet(userId, amount);
+          if (!wallet) return reply({ error: "Insufficient funds" });
           locked = true;
 
           const entry: KenoEntry = { userId, numbers, amount };
           const claim = await state.claimBet(entry);
 
           if (!claim.ok) {
+            // Phase flipped or a racing duplicate slipped in during the await.
             await walletService.unlockBalance(userId);
             locked = false;
             return reply({
@@ -571,21 +473,8 @@ const kenoGame = (io: Server) => {
           }
           claimed = true; // bet is now live; never unlock past this point
 
-          const roundId = (await state.getState()).roundId;
-          fireAndForget("recordWager", () =>
-            wageringService.recordWager(userId, amount, "Keno", roundId),
-          );
-          fireAndForget("addGameplayPoints", () =>
-            pointsService.addGameplayPoints(userId, amount),
-          );
-
-          let wallet: unknown = null;
-          try {
-            wallet = await walletService.getWallet(userId);
-          } catch (err) {
-            console.error("[keno] getWallet after bet failed:", err);
-          }
-
+          // Wagering, points and daily activity are recorded by
+          // settle_game when the round ends.
           return reply({ ok: true, numbers, amount, wallet });
         } catch (error) {
           console.error("[keno] bet error:", userId, error);

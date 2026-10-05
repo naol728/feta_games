@@ -5,8 +5,12 @@ import { Server, Socket } from "socket.io";
 
 import { walletService } from "../../services/wallet.service";
 import { supabase } from "../../config/supabase";
-import { wageringService } from "../../services/waggering.service";
-import { pointsService } from "../../services/points.service";
+import {
+  lockBet,
+  settleGameBatch,
+  SettleEntry,
+  WalletSnapshot,
+} from "../../services/game-settlement.service";
 
 import {
   encodeSync,
@@ -20,30 +24,18 @@ import {
 } from "./Protocols";
 
 // ============================================================
-// NOTES -- IN-MEMORY STATE (no longer Redis-backed)
+// NOTES -- IN-MEMORY STATE
 // ============================================================
 //
-// This used to rely on Redis for two things: (1) sharing round state
-// across multiple Node processes, and (2) atomic Lua-script claims
-// (claimBet/claimCashout/popDueAutoCashouts) so two processes could
-// never both settle the same bet.
+// All round state lives in this process's memory, so this file must
+// run as a SINGLE Node process (no replicas, no PM2 cluster mode).
+// Atomicity of claim functions (claimBet/claimCashout/popDueAutoCashouts)
+// relies on JS single-threadedness: they must not `await` before
+// mutating state.
 //
-// With in-memory state, NEITHER of those guarantees hold across
-// processes anymore -- there is nothing shared to coordinate on. This
-// file must now run as a SINGLE Node process. Do not run this behind
-// multiple replicas/dynos or in PM2 cluster mode: every instance would
-// independently believe it's the round leader and run its own
-// separate round clock, and bets placed against one instance would be
-// invisible to the others.
-//
-// The atomicity that Lua scripts gave us across processes is replaced
-// here by plain JS single-threadedness: as long as claim functions
-// (claimBet, claimCashout, popDueAutoCashouts) don't `await` before
-// mutating in-memory state, two "concurrent" calls can't interleave
-// mid-mutation within one process. That's preserved below.
-//
-// Per-bet/per-cashout batching (~150ms flush) is still worthwhile even
-// single-process, since it's just reducing socket emit volume.
+// Money safety: every settlement goes through the settle_game RPC,
+// which is idempotent per (game, round, user). At most ONE outcome
+// (win or lose) can ever be committed for a player in a round.
 // ============================================================
 
 interface JwtPayload {
@@ -230,8 +222,6 @@ const state = {
     }
   },
 
-  // Leadership is meaningless with per-process in-memory state -- a
-  // single process only ever coordinates with itself.
   async tryAcquireLeadership(
     _instanceId: string,
     _ttlMs: number,
@@ -249,62 +239,17 @@ const state = {
 };
 
 // ============================================================
-// CONSTANTS
+// CONSTANTS / HELPERS
 // ============================================================
 
+const GAME_NAME = "crash";
 const INSTANCE_ID = randomUUID();
 const LEADER_TTL_MS = 8_000;
 const LEADER_RENEW_MS = 3_000;
 const BATCH_INTERVAL_MS = 150;
 const MAX_BATCH_SIZE = 1000; // flush early if a batch gets this big
 
-// ============================================================
-// TRANSACTION RECORDING
-// ============================================================
-//
-// Returns true only if this call actually inserted the row -- i.e.
-// this is the first time this entry+round+outcome has been settled.
-// The unique constraint on reference_id doubles as our idempotency
-// lock: callers must not touch the wallet unless this returns true.
-const recordCrashTransaction = async ({
-  userId,
-  type,
-  amount,
-  roundId,
-  multiplier,
-}: {
-  userId: string;
-  type: "win" | "lose";
-  amount: number;
-  roundId: string | null;
-  multiplier?: number;
-}): Promise<boolean> => {
-  const { error } = await supabase.from("transactions").insert({
-    user_id: userId,
-    type,
-    amount,
-    status: "completed",
-    reference_id: `crash_${roundId ?? "unknown"}_${userId}_${type}`,
-    metadata: {
-      game: "crash",
-      round_id: roundId,
-      ...(multiplier !== undefined ? { multiplier } : {}),
-    },
-  });
-
-  if (error) {
-    if (error.code === "23505") {
-      console.warn(
-        `[crash] duplicate settlement suppressed for ${userId} round ${roundId} (${type})`,
-      );
-      return false;
-    }
-    console.error("Failed to record crash transaction:", error);
-    return false; // fail closed: don't move wallet balance if we can't confirm the log wrote
-  }
-
-  return true;
-};
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 function generateCrashPoint(): number {
   const random = Math.random();
@@ -316,6 +261,35 @@ function generateCrashPoint(): number {
 
 function calculateMultiplierAt(elapsedMs: number): number {
   return Math.floor(Math.exp(elapsedMs / 10_000) * 100) / 100;
+}
+
+// Usernames never change mid-session, so read each one from the DB at
+// most once per process instead of once per bet.
+const usernameCache = new Map<string, string>();
+
+async function getUsername(userId: string): Promise<string | null> {
+  const cached = usernameCache.get(userId);
+  if (cached !== undefined) return cached;
+
+  const { data: user, error } = await supabase
+    .from("users")
+    .select("id, username, Fname")
+    .eq("id", userId)
+    .single();
+
+  if (error || !user) return null;
+
+  const username = user.username ?? user.Fname ?? "";
+  if (usernameCache.size > 50_000) usernameCache.clear();
+  usernameCache.set(userId, username);
+  return username;
+}
+
+interface ClaimedCashout {
+  playerId: number;
+  userId: string;
+  betAmount: number;
+  multiplier: number;
 }
 
 // ============================================================
@@ -334,6 +308,11 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
   let betBuffer: BetBatchEntry[] = [];
   let cashoutBuffer: CashoutBatchEntry[] = [];
   let batchFlushTimer: NodeJS.Timeout | null = null;
+
+  // Cashout settlements currently talking to the DB. The crash handler
+  // waits for these so a cashout that was clicked before the crash
+  // can't lose a race against its own loss settlement.
+  const pendingCashouts = new Set<Promise<unknown>>();
 
   const flushBatches = () => {
     if (betBuffer.length) {
@@ -375,77 +354,70 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
   };
 
   // ==========================================================
-  // CASHOUT (shared logic used by manual + auto-cashout paths)
+  // CASHOUT SETTLEMENT (manual + auto share this)
+  //
+  // Items must already be claimed (cashoutInProgress = true). All items
+  // go to the database in ONE batched call, so a multiplier tick that
+  // triggers 300 auto-cashouts costs one round trip, not 300.
+  // Returns payout + wallet for every cashout that actually landed.
   // ==========================================================
 
-  const settleCashout = async (
-    userId: string,
-    multiplier: number,
-    notify: (data: {
-      userId: string;
-      payout: number;
-      multiplier: number;
-      wallet: any;
-    }) => void,
-  ): Promise<{ ok: true; payout: number } | { ok: false }> => {
-    const claim = await state.claimCashout(userId);
+  const settleClaimed = (
+    items: ClaimedCashout[],
+  ): Promise<Map<string, { payout: number; wallet: WalletSnapshot }>> => {
+    const run = async () => {
+      const won = new Map<string, { payout: number; wallet: WalletSnapshot }>();
+      const roundId = (await state.getState()).roundId ?? "unknown";
 
-    if (!claim.ok) {
-      return { ok: false };
-    }
+      const entries: SettleEntry[] = items.map((item) => ({
+        userId: item.userId,
+        bet: item.betAmount,
+        payout: round2(item.betAmount * item.multiplier),
+        metadata: { multiplier: item.multiplier },
+      }));
 
-    const { playerId, betAmount } = claim;
+      const results = await settleGameBatch(GAME_NAME, roundId, entries);
+      const byUser = new Map(results.map((r) => [r.user_id, r]));
 
-    try {
-      const roundId = (await state.getState()).roundId;
-      const payout = betAmount * multiplier;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const res = byUser.get(item.userId);
 
-      // Insert the ledger row FIRST. Its unique reference_id acts as
-      // the idempotency lock -- only move the wallet if this is the
-      // first time this cashout has actually been recorded.
-      const inserted = await recordCrashTransaction({
-        userId,
-        type: "win",
-        amount: payout,
-        roundId,
-        multiplier,
-      });
-
-      if (!inserted) {
-        // Release the claim without ever touching the wallet. This
-        // leaves the player's payout as null, so if the round crashes
-        // they'll correctly fall through to the loss path instead --
-        // same fallback behavior as any other cashout failure.
-        await state.releaseCashoutLock(userId);
-        return { ok: false };
+        if (res?.status === "ok" && res.wallet) {
+          const payout = entries[i].payout;
+          await state.finalizeCashout(
+            item.playerId,
+            item.userId,
+            item.multiplier,
+          );
+          queueCashout({
+            playerId: item.playerId,
+            multiplier: item.multiplier,
+            payout,
+          });
+          io.to(item.userId).emit("crash:wallet", res.wallet);
+          won.set(item.userId, { payout, wallet: res.wallet });
+        } else {
+          // Nothing was committed (error) or this player was already
+          // settled (duplicate). Release the claim; if the round
+          // crashes they fall through to the loss path, which is a
+          // harmless no-op if they were in fact already settled.
+          await state.releaseCashoutLock(item.userId);
+        }
       }
 
-      await walletService.settleCrashWin(userId, payout, betAmount);
-      const wallet = await walletService.getWallet(userId);
+      return won;
+    };
 
-      await Promise.all([
-        supabase.rpc("record_daily_activity", {
-          p_user_id: userId,
-          p_activity_type: "played",
-        }),
-      ]);
-      await pointsService.addGameplayPoints(userId, betAmount);
+    const promise = run().catch(async (error) => {
+      console.error("[crash] cashout settlement error:", error);
+      for (const item of items) await state.releaseCashoutLock(item.userId);
+      return new Map<string, { payout: number; wallet: WalletSnapshot }>();
+    });
 
-      await state.finalizeCashout(playerId, userId, multiplier);
-
-      queueCashout({ playerId, multiplier, payout });
-      io.to(userId).emit("crash:wallet", wallet);
-      notify({ userId, payout, multiplier, wallet });
-
-      return { ok: true, payout };
-    } catch (error) {
-      console.error("Cashout error:", error);
-      // Release the pending lock without recording a payout, so the bet
-      // is still eligible to be settled as a loss if the round crashes,
-      // or retried by the user if the round is still running.
-      await state.releaseCashoutLock(userId);
-      return { ok: false };
-    }
+    pendingCashouts.add(promise);
+    void promise.finally(() => pendingCashouts.delete(promise));
+    return promise;
   };
 
   // ==========================================================
@@ -507,19 +479,25 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
       io.emit("crash:multiplier", encodeMultiplierTick(currentMultiplier));
 
       // ------------------------------------------------------
-      // AUTO CASHOUT -- pop everyone whose target has been hit
+      // AUTO CASHOUT -- everyone whose target was hit this tick
+      // is settled together in a single batched call
       // ------------------------------------------------------
 
       const duePlayerIds = await state.popDueAutoCashouts(currentMultiplier);
 
       if (duePlayerIds.length && currentMultiplier < snapshot.crashPoint!) {
-        await Promise.all(
-          duePlayerIds.map(async (playerId) => {
-            const player = await state.getPlayer(playerId);
-            if (!player) return;
-            await settleCashout(player.userId, currentMultiplier, () => {});
-          }),
-        );
+        const items: ClaimedCashout[] = [];
+        for (const playerId of duePlayerIds) {
+          const player = await state.getPlayer(playerId);
+          if (!player) continue;
+          items.push({
+            playerId,
+            userId: player.userId,
+            betAmount: player.betAmount,
+            multiplier: currentMultiplier,
+          });
+        }
+        if (items.length) await settleClaimed(items);
       }
 
       // ------------------------------------------------------
@@ -535,67 +513,47 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
 
         io.emit("crash:crash", encodeCrash(snapshot.crashPoint!));
 
+        // Let in-flight cashouts finish first so they can't be beaten
+        // to the ledger by their own loss settlement.
+        await Promise.allSettled([...pendingCashouts]);
+
         // ----------------------------------------------------
-        // LOSSES -- stream players in batches, never one giant
-        // in-memory array for 10k+ entries.
+        // LOSSES -- everyone without a payout, settled in a few
+        // batched calls instead of one call per player.
         // ----------------------------------------------------
 
-        const lossPromises: Promise<void>[] = [];
+        const roundId = snapshot.roundId ?? "unknown";
+        const lossEntries: SettleEntry[] = [];
 
         for await (const player of state.iterateAllPlayers()) {
           if (player.payout !== null) continue;
-
-          lossPromises.push(
-            (async () => {
-              try {
-                // Insert first -- same idempotency-lock pattern as the
-                // win path. If this player was somehow already
-                // recorded as a loss, skip the wallet mutation.
-                const inserted = await recordCrashTransaction({
-                  userId: player.userId,
-                  type: "lose",
-                  amount: player.betAmount,
-                  roundId: snapshot.roundId,
-                });
-
-                if (!inserted) return;
-
-                await walletService.consumeLockedBalance(
-                  player.userId,
-                  player.betAmount,
-                );
-
-                await Promise.all([
-                  supabase.rpc("record_daily_activity", {
-                    p_user_id: player.userId,
-                    p_activity_type: "played",
-                  }),
-                ]);
-                await pointsService
-                  .addGameplayPoints(player.userId, player.betAmount)
-                  .catch((error) => {
-                    console.error(
-                      "Failed to add crash gameplay points:",
-                      error,
-                    );
-                  });
-
-                const wallet = await walletService.getWallet(player.userId);
-                io.to(player.userId).emit("crash:wallet", wallet);
-              } catch (error) {
-                console.error(
-                  "Failed to settle losing bet:",
-                  player.userId,
-                  error,
-                );
-              }
-            })(),
-          );
+          lossEntries.push({
+            userId: player.userId,
+            bet: player.betAmount,
+            payout: 0,
+          });
         }
 
-        await Promise.all(lossPromises);
+        if (lossEntries.length) {
+          try {
+            const results = await settleGameBatch(
+              GAME_NAME,
+              roundId,
+              lossEntries,
+            );
+            for (const res of results) {
+              if (res.status === "ok" && res.wallet) {
+                io.to(res.user_id).emit("crash:wallet", res.wallet);
+              }
+            }
+          } catch (error) {
+            console.error("[crash] loss settlement error:", error);
+          }
+        }
 
-        openBetting();
+        openBetting().catch((error) =>
+          console.error("[crash] openBetting error:", error),
+        );
       }
     };
   };
@@ -646,36 +604,33 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
             return reply({ error: "Invalid auto cashout target" });
           }
 
-          const locked = await state.tryLockPendingBet(userId);
-          if (!locked)
+          const pendingLock = await state.tryLockPendingBet(userId);
+          if (!pendingLock)
             return reply({ error: "You already have a bet this round" });
 
+          let walletLocked = false;
+          let claimed = false;
+
           try {
-            const walletLocked = await walletService.lockandchcekBalance(
-              userId,
-              amount,
-            );
-            if (!walletLocked) return reply({ error: "Insufficient funds" });
-
-            await wageringService.recordWager(
-              userId,
-              amount,
-              "Crash",
-              (await state.getState()).roundId,
-            );
-
-            const { data: user, error } = await supabase
-              .from("users")
-              .select("id, username, Fname")
-              .eq("id", userId)
-              .single();
-
-            if (error || !user) {
-              await walletService.unlockBalance(userId);
-              return reply({ error: "User not found" });
+            // Free in-memory pre-checks: a closed round or a duplicate
+            // bet should never cost a database write.
+            const snapshot = await state.getState();
+            if (snapshot.phase !== 0) {
+              return reply({ error: "Betting is closed" });
+            }
+            if (mem.userToPlayer.has(userId)) {
+              return reply({ error: "You already have a bet this round" });
             }
 
-            const username = user.username ?? user.Fname ?? "";
+            // Cached after the first bet, so usually no DB read at all.
+            const username = await getUsername(userId);
+            if (username === null) return reply({ error: "User not found" });
+
+            // One DB call: lock funds and get the fresh wallet back.
+            const wallet = await lockBet(userId, amount);
+            if (!wallet) return reply({ error: "Insufficient funds" });
+            walletLocked = true;
+
             const claim = await state.claimBet({
               userId,
               username,
@@ -685,6 +640,7 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
 
             if (!claim.ok) {
               await walletService.unlockBalance(userId);
+              walletLocked = false;
               return reply({
                 error:
                   claim.error === "PHASE_CLOSED"
@@ -692,17 +648,30 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
                     : "You already have a bet this round",
               });
             }
+            claimed = true;
 
-            const wallet = await walletService.getWallet(userId);
-
+            // Wagering, points and daily activity are recorded by
+            // settle_game when this bet is settled.
             queueBet({ playerId: claim.playerId, amount });
 
             reply({
               ok: true,
-              roundId: (await state.getState()).roundId,
+              roundId: snapshot.roundId,
               playerId: claim.playerId,
               wallet,
             });
+          } catch (error) {
+            if (walletLocked && !claimed) {
+              try {
+                await walletService.unlockBalance(userId);
+              } catch (unlockErr) {
+                console.error(
+                  "[crash] unlock after failed bet failed:",
+                  unlockErr,
+                );
+              }
+            }
+            throw error;
           } finally {
             await state.unlockPendingBet(userId);
           }
@@ -734,26 +703,26 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
           return done({ error: "Too late" });
         }
 
-        let cashoutWallet: any = null;
-        let payoutMultiplier = currentMultiplier;
+        const claim = await state.claimCashout(userId);
+        if (!claim.ok) return done({ error: "Cashout failed" });
 
-        const result = await settleCashout(
-          userId,
-          currentMultiplier,
-          (data) => {
-            cashoutWallet = data.wallet;
+        const won = await settleClaimed([
+          {
+            playerId: claim.playerId,
+            userId,
+            betAmount: claim.betAmount,
+            multiplier: currentMultiplier,
           },
-        );
+        ]);
 
-        if (!result.ok) {
-          return done({ error: "Cashout failed" });
-        }
+        const result = won.get(userId);
+        if (!result) return done({ error: "Cashout failed" });
 
-        if (!cashoutWallet) {
-          cashoutWallet = await walletService.getWallet(userId);
-        }
-
-        done({ ok: true, multiplier: payoutMultiplier, wallet: cashoutWallet });
+        done({
+          ok: true,
+          multiplier: currentMultiplier,
+          wallet: result.wallet,
+        });
       } catch (error) {
         console.error("Crash cashout error:", error);
         done({ error: "Cashout failed" });

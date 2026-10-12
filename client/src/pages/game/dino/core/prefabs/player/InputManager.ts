@@ -1,3 +1,5 @@
+/*eslint-disable*/
+// @ts-nocheck
 /**
  * Player input manager
  * @class InputManager

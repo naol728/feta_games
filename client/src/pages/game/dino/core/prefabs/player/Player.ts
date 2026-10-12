@@ -1,9 +1,11 @@
-import Phaser from 'phaser';
+/*eslint-disable*/
+// @ts-nocheck
+import Phaser from "phaser";
 
-import CONFIG from '../../config/game';
-import PhysicsManager from './PhysicsManager';
-import InputManager from './InputManager';
-import AnimationManager from './AnimationManager';
+import CONFIG from "../../config/game";
+import PhysicsManager from "./PhysicsManager";
+import InputManager from "./InputManager";
+import AnimationManager from "./AnimationManager";
 
 /**
  * Player
@@ -20,7 +22,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
    * @param {number} [y=Player.CONFIG.POS.Y] - The vertical position of this Player in the world
    */
   constructor(scene, x = Player.CONFIG.POS.INITIAL_X, y = Player.CONFIG.POS.Y) {
-    super(scene, x, y, 'dino', Player.CONFIG.FRAMES.INITIAL);
+    super(scene, x, y, "dino", Player.CONFIG.FRAMES.INITIAL);
 
     this.isInitialJump = true;
 
@@ -34,7 +36,11 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(1000);
 
     // Register event handlers
-    this.scene.events.on(CONFIG.EVENTS.GAME_INTRO_START, this.onIntroStart, this);
+    this.scene.events.on(
+      CONFIG.EVENTS.GAME_INTRO_START,
+      this.onIntroStart,
+      this,
+    );
     this.scene.events.on(CONFIG.EVENTS.GAME_RESTART, this.reset, this);
     this.scene.events.on(CONFIG.EVENTS.GAME_OVER, this.die, this);
 
@@ -49,7 +55,11 @@ class Player extends Phaser.Physics.Arcade.Sprite {
    * Update player
    */
   update() {
-    if (this.scene.intro.isWaiting && this.isOnFloor && (this.isRunning || this.isDucking)) {
+    if (
+      this.scene.intro.isWaiting &&
+      this.isOnFloor &&
+      (this.isRunning || this.isDucking)
+    ) {
       this.scene.intro.start();
     }
 

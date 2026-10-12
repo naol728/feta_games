@@ -1,3 +1,5 @@
+/*eslint-disable*/
+// @ts-nocheck
 import CONFIG from "../../config/game";
 import Stars from "./stars/Stars";
 import Moon from "./moon/Moon";

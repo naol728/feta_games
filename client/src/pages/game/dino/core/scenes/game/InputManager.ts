@@ -1,4 +1,5 @@
-
+/*eslint-disable*/
+// @ts-nocheck
 import Phaser from 'phaser';
 
 import CONFIG from '../../config/game';

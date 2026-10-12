@@ -32,6 +32,7 @@ import Mines from "./pages/game/mines/Mines";
 import Plinko from "./pages/game/plinko/Plinko";
 import ChickenRoad from "./pages/game/chickenroad/ChickenRoad";
 import Dice from "./pages/game/dice/Dice";
+import Baccarat from "./pages/game/barcat/Baccarat";
 
 
 export default function App() {
@@ -105,6 +106,7 @@ export default function App() {
               <Route path="/chicken-road" element={<ChickenRoad />} />
               <Route path="/joker-x" element={<Dice />} />
               <Route path="/plinko" element={<Plinko />} />
+              <Route path="/baccarat" element={<Baccarat />} />
             </Route>
 
             <Route element={<MinimalLayout />}>

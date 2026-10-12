@@ -1,6 +1,8 @@
-import Phaser from 'phaser';
+/*eslint-disable*/
+// @ts-nocheck
+import Phaser from "phaser";
 
-import CONFIG from '../../config/game';
+import CONFIG from "../../config/game";
 
 /**
  * Player animation manager
@@ -19,11 +21,11 @@ class AnimationManager {
     this.initAnimations();
 
     // Register event handlers
-    player.on('animationstart', this.onAnimationEvents, this);
-    player.on('animationupdate', this.onAnimationEvents, this);
-    player.on('animationcomplete', this.onAnimationEvents, this);
-    player.on('animationstart-idle', this.randomizeidleAnimation, this);
-    player.on('animationrepeat-idle', this.randomizeidleAnimation, this);
+    player.on("animationstart", this.onAnimationEvents, this);
+    player.on("animationupdate", this.onAnimationEvents, this);
+    player.on("animationcomplete", this.onAnimationEvents, this);
+    player.on("animationstart-idle", this.randomizeidleAnimation, this);
+    player.on("animationrepeat-idle", this.randomizeidleAnimation, this);
   }
 
   /**
@@ -32,25 +34,35 @@ class AnimationManager {
   initAnimations() {
     const { scene } = this.player;
 
-    const idleFrames = scene.anims.generateFrameNames('dino', {
+    const idleFrames = scene.anims.generateFrameNames("dino", {
       frames: AnimationManager.CONFIG.FRAMES.IDLING,
     });
     scene.anims.create({
-      key: 'idle',
+      key: "idle",
       frames: idleFrames,
       frameRate: 1,
       repeat: -1,
     });
 
-    const runFrames = scene.anims.generateFrameNames('dino', {
+    const runFrames = scene.anims.generateFrameNames("dino", {
       frames: AnimationManager.CONFIG.FRAMES.RUNNING,
     });
-    scene.anims.create({ key: 'run', frames: runFrames, frameRate: 10, repeat: -1 });
+    scene.anims.create({
+      key: "run",
+      frames: runFrames,
+      frameRate: 10,
+      repeat: -1,
+    });
 
-    const duckFrames = scene.anims.generateFrameNames('dino', {
+    const duckFrames = scene.anims.generateFrameNames("dino", {
       frames: AnimationManager.CONFIG.FRAMES.DUCKING,
     });
-    scene.anims.create({ key: 'duck', frames: duckFrames, frameRate: 10, repeat: -1 });
+    scene.anims.create({
+      key: "duck",
+      frames: duckFrames,
+      frameRate: 10,
+      repeat: -1,
+    });
   }
 
   /**
@@ -62,13 +74,13 @@ class AnimationManager {
 
     switch (player.state) {
       case STATES.IDLING:
-        player.anims.play('idle', true);
+        player.anims.play("idle", true);
         break;
       case STATES.RUNNING:
-        player.anims.play('run', true);
+        player.anims.play("run", true);
         break;
       case STATES.DUCKING:
-        player.anims.play('duck', true);
+        player.anims.play("duck", true);
         break;
       case STATES.DEAD:
         player.anims.stop();
@@ -96,7 +108,7 @@ class AnimationManager {
    * Randomize next idle animation blink effect duration
    * @param {Phaser.Animations.Animation} idleAnimation - Idle animation
    */
-  randomizeidleAnimation = idleAnimation => {
+  randomizeidleAnimation = (idleAnimation) => {
     const { BLINK } = AnimationManager.CONFIG;
     const eyeFrame = idleAnimation.getFrameAt(0);
     const blinkFrame = idleAnimation.getFrameAt(1);

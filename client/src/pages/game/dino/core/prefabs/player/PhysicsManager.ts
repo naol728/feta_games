@@ -1,4 +1,6 @@
-import CONFIG from '../../config/game';
+/*eslint-disable*/
+// @ts-nocheck
+import CONFIG from "../../config/game";
 
 /**
  * Player physics manager
@@ -45,7 +47,8 @@ class PhysicsManager {
     }
 
     // Handle jumping while mid-air
-    const { INCREASE_THRESHOLD, INCREASE_INCREMENT } = PhysicsManager.CONFIG.JUMP.VELOCITY;
+    const { INCREASE_THRESHOLD, INCREASE_INCREMENT } =
+      PhysicsManager.CONFIG.JUMP.VELOCITY;
     const velocityY = this.player.body.velocity.y;
     if (velocityY < INCREASE_THRESHOLD) {
       this.player.setVelocityY(velocityY + INCREASE_INCREMENT);

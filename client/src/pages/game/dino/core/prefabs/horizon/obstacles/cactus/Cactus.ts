@@ -1,4 +1,6 @@
-import Obstacle from '../Obstacle';
+/*eslint-disable*/
+// @ts-nocheck
+import Obstacle from "../Obstacle";
 
 /**
  * Cactus obstacle

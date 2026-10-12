@@ -10,6 +10,8 @@ import Slots from "./slot/Slot.socket";
 import Keno from "./keno/keno";
 import Mines from "./mines/mines";
 import Plinko from "./plinko/plinko";
+import Dice from "./dice/dice";
+import Baccarat from "./barccart/barccart";
 
 interface JwtPayload {
   userId: string;
@@ -29,13 +31,12 @@ type GameRegistrar = (io: Server, socket: CustomSocket) => void;
 // Table-driven: adding a new game is a one-line addition here instead of
 // touching the connection handler itself.
 const GAME_REGISTRARS: { name: string; register: GameRegistrar }[] = [
-  { name: "connectFour", register: connectFourSocket },
-  { name: "cardDraw", register: CardDrawSocket },
   { name: "crash", register: Crash },
   { name: "slots", register: Slots },
   { name: "keno", register: Keno },
-  { name: "mines", register: Mines },
   { name: "plinko", register: Plinko },
+  { name: "dice", register: Dice },
+  { name: "baccarat", register: Baccarat },
 ];
 
 const presenceKey = (userId: string) => `player:${userId}`;

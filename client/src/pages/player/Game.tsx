@@ -13,7 +13,13 @@ const games = [
     isNew: false,
     underdevelopment: false,
   },
-
+  {
+    name: "Barcart",
+    path: "/baccarat",
+    image: "/barcart.jpg",
+    isNew: true,
+    underdevelopment: false,
+  },
   {
     name: "Aviator",
     path: "/aviator",
@@ -22,20 +28,20 @@ const games = [
     underdevelopment: false,
   },
   {
+    name: "Dice",
+    path: "/joker-x",
+    image: "https://vfair.games/games/dice.webp",
+    isNew: true,
+    underdevelopment: false,
+  },
+
+  {
     name: "Chicken Coin",
     path: "/slot",
     image: "/images/slot/chicken/chickencoin.png",
     isNew: true,
     underdevelopment: false,
   },
-
-  // {
-  //   name: "Mines",
-  //   path: "/mines",
-  //   image: "https://vfair.games/games/mines.webp",
-  //   isNew: false,
-  //   underdevelopment: false,
-  // },
   {
     name: "Plinko",
     path: "/plinko",
@@ -43,20 +49,8 @@ const games = [
     isNew: true,
     underdevelopment: false,
   },
-  {
-    name: "Chicken Road 2",
-    path: "/chicken-road",
-    image: "/chicken-road.jpg",
-    isNew: true,
-    underdevelopment: true,
-  },
-  {
-    name: "Dice",
-    path: "/joker-x",
-    image: "https://vfair.games/games/dice.webp",
-    isNew: false,
-    underdevelopment: true,
-  },
+
+
 ];
 
 export default function Game() {
@@ -84,7 +78,7 @@ export default function Game() {
       <section className="pt-2">
         <Banner />
       </section>
-      
+
       <FeaturedMatch />
 
       {/* ================================

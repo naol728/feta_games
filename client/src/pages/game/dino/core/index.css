@@ -1,0 +1,15 @@
+/* Scoped Phaser/Dino canvas reset. */
+.dino-game-page,
+.dino-game-page *,
+.dino-game-page *::before,
+.dino-game-page *::after {
+  box-sizing: border-box;
+}
+
+.dino-game-page {
+  height: 100%;
+}
+
+.dino-game-page .phaser-container canvas {
+  display: block;
+}

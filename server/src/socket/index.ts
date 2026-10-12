@@ -12,6 +12,7 @@ import Mines from "./mines/mines";
 import Plinko from "./plinko/plinko";
 import Dice from "./dice/dice";
 import Baccarat from "./barccart/barccart";
+import Dino from "./deno/deno";
 
 interface JwtPayload {
   userId: string;
@@ -37,6 +38,7 @@ const GAME_REGISTRARS: { name: string; register: GameRegistrar }[] = [
   { name: "plinko", register: Plinko },
   { name: "dice", register: Dice },
   { name: "baccarat", register: Baccarat },
+  { name: "deno", register: Dino },
 ];
 
 const presenceKey = (userId: string) => `player:${userId}`;

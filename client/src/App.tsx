@@ -4,13 +4,8 @@ import Game from "./pages/player/Game";
 import Invite from "./pages/player/Invite";
 import Mainlayout from "./layout/Mainlayout";
 import Profile from "./pages/player/Profile";
-// import ConnectFour from "./pages/game/connectfour/ConnectFour";
-// import ConnectFourMatchmaking from "./pages/game/connectfour/ConnectFourMatchmaking";
 import Jetx from "./pages/game/Jetx/Jetx";
-import MemoryFlip from "./pages/game/memoryflip/MemoryFlip";
-import MinesDuel from "./pages/game/minesduel/MinesDuel";
 import CardDraw from "./pages/game/carddraw/CardDraw";
-import CardDrawMatchmaking from "./pages/game/carddraw/CardDrawMatchmaking";
 import { ToastContainer } from "react-toastify"
 import { initAuth } from "./store/slice/auth";
 import { useAppDispatch, useAppSelector } from "./store/hook";
@@ -30,9 +25,9 @@ import Support from "./pages/player/Support";
 import Keno from "./pages/game/keno/Keno";
 import Mines from "./pages/game/mines/Mines";
 import Plinko from "./pages/game/plinko/Plinko";
-import ChickenRoad from "./pages/game/chickenroad/ChickenRoad";
 import Dice from "./pages/game/dice/Dice";
 import Baccarat from "./pages/game/barcat/Baccarat";
+import DinoGame from "./pages/game/dino/Dino";
 
 
 export default function App() {
@@ -94,19 +89,15 @@ export default function App() {
               <Route path="/promo" element={<Invite />} />
             </Route>
             <Route element={<MatchMakingLayout />}>
-              {/* <Route path="/connectfour" element={<ConnectFourMatchmaking />} /> */}
-              <Route path="/carddraw" element={<CardDrawMatchmaking />} />
               <Route path="/jetxpick" element={<Jetx />} />
-              <Route path="/memoryflip" element={<MemoryFlip />} />
-              <Route path="/minesduel" element={<MinesDuel />} />
               <Route path="/slot" element={<Slots />} />
               <Route path="/aviator" element={<CrashGame />} />
               <Route path="/keno" element={<Keno />} />
               <Route path="/mines" element={<Mines />} />
-              <Route path="/chicken-road" element={<ChickenRoad />} />
               <Route path="/joker-x" element={<Dice />} />
               <Route path="/plinko" element={<Plinko />} />
               <Route path="/baccarat" element={<Baccarat />} />
+              <Route path="/deno" element={<DinoGame />} />
             </Route>
 
             <Route element={<MinimalLayout />}>

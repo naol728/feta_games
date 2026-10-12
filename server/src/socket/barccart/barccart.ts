@@ -206,11 +206,7 @@ const registerSocket = (socket: CustomSocket) => {
           return reply({ error: "Pick Player, Banker or Tie" });
         }
 
-        if (
-          !Number.isFinite(amount) ||
-          amount < MIN_BET ||
-          amount > MAX_BET
-        ) {
+        if (!Number.isFinite(amount) || amount < MIN_BET || amount > MAX_BET) {
           return reply({
             error: `Bet must be between ${MIN_BET} and ${MAX_BET} ETB`,
           });

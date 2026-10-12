@@ -21,9 +21,9 @@ const games = [
     underdevelopment: false,
   },
   {
-    name: "Aviator",
-    path: "/aviator",
-    image: "/images/slot/chicken/aviator.png",
+    name: "Deno",
+    path: "/deno",
+    image: "/deno.jpg",
     isNew: false,
     underdevelopment: false,
   },
@@ -34,6 +34,14 @@ const games = [
     isNew: true,
     underdevelopment: false,
   },
+  {
+    name: "Aviator",
+    path: "/aviator",
+    image: "/images/slot/chicken/aviator.png",
+    isNew: false,
+    underdevelopment: false,
+  },
+
 
   {
     name: "Chicken Coin",

@@ -9,7 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import {
     Coins,
     Hash,
@@ -20,17 +29,225 @@ import {
     TrendingUp,
     ArrowUpDown,
     Zap,
+    CircleHelp,
 } from "lucide-react";
 import { useAppSelector, useAppDispatch } from "@/store/hook";
 
 const AUTO_DELAY_MS = 400;
 const BET_TIMEOUT_MS = 10_000;
+const GUIDE_KEY = "dice:hideGuide";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const readHideGuide = () => {
+    try {
+        return localStorage.getItem(GUIDE_KEY) === "1";
+    } catch {
+        return false;
+    }
+};
 
 // Same formula as the server (floored to 4 decimals) so what is shown is what is paid.
 const calcMultiplier = (houseEdge: number, winChance: number) =>
     Math.floor(((100 - houseEdge * 100) / winChance) * 10_000) / 10_000;
+
+// ============================================================
+// How to play popup
+// ============================================================
+function GuideSection({
+    step,
+    title,
+    children,
+}: {
+    step: number;
+    title: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <section className="space-y-1.5">
+            <h3 className="flex items-center gap-2 text-sm font-bold">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-primary-foreground">
+                    {step}
+                </span>
+                {title}
+            </h3>
+            <div className="space-y-1.5 pl-7 text-xs leading-relaxed text-muted-foreground">
+                {children}
+            </div>
+        </section>
+    );
+}
+
+function HowToPlayDialog({
+    open,
+    onClose,
+    houseEdge,
+    limits,
+}: {
+    open: boolean;
+    onClose: (dontShowAgain: boolean) => void;
+    houseEdge: number;
+    limits: { minBet: number; maxBet: number };
+}) {
+    const [dontShow, setDontShow] = useState<boolean>(readHideGuide());
+    const sampleChances = [10, 25, 50, 75, 90];
+    const exampleMulti = calcMultiplier(houseEdge, 50);
+
+    return (
+        <Dialog open={open} onOpenChange={(o) => !o && onClose(dontShow)}>
+            <DialogContent className="flex max-h-[88vh] w-[calc(100%-1.5rem)] max-w-md flex-col gap-0 p-0">
+                <DialogHeader className="space-y-1 border-b px-4 py-3 text-left">
+                    <DialogTitle className="flex items-center gap-2 text-base">
+                        <Dice5 className="h-4 w-4 text-primary" />
+                        How to play Dice
+                    </DialogTitle>
+                    <DialogDescription className="text-xs">
+                        Set your win chance, choose Over or Under, and roll. Lower chances
+                        pay more.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+                    <GuideSection step={1} title="Place your bet">
+                        <p>
+                            Enter your bet amount (between{" "}
+                            <b className="text-foreground">
+                                {limits.minBet} and {limits.maxBet.toLocaleString()} ETB
+                            </b>
+                            ). Use <b className="text-foreground">½</b> and{" "}
+                            <b className="text-foreground">2×</b> to halve or double it
+                            quickly.
+                        </p>
+                    </GuideSection>
+
+                    <GuideSection step={2} title="Set your win chance">
+                        <p>
+                            Use the slider to choose your win chance, from{" "}
+                            <b className="text-foreground">2% to 98%</b>. A low chance is
+                            risky but pays a big multiplier. A high chance wins often but
+                            pays less.
+                        </p>
+                    </GuideSection>
+
+                    <GuideSection step={3} title="Roll Over or Roll Under">
+                        <p>
+                            The dice rolls a number from 0 to 100. Press the{" "}
+                            <b className="text-foreground">Over / Under</b> button to pick
+                            your direction. Your win chance decides the target number:
+                        </p>
+                        <ul className="space-y-1">
+                            <li className="rounded-md border bg-muted/30 px-2 py-1.5">
+                                <span className="font-semibold text-emerald-500">
+                                    Roll Over
+                                </span>
+                                <span className="block">
+                                    You win if the roll is higher than the target. Target = 100
+                                    − win chance.
+                                </span>
+                            </li>
+                            <li className="rounded-md border bg-muted/30 px-2 py-1.5">
+                                <span className="font-semibold text-rose-500">
+                                    Roll Under
+                                </span>
+                                <span className="block">
+                                    You win if the roll is lower than the target. Target = win
+                                    chance.
+                                </span>
+                            </li>
+                        </ul>
+                        <p>
+                            The colored bar shows your winning zone and the white line shows
+                            the target. After each roll, your result appears on the bar.
+                        </p>
+                    </GuideSection>
+
+                    <GuideSection step={4} title="Multiplier and payout">
+                        <p>
+                            Your multiplier depends only on your win chance. If you win, you
+                            receive <b className="text-foreground">bet × multiplier</b>.
+                            The house edge is{" "}
+                            <b className="text-foreground">
+                                {Number((houseEdge * 100).toFixed(2))}%
+                            </b>
+                            .
+                        </p>
+                        <div className="overflow-hidden rounded-md border">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="border-b bg-muted/50 text-[10px] uppercase tracking-wider">
+                                        <th className="px-2 py-1 font-semibold">Win chance</th>
+                                        <th className="px-2 py-1 font-semibold">Multiplier</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {sampleChances.map((c) => (
+                                        <tr key={c}>
+                                            <td className="px-2 py-1 font-bold text-foreground">
+                                                {c}%
+                                            </td>
+                                            <td className="px-2 py-1 tabular-nums">
+                                                {calcMultiplier(houseEdge, c).toFixed(4)}×
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p>
+                            Example: bet 100 ETB at 50% win chance. The multiplier is{" "}
+                            {exampleMulti.toFixed(4)}×, so a win pays{" "}
+                            {(100 * exampleMulti).toFixed(2)} ETB.
+                        </p>
+                    </GuideSection>
+
+                    <GuideSection step={5} title="Auto bet">
+                        <p>
+                            Switch to the <b className="text-foreground">Auto</b> tab to
+                            place bets one after another with the same settings.
+                        </p>
+                        <ul className="list-disc space-y-0.5 pl-4">
+                            <li>
+                                Set the number of bets, or enter{" "}
+                                <b className="text-foreground">0</b> to keep going with no
+                                limit.
+                            </li>
+                            <li>Press Start Auto to begin and Stop Auto to end it.</li>
+                            <li>
+                                Auto stops by itself if you run out of funds or an error
+                                happens.
+                            </li>
+                        </ul>
+                    </GuideSection>
+
+                    <GuideSection step={6} title="Fair and server-controlled">
+                        <p>
+                            Every roll is generated by the server, and the result and your
+                            payout are calculated there, not on your device.
+                        </p>
+                    </GuideSection>
+
+                    <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-700 dark:text-amber-400">
+                        Play responsibly. Only bet what you can afford to lose.
+                    </p>
+                </div>
+
+                <DialogFooter className="flex-col gap-2 border-t px-4 py-3 sm:flex-col sm:space-x-0">
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                            checked={dontShow}
+                            onCheckedChange={(v) => setDontShow(v === true)}
+                        />
+                        Don't show this again
+                    </label>
+                    <Button className="w-full" onClick={() => onClose(dontShow)}>
+                        <Play className="mr-1.5 h-3.5 w-3.5 fill-current" />
+                        Got it, let's play
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function Dice() {
     const user = useAppSelector((state) => state.auth.user);
@@ -49,6 +266,9 @@ export default function Dice() {
     const [autoBetCount, setAutoBetCount] = useState<number>(0);
     const [autoBetsRemaining, setAutoBetsRemaining] = useState<number>(0);
 
+    // How-to-play popup: opens when the user enters the page.
+    const [guideOpen, setGuideOpen] = useState<boolean>(() => !readHideGuide());
+
     // Server-driven config + balance.
     const [houseEdge, setHouseEdge] = useState<number>(HOUSE_EDGES.DICE);
     const [limits, setLimits] = useState({ minBet: 1, maxBet: 50_000 });
@@ -62,6 +282,16 @@ export default function Dice() {
     const latest = useRef({ betAmount, winChance, rollOver, balance, limits });
     latest.current = { betAmount, winChance, rollOver, balance, limits };
     const busyRef = useRef(false);
+
+    const closeGuide = (dontShowAgain: boolean) => {
+        try {
+            if (dontShowAgain) localStorage.setItem(GUIDE_KEY, "1");
+            else localStorage.removeItem(GUIDE_KEY);
+        } catch {
+            /* storage unavailable, ignore */
+        }
+        setGuideOpen(false);
+    };
 
     // ---------------- socket wiring ----------------
     useEffect(() => {
@@ -181,6 +411,14 @@ export default function Dice() {
 
     return (
         <div className="space-y-1.5 px-2 py-2 sm:px-2.5 sm:py-2.5">
+            {/* ==================== HOW TO PLAY POPUP ==================== */}
+            <HowToPlayDialog
+                open={guideOpen}
+                onClose={closeGuide}
+                houseEdge={houseEdge}
+                limits={limits}
+            />
+
             {/* ==================== HERO HEADER ==================== */}
             <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary via-primary to-primary/85 px-3 py-2.5 text-primary-foreground shadow-sm">
                 <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full border-4 border-primary-foreground/15" />
@@ -201,16 +439,26 @@ export default function Dice() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col items-end">
-                        <span className="text-[7px] uppercase tracking-wider text-primary-foreground/70">
-                            Balance
-                        </span>
-                        <span className="text-[11px] font-bold leading-tight">
-                            {balance.toFixed(2)}
-                            <span className="ml-0.5 text-[7px] font-normal opacity-80">
-                                ETB
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setGuideOpen(true)}
+                            aria-label="How to play"
+                            className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground/15 transition-colors hover:bg-primary-foreground/25 active:scale-95"
+                        >
+                            <CircleHelp className="h-3.5 w-3.5" />
+                        </button>
+                        <div className="flex flex-col items-end">
+                            <span className="text-[7px] uppercase tracking-wider text-primary-foreground/70">
+                                Balance
                             </span>
-                        </span>
+                            <span className="text-[11px] font-bold leading-tight">
+                                {balance.toFixed(2)}
+                                <span className="ml-0.5 text-[7px] font-normal opacity-80">
+                                    ETB
+                                </span>
+                            </span>
+                        </div>
                     </div>
                 </div>
 

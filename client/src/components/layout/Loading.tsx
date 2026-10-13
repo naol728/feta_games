@@ -2,10 +2,10 @@ import { motion } from "framer-motion";
 
 export default function Loading() {
     return (
-        <div className="h-screen w-full bg-[#101318] flex flex-col overflow-hidden">
+        <div className="h-screen w-full bg-background flex flex-col overflow-hidden">
 
             {/* Top bar */}
-            <div className="h-[9px] bg-[#17212b] shrink-0" />
+            <div className="h-[9px] bg-background shrink-0" />
 
             {/* Main loading area */}
             <div className="flex-1 flex flex-col items-center justify-center">

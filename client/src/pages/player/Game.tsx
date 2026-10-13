@@ -10,21 +10,21 @@ const games = [
     name: " Keno",
     path: "/keno",
     image: "https://vfair.games/games/keno.webp",
-    isNew: false,
+    isNew: true,
     underdevelopment: false,
   },
   {
-    name: "Barcart",
+    name: "Baccart",
     path: "/baccarat",
-    image: "/barcart.jpg",
+    image: "/baccart.png",
     isNew: true,
     underdevelopment: false,
   },
   {
     name: "Deno",
     path: "/deno",
-    image: "/deno.jpg",
-    isNew: false,
+    image: "/deno.png",
+    isNew: true,
     underdevelopment: false,
   },
   {
@@ -35,18 +35,18 @@ const games = [
     underdevelopment: false,
   },
   {
-    name: "Aviator",
+    name: "Fly Witch",
     path: "/aviator",
-    image: "/images/slot/chicken/aviator.png",
+    image: "/flywitch.png",
     isNew: false,
     underdevelopment: false,
   },
 
 
   {
-    name: "Chicken Coin",
+    name: "Amine Coin",
     path: "/slot",
-    image: "/images/slot/chicken/chickencoin.png",
+    image: "/animecoin.png",
     isNew: true,
     underdevelopment: false,
   },
@@ -87,7 +87,7 @@ export default function Game() {
         <Banner />
       </section>
 
-      <FeaturedMatch />
+      {/* <FeaturedMatch /> */}
 
       {/* ================================
           SECTION HEADER

@@ -11,9 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
@@ -28,6 +31,7 @@ import {
     BarChart3,
     Bug,
     CheckCircle2,
+    CircleHelp,
     Flame,
     LineChart,
     Play,
@@ -68,6 +72,21 @@ type Phase =
     | "cashed_out";
 
 const BET_TIMEOUT_MS = 10_000;
+const GUIDE_KEY = "dino:hideGuide";
+
+const readHideGuide = () => {
+    try {
+        return localStorage.getItem(GUIDE_KEY) === "1";
+    } catch {
+        return false;
+    }
+};
+
+// Same formula used for the multiplier track.
+const multiplierFor = (survivalChance: number, jump: number) => {
+    const prob = Math.pow(survivalChance, jump);
+    return parseFloat((Math.floor((0.99 / prob) * 100) / 100).toFixed(2));
+};
 
 // ============================================================
 // Socket payload types
@@ -190,6 +209,224 @@ class DinoGameInstance extends Phaser.Game {
 }
 
 // ============================================================
+// How to play popup
+// ============================================================
+function GuideSection({
+    step,
+    title,
+    children,
+}: {
+    step: number;
+    title: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <section className="space-y-1.5">
+            <h3 className="flex items-center gap-2 text-sm font-bold">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-primary-foreground">
+                    {step}
+                </span>
+                {title}
+            </h3>
+            <div className="space-y-1.5 pl-7 text-xs leading-relaxed text-muted-foreground">
+                {children}
+            </div>
+        </section>
+    );
+}
+
+function HowToPlayDialog({
+    open,
+    onClose,
+    minBet,
+    maxBet,
+}: {
+    open: boolean;
+    onClose: (dontShowAgain: boolean) => void;
+    minBet: number;
+    maxBet: number;
+}) {
+    const [dontShow, setDontShow] = useState<boolean>(readHideGuide());
+    const sampleJumps = [1, 2, 3, 5, 8];
+
+    return (
+        <Dialog open={open} onOpenChange={(o) => !o && onClose(dontShow)}>
+            <DialogContent className="flex max-h-[88vh] w-[calc(100%-1.5rem)] max-w-md flex-col gap-0 p-0">
+                <DialogHeader className="space-y-1 border-b px-4 py-3 text-left">
+                    <DialogTitle className="flex items-center gap-2 text-base">
+                        <span className="text-lg">🦖</span>
+                        How to play Dino
+                    </DialogTitle>
+                    <DialogDescription className="text-xs">
+                        Jump over obstacles to grow your multiplier, then cash out before
+                        the dino crashes.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+                    <GuideSection step={1} title="Place your bet">
+                        <p>
+                            Enter your bet amount (between{" "}
+                            <b className="text-foreground">
+                                {minBet} and {maxBet.toLocaleString()} ETB
+                            </b>
+                            ) and choose a difficulty. Then press{" "}
+                            <b className="text-foreground">Place Bet</b>. Your bet is taken
+                            from your balance when the game starts.
+                        </p>
+                    </GuideSection>
+
+                    <GuideSection step={2} title="Pick a difficulty">
+                        <p>
+                            Difficulty sets the chance of surviving each jump. Harder
+                            difficulties are riskier but grow the multiplier faster.
+                        </p>
+                        <ul className="space-y-1">
+                            {(Object.keys(DIFFICULTIES) as DifficultyKey[]).map((key) => {
+                                const d = DIFFICULTIES[key];
+                                return (
+                                    <li
+                                        key={key}
+                                        className="flex items-center justify-between rounded-md border bg-muted/30 px-2 py-1.5"
+                                    >
+                                        <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                                            <span
+                                                className="h-2 w-2 rounded-full"
+                                                style={{ background: d.color }}
+                                            />
+                                            {d.label}
+                                        </span>
+                                        <span className="font-bold" style={{ color: d.color }}>
+                                            {Math.round(d.survivalChance * 100)}% survive
+                                        </span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </GuideSection>
+
+                    <GuideSection step={3} title="Jump or cash out">
+                        <p>
+                            The dino runs by itself. When an obstacle gets close, the game
+                            pauses and shows{" "}
+                            <b className="text-foreground">"Obstacle Ahead!"</b>. Now you
+                            decide:
+                        </p>
+                        <ul className="space-y-1">
+                            <li className="rounded-md border bg-muted/30 px-2 py-1.5">
+                                <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                                    <Zap className="h-3 w-3 fill-current" /> Jump
+                                </span>
+                                <span>
+                                    Risk it. If the dino survives, your multiplier goes up and
+                                    the run continues. If it fails, the dino crashes and you
+                                    lose your bet.
+                                </span>
+                            </li>
+                            <li className="rounded-md border bg-muted/30 px-2 py-1.5">
+                                <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                                    <Trophy className="h-3 w-3" /> Cash Out
+                                </span>
+                                <span>
+                                    Take your winnings now: bet × current multiplier. You need
+                                    to clear at least 1 obstacle before you can cash out.
+                                </span>
+                            </li>
+                        </ul>
+                    </GuideSection>
+
+                    <GuideSection step={4} title="How the multiplier grows">
+                        <p>
+                            Each cleared obstacle raises the multiplier. The longer you
+                            survive, the more you can win, but the odds of surviving every
+                            jump in a row get smaller.
+                        </p>
+                        <div className="overflow-hidden rounded-md border">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="border-b bg-muted/50 text-[10px] uppercase tracking-wider">
+                                        <th className="px-2 py-1 font-semibold">Jumps</th>
+                                        {(Object.keys(DIFFICULTIES) as DifficultyKey[]).map(
+                                            (key) => (
+                                                <th
+                                                    key={key}
+                                                    className="px-2 py-1 font-semibold"
+                                                    style={{ color: DIFFICULTIES[key].color }}
+                                                >
+                                                    {DIFFICULTIES[key].label}
+                                                </th>
+                                            ),
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {sampleJumps.map((j) => (
+                                        <tr key={j}>
+                                            <td className="px-2 py-1 font-bold text-foreground">
+                                                {j}
+                                            </td>
+                                            {(Object.keys(DIFFICULTIES) as DifficultyKey[]).map(
+                                                (key) => (
+                                                    <td
+                                                        key={key}
+                                                        className="px-2 py-1 tabular-nums"
+                                                    >
+                                                        {multiplierFor(
+                                                            DIFFICULTIES[key].survivalChance,
+                                                            j,
+                                                        ).toFixed(2)}
+                                                        ×
+                                                    </td>
+                                                ),
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p>
+                            Example: bet 100 ETB on Medium, clear 3 jumps and cash out at{" "}
+                            {multiplierFor(DIFFICULTIES.medium.survivalChance, 3).toFixed(2)}
+                            × to receive{" "}
+                            {(
+                                100 * multiplierFor(DIFFICULTIES.medium.survivalChance, 3)
+                            ).toFixed(2)}{" "}
+                            ETB.
+                        </p>
+                    </GuideSection>
+
+                    <GuideSection step={5} title="Fair and server-controlled">
+                        <p>
+                            Every jump result is decided by the server, not by your device.
+                            Your bet, multiplier and payouts are always calculated on the
+                            server, so the game cannot be affected from your side.
+                        </p>
+                    </GuideSection>
+
+                    <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-700 dark:text-amber-400">
+                        Play responsibly. Only bet what you can afford to lose.
+                    </p>
+                </div>
+
+                <DialogFooter className="flex-col gap-2 border-t px-4 py-3 sm:flex-col sm:space-x-0">
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                            checked={dontShow}
+                            onCheckedChange={(v) => setDontShow(v === true)}
+                        />
+                        Don't show this again
+                    </label>
+                    <Button className="w-full" onClick={() => onClose(dontShow)}>
+                        <Play className="mr-1.5 h-3.5 w-3.5 fill-current" />
+                        Got it, let's play
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+// ============================================================
 // Component
 // ============================================================
 export default function DinoGame() {
@@ -227,6 +464,9 @@ export default function DinoGame() {
         null,
     );
 
+    // How-to-play popup: opens when the user enters the page.
+    const [guideOpen, setGuideOpen] = useState<boolean>(() => !readHideGuide());
+
     // -------- refs --------
     const gameContainerRef = useRef<HTMLDivElement>(null);
     const phaserContainerRef = useRef<HTMLDivElement>(null);
@@ -258,6 +498,16 @@ export default function DinoGame() {
     useEffect(() => {
         phaseRef.current = phase;
     }, [phase]);
+
+    const closeGuide = (dontShowAgain: boolean) => {
+        try {
+            if (dontShowAgain) localStorage.setItem(GUIDE_KEY, "1");
+            else localStorage.removeItem(GUIDE_KEY);
+        } catch {
+            /* storage unavailable, ignore */
+        }
+        setGuideOpen(false);
+    };
 
     // ============================================================
     // SOCKET: config + wallet sync
@@ -791,11 +1041,7 @@ export default function DinoGame() {
     const multiplierTrack = useMemo(() => {
         const out: { jump: number; mult: number }[] = [];
         for (let jump = 1; jump <= 12; jump += 1) {
-            const prob = Math.pow(diffConfig.survivalChance, jump);
-            const mult = parseFloat(
-                (Math.floor((0.99 / prob) * 100) / 100).toFixed(2),
-            );
-            out.push({ jump, mult });
+            out.push({ jump, mult: multiplierFor(diffConfig.survivalChance, jump) });
         }
         return out;
     }, [diffConfig.survivalChance]);
@@ -815,6 +1061,14 @@ export default function DinoGame() {
                     WebkitUserSelect: "none",
                 }}
             >
+                {/* HOW TO PLAY POPUP */}
+                <HowToPlayDialog
+                    open={guideOpen}
+                    onClose={closeGuide}
+                    minBet={serverMin}
+                    maxBet={serverMax}
+                />
+
                 {/* HERO HEADER */}
                 <div className="relative mx-2 mt-2 overflow-hidden rounded-xl bg-gradient-to-br from-primary via-primary to-primary/85 px-3 py-2 text-primary-foreground shadow-sm">
                     <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full border-4 border-primary-foreground/15" />
@@ -832,16 +1086,26 @@ export default function DinoGame() {
                                 </p>
                             </div>
                         </div>
-                        <div className="flex flex-col items-end">
-                            <span className="text-[7px] uppercase tracking-wider text-primary-foreground/70">
-                                Balance
-                            </span>
-                            <span className="text-[11px] font-bold leading-tight">
-                                {balance.toFixed(2)}
-                                <span className="ml-0.5 text-[7px] font-normal opacity-80">
-                                    ETB
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setGuideOpen(true)}
+                                aria-label="How to play"
+                                className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground/15 transition-colors hover:bg-primary-foreground/25 active:scale-95"
+                            >
+                                <CircleHelp className="h-3.5 w-3.5" />
+                            </button>
+                            <div className="flex flex-col items-end">
+                                <span className="text-[7px] uppercase tracking-wider text-primary-foreground/70">
+                                    Balance
                                 </span>
-                            </span>
+                                <span className="text-[11px] font-bold leading-tight">
+                                    {balance.toFixed(2)}
+                                    <span className="ml-0.5 text-[7px] font-normal opacity-80">
+                                        ETB
+                                    </span>
+                                </span>
+                            </div>
                         </div>
                     </div>
 

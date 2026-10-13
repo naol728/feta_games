@@ -7,6 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Coins,
   User,
@@ -15,6 +24,7 @@ import {
   Play,
   Trophy,
   Sparkles,
+  CircleHelp,
 } from "lucide-react";
 import { useAppSelector, useAppDispatch } from "@/store/hook";
 
@@ -28,6 +38,7 @@ interface Card_ {
 // does not skip the animation.
 const DEAL_MS = 1200;
 const BET_TIMEOUT_MS = 10_000;
+const GUIDE_KEY = "baccarat:hideGuide";
 
 const SUITS = ["♠", "♥", "♦", "♣"];
 const RED_SUITS = new Set([1, 2]);
@@ -35,6 +46,14 @@ const rankLabel = (r: number) =>
   r === 1 ? "A" : r === 11 ? "J" : r === 12 ? "Q" : r === 13 ? "K" : String(r);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const readHideGuide = () => {
+  try {
+    return localStorage.getItem(GUIDE_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
 
 function PlayingCard({ card }: { card?: Card_ }) {
   if (!card) {
@@ -61,6 +80,234 @@ function PlayingCard({ card }: { card?: Card_ }) {
   );
 }
 
+function GuideSection({
+  step,
+  title,
+  children,
+}: {
+  step: number;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-1.5">
+      <h3 className="flex items-center gap-2 text-sm font-bold">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-primary-foreground">
+          {step}
+        </span>
+        {title}
+      </h3>
+      <div className="space-y-1.5 pl-7 text-xs leading-relaxed text-muted-foreground">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function HowToPlayDialog({
+  open,
+  onClose,
+  payouts,
+  limits,
+}: {
+  open: boolean;
+  onClose: (dontShowAgain: boolean) => void;
+  payouts: Record<Side, number>;
+  limits: { minBet: number; maxBet: number };
+}) {
+  const [dontShow, setDontShow] = useState(readHideGuide());
+  const fmt = (n: number) => `${Number(n.toFixed(2))}x`;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose(dontShow)}>
+      <DialogContent className="flex max-h-[88vh] w-[calc(100%-1.5rem)] max-w-md flex-col gap-0 p-0">
+        <DialogHeader className="space-y-1 border-b px-4 py-3 text-left">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Sparkles className="h-4 w-4 text-primary" />
+            How to play Baccarat
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Pick a side, place your bet, and see which hand gets closest to 9.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+          <GuideSection step={1} title="Choose your bet">
+            <p>Two hands are dealt: the Player and the Banker. Bet on:</p>
+            <ul className="space-y-1">
+              <li className="flex items-center justify-between rounded-md border bg-muted/30 px-2 py-1.5">
+                <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                  <User className="h-3 w-3" /> Player wins
+                </span>
+                <span className="font-bold text-primary">{fmt(payouts.PLAYER)}</span>
+              </li>
+              <li className="flex items-center justify-between rounded-md border bg-muted/30 px-2 py-1.5">
+                <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                  <Landmark className="h-3 w-3" /> Banker wins
+                </span>
+                <span className="font-bold text-primary">{fmt(payouts.BANKER)}</span>
+              </li>
+              <li className="flex items-center justify-between rounded-md border bg-muted/30 px-2 py-1.5">
+                <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                  <Handshake className="h-3 w-3" /> Tie
+                </span>
+                <span className="font-bold text-primary">{fmt(payouts.TIE)}</span>
+              </li>
+            </ul>
+            <p>
+              The multiplier is applied to your bet when you win. Bets can be
+              between{" "}
+              <b className="text-foreground">
+                {limits.minBet} and {limits.maxBet.toLocaleString()} ETB
+              </b>
+              .
+            </p>
+          </GuideSection>
+
+          <GuideSection step={2} title="Card values">
+            <ul className="list-disc space-y-0.5 pl-4">
+              <li>
+                <b className="text-foreground">A</b> is worth 1.
+              </li>
+              <li>
+                <b className="text-foreground">2 to 9</b> are worth their face
+                value.
+              </li>
+              <li>
+                <b className="text-foreground">10, J, Q, K</b> are worth 0.
+              </li>
+            </ul>
+            <p>
+              A hand's total is the sum of its cards, keeping only the last
+              digit. For example, 7 + 8 = 15, which counts as{" "}
+              <b className="text-foreground">5</b>.
+            </p>
+          </GuideSection>
+
+          <GuideSection step={3} title="The deal">
+            <p>
+              Each side gets 2 cards. The hand with the total closest to{" "}
+              <b className="text-foreground">9</b> wins. If both totals are
+              equal, it's a Tie.
+            </p>
+            <p>
+              If either hand starts with an 8 or 9 (a{" "}
+              <b className="text-foreground">natural</b>), no more cards are
+              drawn and the round ends immediately.
+            </p>
+          </GuideSection>
+
+          <GuideSection step={4} title="Third card rules">
+            <p>
+              Otherwise, a third card may be drawn. This is automatic, you
+              don't need to do anything.
+            </p>
+            <div className="overflow-hidden rounded-md border">
+              <div className="bg-muted/50 px-2 py-1 text-[11px] font-bold text-foreground">
+                Player
+              </div>
+              <div className="space-y-0.5 px-2 py-1.5">
+                <p>
+                  Total <b className="text-foreground">0–5</b>: draws a card
+                </p>
+                <p>
+                  Total <b className="text-foreground">6–7</b>: stands
+                </p>
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-md border">
+              <div className="bg-muted/50 px-2 py-1 text-[11px] font-bold text-foreground">
+                Banker (if the Player stood)
+              </div>
+              <div className="space-y-0.5 px-2 py-1.5">
+                <p>
+                  Total <b className="text-foreground">0–5</b>: draws a card
+                </p>
+                <p>
+                  Total <b className="text-foreground">6–7</b>: stands
+                </p>
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-md border">
+              <div className="bg-muted/50 px-2 py-1 text-[11px] font-bold text-foreground">
+                Banker (if the Player drew a third card)
+              </div>
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b text-[10px] uppercase tracking-wider">
+                    <th className="px-2 py-1 font-semibold">Banker total</th>
+                    <th className="px-2 py-1 font-semibold">
+                      Draws when Player's 3rd card is
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  <tr>
+                    <td className="px-2 py-1 font-bold text-foreground">0–2</td>
+                    <td className="px-2 py-1">Always</td>
+                  </tr>
+                  <tr>
+                    <td className="px-2 py-1 font-bold text-foreground">3</td>
+                    <td className="px-2 py-1">Anything except 8</td>
+                  </tr>
+                  <tr>
+                    <td className="px-2 py-1 font-bold text-foreground">4</td>
+                    <td className="px-2 py-1">2 – 7</td>
+                  </tr>
+                  <tr>
+                    <td className="px-2 py-1 font-bold text-foreground">5</td>
+                    <td className="px-2 py-1">4 – 7</td>
+                  </tr>
+                  <tr>
+                    <td className="px-2 py-1 font-bold text-foreground">6</td>
+                    <td className="px-2 py-1">6 – 7</td>
+                  </tr>
+                  <tr>
+                    <td className="px-2 py-1 font-bold text-foreground">7</td>
+                    <td className="px-2 py-1">Never (stands)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </GuideSection>
+
+          <GuideSection step={5} title="Results and payouts">
+            <ul className="list-disc space-y-0.5 pl-4">
+              <li>
+                If your side wins, you receive your bet multiplied by that
+                side's multiplier.
+              </li>
+              <li>
+                If you bet Player or Banker and the round is a{" "}
+                <b className="text-foreground">Tie</b>, your bet is returned.
+              </li>
+              <li>If your side loses, the bet is lost.</li>
+            </ul>
+          </GuideSection>
+
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-700 dark:text-amber-400">
+            Play responsibly. Only bet what you can afford to lose.
+          </p>
+        </div>
+
+        <DialogFooter className="flex-col gap-2 border-t px-4 py-3 sm:flex-col sm:space-x-0">
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <Checkbox
+              checked={dontShow}
+              onCheckedChange={(v) => setDontShow(v === true)}
+            />
+            Don't show this again
+          </label>
+          <Button className="w-full" onClick={() => onClose(dontShow)}>
+            <Play className="mr-1.5 h-3.5 w-3.5 fill-current" />
+            Got it, let's play
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Baccarat() {
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
@@ -74,6 +321,9 @@ export default function Baccarat() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // How-to-play popup: opens when the user enters the page.
+  const [guideOpen, setGuideOpen] = useState<boolean>(() => !readHideGuide());
+
   // Server-driven config.
   const [payouts, setPayouts] = useState<Record<Side, number>>({
     PLAYER: 2,
@@ -86,6 +336,16 @@ export default function Baccarat() {
 
   // Wallet lives in redux; the server's wallet is pushed in via setUserWallet.
   const balance = Number(user?.wallets?.available_balance ?? 0);
+
+  const closeGuide = (dontShowAgain: boolean) => {
+    try {
+      if (dontShowAgain) localStorage.setItem(GUIDE_KEY, "1");
+      else localStorage.removeItem(GUIDE_KEY);
+    } catch {
+      /* storage unavailable, ignore */
+    }
+    setGuideOpen(false);
+  };
 
   // ---------------- socket wiring ----------------
   useEffect(() => {
@@ -183,6 +443,14 @@ export default function Baccarat() {
 
   return (
     <div className="space-y-1.5 px-2 py-2 sm:px-2.5 sm:py-2.5">
+      {/* ============ HOW TO PLAY POPUP ============ */}
+      <HowToPlayDialog
+        open={guideOpen}
+        onClose={closeGuide}
+        payouts={payouts}
+        limits={limits}
+      />
+
       {/* ============ HERO HEADER ============ */}
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary via-primary to-primary/85 px-3 py-2.5 text-primary-foreground shadow-sm">
         <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full border-4 border-primary-foreground/15" />
@@ -203,16 +471,29 @@ export default function Baccarat() {
             </div>
           </div>
 
-          <div className="flex flex-col items-end">
-            <span className="text-[7px] uppercase tracking-wider text-primary-foreground/70">
-              Balance
-            </span>
-            <span className="text-[11px] font-bold leading-tight">
-              {balance.toFixed(2)}
-              <span className="ml-0.5 text-[7px] font-normal opacity-80">
-                ETB
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setGuideOpen(true);
+                audio.playClick();
+              }}
+              aria-label="How to play"
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground/15 transition-colors hover:bg-primary-foreground/25 active:scale-95"
+            >
+              <CircleHelp className="h-3.5 w-3.5" />
+            </button>
+            <div className="flex flex-col items-end">
+              <span className="text-[7px] uppercase tracking-wider text-primary-foreground/70">
+                Balance
               </span>
-            </span>
+              <span className="text-[11px] font-bold leading-tight">
+                {balance.toFixed(2)}
+                <span className="ml-0.5 text-[7px] font-normal opacity-80">
+                  ETB
+                </span>
+              </span>
+            </div>
           </div>
         </div>
 

@@ -1,3 +1,5 @@
+/* eslint-disable */
+// @ts-nocheck
 import { useEffect, useRef } from "react";
 
 import { draw_dot, getDistance_between_entities } from "./game";

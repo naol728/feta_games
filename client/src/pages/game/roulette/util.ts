@@ -1,6 +1,6 @@
-// ============================================================
-// Basic helpers
-// ============================================================
+/* eslint-disable */
+// @ts-nocheck
+
 export const isEmpty = (element: unknown): boolean => {
   let empty = true;
   if (

@@ -153,6 +153,10 @@ const registerSocket = (socket: CustomSocket) => {
           return reply({ error: `Max payout is ${MAX_PAYOUT} ETB` });
         }
 
+        // 🆕 Release any stale lock left behind by a crashed or
+        // abandoned bet. No-op when nothing is locked. Never throws.
+        await walletService.releaseAllLocks(userId);
+
         // One DB call: lock funds and get the fresh wallet back.
         const lockedWallet = await lockBet(userId, amount);
         if (!lockedWallet) return reply({ error: "Insufficient funds" });

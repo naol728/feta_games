@@ -212,6 +212,10 @@ const registerSocket = (socket: CustomSocket) => {
           });
         }
 
+        // 🆕 Release any stale lock left behind by a crashed or
+        // abandoned bet. No-op when nothing is locked. Never throws.
+        await walletService.releaseAllLocks(userId);
+
         // One DB call: lock funds.
         const lockedWallet = await lockBet(userId, amount);
         if (!lockedWallet) return reply({ error: "Insufficient funds" });

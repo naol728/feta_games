@@ -26,17 +26,6 @@ import {
 // ============================================================
 // NOTES -- IN-MEMORY STATE
 // ============================================================
-//
-// All round state lives in this process's memory, so this file must
-// run as a SINGLE Node process (no replicas, no PM2 cluster mode).
-// Atomicity of claim functions (claimBet/claimCashout/popDueAutoCashouts)
-// relies on JS single-threadedness: they must not `await` before
-// mutating state.
-//
-// Money safety: every settlement goes through the settle_game RPC,
-// which is idempotent per (game, round, user). At most ONE outcome
-// (win or lose) can ever be committed for a player in a round.
-// ============================================================
 
 interface JwtPayload {
   userId: string;
@@ -59,8 +48,8 @@ interface InternalPlayer {
   username: string;
   betAmount: number;
   autoCashoutAt: number | null;
-  payout: number | null; // null until a win is finalized; stays null for losers
-  cashoutInProgress: boolean; // claim lock so a player can't be settled twice
+  payout: number | null;
+  cashoutInProgress: boolean;
 }
 
 interface CrashMemState {
@@ -174,7 +163,7 @@ const state = {
       return { ok: false };
     }
 
-    player.cashoutInProgress = true; // synchronous -- no await above, so this is atomic
+    player.cashoutInProgress = true;
     return { ok: true, playerId, betAmount: player.betAmount };
   },
 
@@ -205,7 +194,7 @@ const state = {
         player.autoCashoutAt !== null &&
         player.autoCashoutAt <= currentMultiplier
       ) {
-        player.cashoutInProgress = true; // claim immediately, atomic within this sync loop
+        player.cashoutInProgress = true;
         due.push(player.playerId);
       }
     }
@@ -247,7 +236,7 @@ const INSTANCE_ID = randomUUID();
 const LEADER_TTL_MS = 8_000;
 const LEADER_RENEW_MS = 3_000;
 const BATCH_INTERVAL_MS = 150;
-const MAX_BATCH_SIZE = 1000; // flush early if a batch gets this big
+const MAX_BATCH_SIZE = 1000;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -263,8 +252,6 @@ function calculateMultiplierAt(elapsedMs: number): number {
   return Math.floor(Math.exp(elapsedMs / 10_000) * 100) / 100;
 }
 
-// Usernames never change mid-session, so read each one from the DB at
-// most once per process instead of once per bet.
 const usernameCache = new Map<string, string>();
 
 async function getUsername(userId: string): Promise<string | null> {
@@ -309,9 +296,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
   let cashoutBuffer: CashoutBatchEntry[] = [];
   let batchFlushTimer: NodeJS.Timeout | null = null;
 
-  // Cashout settlements currently talking to the DB. The crash handler
-  // waits for these so a cashout that was clicked before the crash
-  // can't lose a race against its own loss settlement.
   const pendingCashouts = new Set<Promise<unknown>>();
 
   const flushBatches = () => {
@@ -355,11 +339,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
 
   // ==========================================================
   // CASHOUT SETTLEMENT (manual + auto share this)
-  //
-  // Items must already be claimed (cashoutInProgress = true). All items
-  // go to the database in ONE batched call, so a multiplier tick that
-  // triggers 300 auto-cashouts costs one round trip, not 300.
-  // Returns payout + wallet for every cashout that actually landed.
   // ==========================================================
 
   const settleClaimed = (
@@ -398,10 +377,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
           io.to(item.userId).emit("crash:wallet", res.wallet);
           won.set(item.userId, { payout, wallet: res.wallet });
         } else {
-          // Nothing was committed (error) or this player was already
-          // settled (duplicate). Release the claim; if the round
-          // crashes they fall through to the loss path, which is a
-          // harmless no-op if they were in fact already settled.
           await state.releaseCashoutLock(item.userId);
         }
       }
@@ -478,11 +453,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
 
       io.emit("crash:multiplier", encodeMultiplierTick(currentMultiplier));
 
-      // ------------------------------------------------------
-      // AUTO CASHOUT -- everyone whose target was hit this tick
-      // is settled together in a single batched call
-      // ------------------------------------------------------
-
       const duePlayerIds = await state.popDueAutoCashouts(currentMultiplier);
 
       if (duePlayerIds.length && currentMultiplier < snapshot.crashPoint!) {
@@ -500,27 +470,16 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
         if (items.length) await settleClaimed(items);
       }
 
-      // ------------------------------------------------------
-      // CRASH
-      // ------------------------------------------------------
-
       if (currentMultiplier >= snapshot.crashPoint!) {
         if (ticker) clearInterval(ticker);
         ticker = null;
 
         await state.setPhaseCrashed();
-        flushBatches(); // make sure every bet/cashout lands before the crash frame
+        flushBatches();
 
         io.emit("crash:crash", encodeCrash(snapshot.crashPoint!));
 
-        // Let in-flight cashouts finish first so they can't be beaten
-        // to the ledger by their own loss settlement.
         await Promise.allSettled([...pendingCashouts]);
-
-        // ----------------------------------------------------
-        // LOSSES -- everyone without a payout, settled in a few
-        // batched calls instead of one call per player.
-        // ----------------------------------------------------
 
         const roundId = snapshot.roundId ?? "unknown";
         const lossEntries: SettleEntry[] = [];
@@ -612,8 +571,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
           let claimed = false;
 
           try {
-            // Free in-memory pre-checks: a closed round or a duplicate
-            // bet should never cost a database write.
             const snapshot = await state.getState();
             if (snapshot.phase !== 0) {
               return reply({ error: "Betting is closed" });
@@ -622,9 +579,12 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
               return reply({ error: "You already have a bet this round" });
             }
 
-            // Cached after the first bet, so usually no DB read at all.
             const username = await getUsername(userId);
             if (username === null) return reply({ error: "User not found" });
+
+            // 🆕 Release any stale lock left behind by a crashed or
+            // abandoned bet. No-op when nothing is locked. Never throws.
+            await walletService.releaseAllLocks(userId);
 
             // One DB call: lock funds and get the fresh wallet back.
             const wallet = await lockBet(userId, amount);
@@ -650,8 +610,6 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
             }
             claimed = true;
 
-            // Wagering, points and daily activity are recorded by
-            // settle_game when this bet is settled.
             queueBet({ playerId: claim.playerId, amount });
 
             reply({
@@ -731,7 +689,7 @@ const crashGame = (io: Server, { bettingMs = 12_000, tickMs = 100 } = {}) => {
   };
 
   // ==========================================================
-  // LEADER ELECTION (no-op with in-memory state -- kept for shape)
+  // LEADER ELECTION
   // ==========================================================
 
   const becomeLeader = async () => {

@@ -70,6 +70,32 @@ export const walletService = {
 
     await emitBalance(userId);
   },
+  async releaseAllLocks(userId: string): Promise<void> {
+    try {
+      const { data: w, error: readErr } = await supabase
+        .from("wallets")
+        .select("locked_balance")
+        .eq("user_id", userId)
+        .single();
+
+      if (readErr) {
+        console.warn("[wallet] releaseAllLocks read failed:", readErr);
+        return;
+      }
+      if (!w || Number(w.locked_balance ?? 0) <= 0) return;
+
+      const { error } = await supabase.rpc("unlock_wallet_balance", {
+        p_user_id: userId,
+      });
+      if (error) {
+        console.warn("[wallet] releaseAllLocks rpc failed:", error);
+        return;
+      }
+      await emitBalance(userId);
+    } catch (err) {
+      console.warn("[wallet] releaseAllLocks threw:", err);
+    }
+  },
 
   async unlockBalance(userId: string) {
     const { error } = await supabase.rpc("unlock_wallet_balance", {

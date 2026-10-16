@@ -13,6 +13,7 @@ import Plinko from "./plinko/plinko";
 import Dice from "./dice/dice";
 import Baccarat from "./barccart/barccart";
 import Dino from "./deno/deno";
+import Roulette from "./roulette/roulette";
 
 interface JwtPayload {
   userId: string;
@@ -39,6 +40,7 @@ const GAME_REGISTRARS: { name: string; register: GameRegistrar }[] = [
   { name: "dice", register: Dice },
   { name: "baccarat", register: Baccarat },
   { name: "deno", register: Dino },
+  { name: "roulette", register: Roulette },
 ];
 
 const presenceKey = (userId: string) => `player:${userId}`;

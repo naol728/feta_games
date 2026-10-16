@@ -41,6 +41,13 @@ const games = [
     isNew: false,
     underdevelopment: false,
   },
+  {
+    name: "Roulette",
+    path: "/roulette",
+    image: "/roulette.png",
+    isNew: false,
+    underdevelopment: false,
+  },
 
 
   {

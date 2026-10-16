@@ -4,21 +4,21 @@ import { Server, Socket } from "socket.io";
 import { randomUUID } from "crypto";
 
 import { supabase } from "../../config/supabase";
+import { walletService } from "../../services/wallet.service";
 import { lockBet, settleOne } from "../../services/game-settlement.service";
 // ============================================================
 // FLOW
 // ============================================================
 // Each spin is self-contained (no shared round state, no Redis).
-//   1. lockBet      -> checks balance, moves bet into locked_balance
-//   2. generateGrid -> roll ONLY after the bet is locked
-//   3. settleOne    -> settle_game RPC, atomically:
+//   1. releaseAllLocks -> free any stale lock from a crashed spin
+//   2. lockBet         -> checks balance, moves bet into locked_balance
+//   3. generateGrid    -> roll ONLY after the bet is locked
+//   4. settleOne       -> settle_game RPC, atomically:
 //        - writes the transactions ledger row (idempotency lock)
 //        - updates wagering progress
 //        - releases locked bet, credits payout (balance or withdrawable)
 //        - adds gameplay points + daily activity
 //      and returns the fresh wallet.
-// So wagering / points / transactions / daily activity are NOT done here
-// anymore. Only game_history is still written from this file.
 // ============================================================
 
 interface JwtPayload {
@@ -73,14 +73,7 @@ const WIN_LINES = [
 // ============================================================
 // RTP-CALIBRATED SYMBOL WEIGHTS -- TARGET: 75% RTP
 // ============================================================
-// 5 paylines * E[line] = 0.75, so E[line] = 0.15, where for one line of
-// 3 i.i.d. cells (p_s for the 6 non-wild symbols, p_wild):
-//   E[line] = sum_s mult[s] * (p_s^3 + 3*p_wild^2*p_s + 3*p_wild*p_s^2)
-//             + 5 * p_wild^3
-// Non-wild relative frequencies: red 30 : blue 24 : green 18 :
-// yin_yang 12 : hakkero 8 : yellow 5. p_wild solved by bisection
-// (~0.10202). Exact RTP with these weights: 75.00%.
-// Values are basis points out of 1,000,000.
+
 const SYMBOL_WEIGHTS_BP: Record<SymbolName, number> = {
   wild: 73_654,
   red: 286_498,
@@ -127,7 +120,6 @@ function generateGrid(): SymbolName[] {
 // CALCULATE WINS
 // ============================================================
 
-// Avoids float noise like 3.3000000000000003 reaching the wallet.
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 function calculateWins(grid: SymbolName[], betAmount: number) {
@@ -171,7 +163,7 @@ function calculateWins(grid: SymbolName[], betAmount: number) {
 }
 
 // ============================================================
-// BACKGROUND RECORDING (history only; everything else is in settle_game)
+// BACKGROUND RECORDING (history only)
 // ============================================================
 
 const saveSlotHistory = async ({
@@ -197,8 +189,6 @@ const saveSlotHistory = async ({
       grid_state: gridState,
       spin_result: wins,
       total_payout: totalPayout,
-      // Uncomment if game_history has a round/reference column:
-      // round_id: roundId,
     });
 
     if (error) {
@@ -216,8 +206,6 @@ const saveSlotHistory = async ({
 export default function Slots(io: Server, socket: CustomSocket) {
   const userId = socket.user.userId;
 
-  // Guards against accidental double-emits on this connection. Wallet
-  // correctness is enforced in Postgres (lock_bet / settle_game).
   let spinInFlight = false;
 
   socket.on(
@@ -257,11 +245,13 @@ export default function Slots(io: Server, socket: CustomSocket) {
 
       spinInFlight = true;
 
-      // Unique per spin, created before any DB call so retries stay
-      // idempotent on (game, round, user).
       const roundId = randomUUID();
 
       try {
+        // 🆕 Free any stale lock left behind by a crashed or abandoned
+        // spin. No-op when nothing is locked. Never throws.
+        await walletService.releaseAllLocks(userId);
+
         // 1. Lock the bet (checks balance + moves it to locked_balance)
         try {
           const locked = await lockBet(userId, betAmount);
@@ -294,12 +284,10 @@ export default function Slots(io: Server, socket: CustomSocket) {
         });
 
         if (result.status === "duplicate") {
-          // Same roundId settled twice; already applied once.
           return reply({ success: false, message: "Spin already settled" });
         }
 
         if (result.status !== "ok" || !result.wallet) {
-          // Bet stays safely locked; roundId lets you re-run settlement.
           console.error(
             `[slots] settlement ${result.status} for round ${roundId} user ${userId}:`,
             result.message,
@@ -327,7 +315,6 @@ export default function Slots(io: Server, socket: CustomSocket) {
           processingTime: Date.now() - startTime,
         });
 
-        // Fire-and-forget: history only.
         void saveSlotHistory({
           userId,
           roundId,

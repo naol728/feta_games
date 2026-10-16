@@ -30,9 +30,9 @@ interface KenoEntry {
 // ============================================================
 
 const GAME_NAME = "keno";
-const BOARD_SIZE = 40; // numbers 1..40
-const DRAW_COUNT = 10; // numbers drawn per round
-const DRAW_INTERVAL_MS = 200; // matches the original reveal pacing
+const BOARD_SIZE = 40;
+const DRAW_COUNT = 10;
+const DRAW_INTERVAL_MS = 200;
 const MIN_PICKS = 1;
 const MAX_PICKS = 10;
 const MIN_BET = 1;
@@ -40,20 +40,12 @@ const MAX_BET = 50_000;
 
 const BETTING_DURATION_MS = 30_000;
 const RESULT_DURATION_MS = 10_000;
-// Small buffer after the 10th reveal before moving to RESULT, so the
-// last number's animation has time to land before the phase flips.
 const DRAWING_BUFFER_MS = 400;
 const DRAWING_DURATION_MS = DRAW_COUNT * DRAW_INTERVAL_MS + DRAWING_BUFFER_MS;
 
 // ============================================================
 // IN-MEMORY STATE
 // ============================================================
-//
-// All round state (phase, drawn numbers, per-user entries) lives in
-// plain process memory. It is NOT shared across multiple server
-// instances: run a single instance, or players on different instances
-// will be in different, unsynchronized rounds. The leader-election
-// plumbing below is a no-op kept for shape.
 
 type KenoPhase = 0 | 1 | 2; // 0 = betting, 1 = drawing, 2 = result
 
@@ -147,22 +139,18 @@ const state = {
 // ============================================================
 // PAYTABLE
 // ============================================================
-//
-// P(k hits | n picks) = C(n,k) * C(40-n, 10-k) / C(40,10)
-//
-// Only hits at or above a threshold pay. The RTP noted on each row is
-// the realized return for that pick count.
+
 const PAYTABLE: Record<number, Record<number, number>> = {
-  1: { 1: 2.4 }, // RTP 0.6000
-  2: { 2: 10.4 }, // RTP 0.6000
-  3: { 2: 3.51, 3: 9.92 }, // RTP 0.6001
-  4: { 3: 13.07, 4: 36.99 }, // RTP 0.5998
-  5: { 3: 5.54, 4: 15.65, 5: 28.76 }, // RTP 0.6003
-  6: { 3: 2.93, 4: 8.28, 5: 15.22, 6: 23.43 }, // RTP 0.6002
-  7: { 4: 9.35, 5: 26.44, 6: 48.58, 7: 74.79 }, // RTP 0.5999
-  8: { 4: 5.04, 5: 14.26, 6: 26.2, 7: 40.34, 8: 56.38 }, // RTP 0.5999
-  9: { 5: 17.09, 6: 48.34, 7: 88.82, 8: 136.74, 9: 191.1 }, // RTP 0.6000
-  10: { 5: 9.27, 6: 26.22, 7: 48.17, 8: 74.16, 9: 103.64, 10: 136.24 }, // RTP 0.6002
+  1: { 1: 2.4 },
+  2: { 2: 10.4 },
+  3: { 2: 3.51, 3: 9.92 },
+  4: { 3: 13.07, 4: 36.99 },
+  5: { 3: 5.54, 4: 15.65, 5: 28.76 },
+  6: { 3: 2.93, 4: 8.28, 5: 15.22, 6: 23.43 },
+  7: { 4: 9.35, 5: 26.44, 6: 48.58, 7: 74.79 },
+  8: { 4: 5.04, 5: 14.26, 6: 26.2, 7: 40.34, 8: 56.38 },
+  9: { 5: 17.09, 6: 48.34, 7: 88.82, 8: 136.74, 9: 191.1 },
+  10: { 5: 9.27, 6: 26.22, 7: 48.17, 8: 74.16, 9: 103.64, 10: 136.24 },
 };
 
 function computeHitsAndPayout(
@@ -183,13 +171,10 @@ function computeHitsAndPayout(
 
 function drawNumbers(): number[] {
   const pool = Array.from({ length: BOARD_SIZE }, (_, i) => i + 1);
-
-  // Fisher-Yates, only as many swaps as numbers we need to draw.
   for (let i = 0; i < DRAW_COUNT; i++) {
     const j = i + Math.floor(Math.random() * (pool.length - i));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-
   return pool.slice(0, DRAW_COUNT);
 }
 
@@ -243,7 +228,7 @@ const kenoGame = (io: Server) => {
   };
 
   // ==========================================================
-  // ROUND LIFECYCLE (leader only)
+  // ROUND LIFECYCLE
   // ==========================================================
 
   const runBettingPhase = async (): Promise<void> => {
@@ -278,7 +263,7 @@ const kenoGame = (io: Server) => {
       let ticking = false;
 
       drawTimer = setInterval(() => {
-        if (ticking) return; // never overlap ticks
+        if (ticking) return;
         ticking = true;
 
         (async () => {
@@ -333,7 +318,6 @@ const kenoGame = (io: Server) => {
 
       io.emit("keno:result", { drawn, roundId, phaseEndsAt });
 
-      // Compute every outcome in memory first...
       const outcomes = new Map<
         string,
         { hits: number; multiplier: number; payout: number }
@@ -357,11 +341,10 @@ const kenoGame = (io: Server) => {
 
       if (entries.length === 0) return;
 
-      // ...then settle the whole round in a few batched DB calls.
       const results = await settleGameBatch(GAME_NAME, roundId, entries);
 
       for (const res of results) {
-        if (res.status !== "ok" || !res.wallet) continue; // duplicate/error: money stays safe, see logs
+        if (res.status !== "ok" || !res.wallet) continue;
         const outcome = outcomes.get(res.user_id);
         if (!outcome) continue;
 
@@ -376,7 +359,6 @@ const kenoGame = (io: Server) => {
     } catch (error) {
       console.error("[keno] result phase error:", error);
     } finally {
-      // Always keep the game loop alive, even if settlement blew up.
       scheduleNext(runBettingPhase, RESULT_DURATION_MS, "betting phase");
     }
   };
@@ -442,8 +424,6 @@ const kenoGame = (io: Server) => {
             });
           }
 
-          // Cheap in-memory pre-checks first, so a closed round or a
-          // duplicate bet never costs a database write.
           const snapshot = await state.getState();
           if (snapshot.phase !== 0) {
             return reply({ error: "Betting is closed" });
@@ -451,6 +431,10 @@ const kenoGame = (io: Server) => {
           if (await state.getEntry(userId)) {
             return reply({ error: "You already have a bet this round" });
           }
+
+          // 🆕 Release any stale lock left behind by a crashed or
+          // abandoned round. No-op when nothing is locked. Never throws.
+          await walletService.releaseAllLocks(userId);
 
           // One DB call: lock funds and get the fresh wallet back.
           const wallet = await lockBet(userId, amount);
@@ -461,7 +445,6 @@ const kenoGame = (io: Server) => {
           const claim = await state.claimBet(entry);
 
           if (!claim.ok) {
-            // Phase flipped or a racing duplicate slipped in during the await.
             await walletService.unlockBalance(userId);
             locked = false;
             return reply({
@@ -471,15 +454,16 @@ const kenoGame = (io: Server) => {
                   : "You already have a bet this round",
             });
           }
-          claimed = true; // bet is now live; never unlock past this point
+          claimed = true;
 
-          // Wagering, points and daily activity are recorded by
-          // settle_game when the round ends.
+          // 🆕 Push the new (locked) wallet to every tab the user has open.
+          socket.emit("balance:update", wallet);
+          io.to(userId).emit("balance:update", wallet);
+
           return reply({ ok: true, numbers, amount, wallet });
         } catch (error) {
           console.error("[keno] bet error:", userId, error);
 
-          // Bet failed before it was registered: give the money back.
           if (locked && !claimed && userId) {
             try {
               await walletService.unlockBalance(userId);
@@ -498,7 +482,7 @@ const kenoGame = (io: Server) => {
   };
 
   // ==========================================================
-  // LEADER ELECTION (no-op with in-memory state -- kept for shape)
+  // LEADER ELECTION (no-op with in-memory state)
   // ==========================================================
 
   const becomeLeader = async () => {

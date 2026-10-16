@@ -28,6 +28,7 @@ import Plinko from "./pages/game/plinko/Plinko";
 import Dice from "./pages/game/dice/Dice";
 import Baccarat from "./pages/game/barcat/Baccarat";
 import DinoGame from "./pages/game/dino/Dino";
+import Roulette from "./pages/game/roulette/Roulette";
 
 
 export default function App() {
@@ -98,6 +99,7 @@ export default function App() {
               <Route path="/plinko" element={<Plinko />} />
               <Route path="/baccarat" element={<Baccarat />} />
               <Route path="/deno" element={<DinoGame />} />
+              <Route path="/roulette" element={<Roulette />} />
             </Route>
 
             <Route element={<MinimalLayout />}>
